@@ -182,6 +182,10 @@ export function useVADProcessor() {
         const totalDuration = resampledBuffer.duration;
         confidenceScore = Math.min(1, totalSpeechDuration / (totalDuration * 0.8)); // Expect ~80% to be speech
         
+        // Store original speech boundaries before padding
+        const originalSpeechStart = overallStart;
+        const originalSpeechEnd = overallEnd;
+        
         // Apply generous padding to preserve natural speech endings
         const generousPadding = Math.max(padding, 0.1); // At least 100ms padding
         overallStart = Math.max(0, overallStart - generousPadding);
@@ -207,6 +211,11 @@ export function useVADProcessor() {
         endTime: overallEnd, 
         startSample: Math.floor(overallStart * audioBuffer.sampleRate),
         endSample: Math.floor(overallEnd * audioBuffer.sampleRate),
+        
+        // Original speech boundaries (before padding applied)
+        originalSpeechStart: originalSpeechStart,
+        originalSpeechEnd: originalSpeechEnd,
+        
         silenceStart: overallStart,
         silenceEnd: audioBuffer.duration - overallEnd,
         speechSegments: speechSegments.length,

@@ -15,6 +15,11 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
   const playerId = audioId || `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   let playerInfo = null;
 
+  // Detect if we're on mobile device
+  const isMobileDevice = () => {
+    return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
   const initWaveform = () => {
     console.log('🎵 initWaveform called');
     
@@ -45,38 +50,63 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
         return;
       }
 
-      // Create WaveSurfer with waveform above spectrogram (Test 3 approach)
+      // Create WaveSurfer with explicit configuration
+      console.log('🎵 Creating WaveSurfer with container dimensions:', {
+        width: containerRef.value.offsetWidth,
+        height: containerRef.value.offsetHeight,
+        clientWidth: containerRef.value.clientWidth,
+        clientHeight: containerRef.value.clientHeight
+      });
+      
+      // Get device-specific heights (restore original working values)
+      const isMobile = isMobileDevice();
+      
+      // Use original working heights: desktop 60px waveform, mobile 40px
+      const waveformHeight = isMobile ? 40 : 60;
+      // Use original working heights: desktop 200px spectrogram, mobile 120px
+      const spectrogramHeight = isMobile ? 120 : 200;
+      
       wavesurfer.value = WaveSurfer.create({
         container: containerRef.value,
-        waveColor: 'rgba(96, 165, 250, 0.8)', // Semi-transparent blue
-        progressColor: 'rgba(59, 130, 246, 0.9)', // Slightly more opaque progress
-        cursorColor: 'transparent',
-        barWidth: 2,
-        barRadius: 3,
-        responsive: true,
-        height: 60, // Match container height
+        waveColor: 'rgba(96, 165, 250, 0.8)', // Original semi-transparent blue
+        progressColor: 'rgba(59, 130, 246, 0.9)', // Original slightly more opaque progress
+        cursorColor: 'transparent', // Original setting
+        backgroundColor: 'transparent',
+        height: waveformHeight,
         normalize: true,
-        interact: true, // Allow interaction
-        fillParent: true,
-        backend: 'WebAudio', // Ensure we have proper audio analysis
-      });
-      // Register spectrogram plugin with Test 3 settings
-      console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Creating spectrogram plugin for container:`, spectrogramContainerRef.value?.id);
-      
-      const spectrogramPlugin = Spectrogram.create({
-        container: spectrogramContainerRef.value,
-        labels: true, // Enable labels like Test 3
-        splitChannels: false,
-        height: 200, // Full height for spectrogram background
-        fftSamples: 512,
-        windowFunc: 'hann',
+        barWidth: 2,
+        barRadius: 3, // Original setting
+        responsive: true, // Original setting
+        interact: true, // Original setting
+        fillParent: true, // Original setting
+        // Remove backend specification to avoid media element issues
+        mediaControls: false
       });
       
-      console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Registering spectrogram plugin`);
-      wavesurfer.value.registerPlugin(spectrogramPlugin);
-      console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Spectrogram plugin registered successfully`);
+      console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: WaveSurfer created successfully`);
       
-      console.log('🎵 WaveSurfer created with waveform height 60px, spectrogram height 200px');
+      // Re-enable spectrogram with working structure
+      console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Creating spectrogram plugin`);
+      
+      try {
+        const spectrogramPlugin = Spectrogram.create({
+          container: spectrogramContainerRef.value,
+          labels: true,
+          splitChannels: false,
+          height: spectrogramHeight,
+          fftSamples: 512,
+          windowFunc: 'hann'
+        });
+        
+        console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Registering spectrogram plugin`);
+        wavesurfer.value.registerPlugin(spectrogramPlugin);
+        console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Spectrogram plugin registered successfully`);
+      } catch (error) {
+        console.error(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Error creating spectrogram:`, error);
+        console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Continuing without spectrogram`);
+      }
+      
+      console.log(`🎵 WaveSurfer created with ${isMobile ? 'mobile' : 'desktop'} heights: waveform ${waveformHeight}px, spectrogram ${spectrogramHeight}px`);
 
       console.log('🎵 WaveSurfer created with overlay configuration');
 
@@ -125,35 +155,129 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
           drawerWrapperDisplay: wavesurfer.value.drawer?.wrapper ? getComputedStyle(wavesurfer.value.drawer.wrapper).display : 'none'
         });
         
-        // Check if waveform elements are being created
+        // Enhanced debugging for waveform rendering
         if (containerRef.value) {
           const waveElements = containerRef.value.querySelectorAll('wave');
           const canvasElements = containerRef.value.querySelectorAll('canvas');
+          const divElements = containerRef.value.querySelectorAll('div');
+          const svgElements = containerRef.value.querySelectorAll('svg');
+          
           console.log('🎵 Waveform DOM elements found:', {
             waveElements: waveElements.length,
             canvasElements: canvasElements.length,
+            divElements: divElements.length,
+            svgElements: svgElements.length,
             allChildren: Array.from(containerRef.value.children).map(child => ({
               tagName: child.tagName,
               className: child.className,
-              style: child.style.cssText
+              style: child.style.cssText,
+              id: child.id,
+              innerHTML: child.innerHTML?.slice(0, 200)
             }))
           });
+          
+          // Check WaveSurfer internal state with more details
+          console.log('🎵 WaveSurfer internal state:', {
+            renderer: wavesurfer.value?.renderer,
+            rendered: wavesurfer.value?.renderer?.rendered,
+            width: wavesurfer.value?.renderer?.width,
+            height: wavesurfer.value?.renderer?.height,
+            options: wavesurfer.value?.options,
+            getDecodedData: !!wavesurfer.value?.getDecodedData,
+            isLoaded: !!wavesurfer.value?.getDecodedData()
+          });
+          
+          // Check if audio buffer exists
+          const decodedData = wavesurfer.value?.getDecodedData();
+          if (decodedData) {
+            console.log('🎵 Audio data available:', {
+              duration: decodedData.duration,
+              sampleRate: decodedData.sampleRate,
+              numberOfChannels: decodedData.numberOfChannels,
+              length: decodedData.length
+            });
+          } else {
+            console.log('🎵 No audio data found');
+          }
         }
         
-        // Force redraw after ready with debug
+        // Force manual resize and render for WaveSurfer v7+
         setTimeout(() => {
           if (wavesurfer.value) {
-            console.log('🎵 Forcing redraw for overlay setup');
+            console.log('🎵 Attempting manual resize and render');
             try {
-              if (wavesurfer.value.drawer && wavesurfer.value.drawer.drawBuffer) {
-                wavesurfer.value.drawer.drawBuffer();
-                console.log('🎵 drawBuffer called successfully');
+              // Try different render/resize methods for v7+
+              if (wavesurfer.value.renderer) {
+                console.log('🎵 Found renderer, attempting render');
+                
+                // Force renderer dimensions
+                const container = containerRef.value;
+                if (container) {
+                  const width = container.offsetWidth;
+                  const height = container.offsetHeight;
+                  console.log('🎵 Setting renderer dimensions:', { width, height });
+                  
+                  // Try gentle redraw methods that don't break WaveSurfer v7+
+                  if (wavesurfer.value) {
+                    console.log('🎵 Attempting gentle render methods');
+                    
+                    try {
+                      // Method 1: Simple redraw (safest)
+                      if (wavesurfer.value.redraw) {
+                        wavesurfer.value.redraw();
+                        console.log('🎵 Called redraw()');
+                      }
+                      
+                      // Method 2: Set renderer size only
+                      if (wavesurfer.value.renderer && wavesurfer.value.renderer.setSize) {
+                        wavesurfer.value.renderer.setSize(width, height);
+                        console.log('🎵 Set renderer size to:', { width, height });
+                      }
+                      
+                      // Method 3: Check for alternative reRender
+                      if (wavesurfer.value.reRender) {
+                        wavesurfer.value.reRender();
+                        console.log('🎵 Called reRender()');
+                      }
+                      
+                      // Method 4: Force container style update only
+                      if (wavesurfer.value.renderer && wavesurfer.value.renderer.container) {
+                        console.log('🎵 Updating container style');
+                        const rendererContainer = wavesurfer.value.renderer.container;
+                        rendererContainer.style.width = width + 'px';
+                        rendererContainer.style.height = height + 'px';
+                      }
+                      
+                    } catch (renderError) {
+                      console.error('🎵 Error during gentle render:', renderError);
+                    }
+                  }
+                }
               }
             } catch (e) {
-              console.log('🎵 Error during redraw:', e);
+              console.log('🎵 Error during manual render:', e);
             }
           }
         }, 200);
+        
+        // Additional retry after longer delay for HMR stability
+        setTimeout(() => {
+          if (wavesurfer.value && containerRef.value) {
+            console.log('🎵 Final retry - checking if waveform is visible');
+            const container = containerRef.value;
+            const hasWaveformContent = container.children.length > 0;
+            console.log('🎵 Container has content:', hasWaveformContent);
+            
+            if (!hasWaveformContent) {
+              console.log('🎵 No waveform content detected, forcing reload');
+              const currentUrl = wavesurfer.value.options?.url;
+              if (currentUrl) {
+                console.log('🎵 Reloading audio to fix missing waveform');
+                wavesurfer.value.load(currentUrl);
+              }
+            }
+          }
+        }, 1000);
       });
 
       wavesurfer.value.on('error', (error) => {
@@ -197,63 +321,29 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
 
   const loadAudio = (url) => {
     console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: loadAudio called with URL:`, url ? url.slice(0, 50) + '...' : 'null');
-    console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: WaveSurfer instance exists:`, !!wavesurfer.value);
-    console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Container dimensions before load:`, {
-      waveform: containerRef.value ? {
-        width: containerRef.value.offsetWidth,
-        height: containerRef.value.offsetHeight,
-        display: getComputedStyle(containerRef.value).display
-      } : 'null',
-      spectrogram: spectrogramContainerRef.value ? {
-        width: spectrogramContainerRef.value.offsetWidth,
-        height: spectrogramContainerRef.value.offsetHeight,
-        display: getComputedStyle(spectrogramContainerRef.value).display
-      } : 'null'
-    });
     
     if (!url) {
       console.warn(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Cannot load audio: no URL provided`);
       return;
     }
     
-    // Always destroy and recreate for any audio loading to ensure spectrogram updates
-    console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Destroying existing instance for fresh reload`);
-    destroyWaveform();
-    
-    // Use longer timeout for clean recreation
-    setTimeout(() => {
-      if (!containerRef.value || !spectrogramContainerRef.value) {
-        console.error(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Cannot initialize: containers not available after timeout`);
-        return;
-      }
-      
-      console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Reinitializing WaveSurfer`);
+    // If WaveSurfer doesn't exist, create it first
+    if (!wavesurfer.value) {
+      console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: No WaveSurfer instance, initializing first`);
       initWaveform();
       
-      // Wait for initialization then load audio
+      // Wait for initialization then try loading again
       setTimeout(() => {
         if (wavesurfer.value) {
-          console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Loading audio after recreation`);
           loadAudioDirect(url);
-        } else {
-          console.error(`🎵 WAVEFORM [${audioType.toUpperCase()}]: WaveSurfer failed to initialize after recreation`);
-          // Retry once more with longer delay
-          setTimeout(() => {
-            if (!wavesurfer.value) {
-              console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Retrying initialization one more time`);
-              initWaveform();
-              setTimeout(() => {
-                if (wavesurfer.value) {
-                  loadAudioDirect(url);
-                } else {
-                  console.error(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Failed to initialize after final retry`);
-                }
-              }, 100);
-            }
-          }, 300);
         }
-      }, 200);
-    }, 300);
+      }, 100);
+      return;
+    }
+    
+    // If WaveSurfer exists, load audio directly
+    console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: WaveSurfer exists, loading audio directly`);
+    loadAudioDirect(url);
   };
   
   // Separate function for direct audio loading (no recreation)
@@ -372,9 +462,7 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
     }
   };
 
-  onUnmounted(() => {
-    destroyWaveform();
-  });
+  // Note: onUnmounted is handled by parent component to avoid lifecycle issues
 
   return {
     wavesurfer,

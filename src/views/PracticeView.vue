@@ -186,8 +186,7 @@ import SessionStats from '../components/SessionStats.vue';
 import RecordingSetsManager from '../components/RecordingSetsManager.vue';
 import VADSettingsModal from '../components/VADSettingsModal.vue';
 import { useIndexedDB } from '../composables/useIndexedDB';
-import { useAudioProcessing } from '../composables/useAudioProcessing';
-import { useVADProcessor } from '../composables/useVADProcessor';
+import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment';
 import { useRecordingSets } from '../composables/useRecordingSets';
 import { useTimeSync } from '../composables/useTimeSync';
 import { audioManager } from '../composables/useAudioManager';
@@ -215,8 +214,14 @@ const vadSettings = ref({
 });
 
 const { initDB, addRecording, deleteRecording } = useIndexedDB();
-const { isProcessing, autoAlignRecordings, vadReady, initVAD } = useAudioProcessing();
-const { trimAudioWithVAD } = useVADProcessor();
+const { 
+  isProcessing,
+  vadReady,
+  initVAD,
+  processAudio,
+  normalizeAudioSilence,
+  alignTwoAudios
+} = useSmartAudioAlignment();
 const { 
   activeSet, 
   currentRecording, 
@@ -254,13 +259,50 @@ const handleVADSettingsSave = (newSettings) => {
   console.log('🔧 VAD settings updated:', vadSettings.value);
 };
 
-const handleFileSelection = (event) => {
+const handleFileSelection = async (event) => {
   const file = event.target.files[0];
   if (file) {
-    targetAudioBlob.value = file;
-    targetAudioUrl.value = URL.createObjectURL(file);
-    currentAudioSource.value = file.name;
-    console.log('Target Audio File:', file.name);
+    try {
+      console.log('📁 Processing target audio file:', file.name);
+      
+      // Process target audio with VAD
+      const targetProcessed = await processAudio(file);
+      
+      if (targetProcessed.processed && targetProcessed.vadBoundaries) {
+        console.log('🎯 Target audio VAD analysis complete:', {
+          speechStart: targetProcessed.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
+          speechEnd: targetProcessed.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
+          paddedStart: targetProcessed.vadBoundaries.startTime?.toFixed(3) + 's',
+          paddedEnd: targetProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
+        });
+        
+        // Normalize target audio to have consistent padding
+        const normalizedBlob = await normalizeAudioSilence(
+          targetProcessed.audioBlob,
+          targetProcessed.vadBoundaries,
+          vadSettings.value.padding * 1000 // Convert to milliseconds
+        );
+        
+        targetAudioBlob.value = normalizedBlob;
+        targetAudioUrl.value = URL.createObjectURL(normalizedBlob);
+        
+        console.log('🎵 SMART-ALIGN: Target audio normalized with consistent padding');
+      } else {
+        console.log('📏 SMART-ALIGN: Target VAD processing failed - using original file');
+        targetAudioBlob.value = file;
+        targetAudioUrl.value = URL.createObjectURL(file);
+      }
+      
+      currentAudioSource.value = file.name;
+      console.log('Target Audio File:', file.name);
+    } catch (error) {
+      console.error('Error processing target audio:', error);
+      // Fallback to original file
+      targetAudioBlob.value = file;
+      targetAudioUrl.value = URL.createObjectURL(file);
+      currentAudioSource.value = file.name;
+    }
+    
     // Reset the input so the same file can be selected again if needed
     event.target.value = '';
   }
@@ -290,8 +332,43 @@ const handleUrlLoad = async () => {
       throw new Error('URL does not point to an audio file');
     }
     
-    targetAudioBlob.value = blob;
-    targetAudioUrl.value = URL.createObjectURL(blob);
+    try {
+      console.log('🌐 Processing target audio from URL:', url);
+      
+      // Process target audio with VAD
+      const targetProcessed = await processAudio(blob);
+      
+      if (targetProcessed.processed && targetProcessed.vadBoundaries) {
+        console.log('🎯 Target audio VAD analysis complete:', {
+          speechStart: targetProcessed.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
+          speechEnd: targetProcessed.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
+          paddedStart: targetProcessed.vadBoundaries.startTime?.toFixed(3) + 's',
+          paddedEnd: targetProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
+        });
+        
+        // Normalize target audio to have consistent padding
+        const normalizedBlob = await normalizeAudioSilence(
+          targetProcessed.audioBlob,
+          targetProcessed.vadBoundaries,
+          vadSettings.value.padding * 1000 // Convert to milliseconds
+        );
+        
+        targetAudioBlob.value = normalizedBlob;
+        targetAudioUrl.value = URL.createObjectURL(normalizedBlob);
+        
+        console.log('🎵 SMART-ALIGN: Target audio from URL normalized with consistent padding');
+      } else {
+        console.log('📏 SMART-ALIGN: Target VAD processing failed - using original URL audio');
+        targetAudioBlob.value = blob;
+        targetAudioUrl.value = URL.createObjectURL(blob);
+      }
+    } catch (audioError) {
+      console.error('Error processing target audio from URL:', audioError);
+      // Fallback to original blob
+      targetAudioBlob.value = blob;
+      targetAudioUrl.value = URL.createObjectURL(blob);
+    }
+    
     currentAudioSource.value = url;
     showUrlModal.value = false;
     tempAudioUrl.value = '';
@@ -347,87 +424,46 @@ const handleRecordedAudio = async (blob) => {
     updateUserRecording(blob, userAudioUrl.value);
   }
   
-  // Smart VAD-based audio trimming
+  // Smart VAD-based audio processing with normalized padding
   if (autoAlignEnabled.value) {
     try {
-      console.log('🎧 Starting VAD-based audio trimming with settings:', vadSettings.value);
-      const result = await trimAudioWithVAD(blob, {
-        padding: vadSettings.value.padding,
-        threshold: vadSettings.value.threshold,
-        minSpeechDuration: vadSettings.value.minSpeechDuration,
-        maxSilenceDuration: vadSettings.value.maxSilenceDuration,
-        maxTrimStart: vadSettings.value.maxTrimStart,
-        maxTrimEnd: vadSettings.value.maxTrimEnd
-      });
+      console.log('🎧 Starting smart VAD-based audio processing...');
       
-      if (result.blob && result.blob !== blob) {
-        const userTrimmed = result.trimmedStart + result.trimmedEnd;
-        console.log(`✂️ AUTO-ALIGN: Trimmed ${userTrimmed.toFixed(3)}s from user recording (start: ${result.trimmedStart.toFixed(3)}s, end: ${result.trimmedEnd.toFixed(3)}s)`);
-        console.log(`🎯 AUTO-ALIGN: Original duration: ${result.originalDuration?.toFixed(3)}s, New duration: ${result.newDuration?.toFixed(3)}s`);
-        console.log(`🔍 AUTO-ALIGN: Original blob size: ${blob.size}, trimmed blob size: ${result.blob.size}`);
+      // Process the recorded audio with VAD to get speech boundaries
+      const userProcessed = await processAudio(blob);
+      
+      if (userProcessed.processed && userProcessed.vadBoundaries) {
+        console.log('🎯 User audio VAD analysis complete:', {
+          speechStart: userProcessed.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
+          speechEnd: userProcessed.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
+          paddedStart: userProcessed.vadBoundaries.startTime?.toFixed(3) + 's',
+          paddedEnd: userProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
+        });
+        
+        // Normalize the audio to have consistent 200ms padding
+        const normalizedBlob = await normalizeAudioSilence(
+          userProcessed.audioBlob,
+          userProcessed.vadBoundaries,
+          vadSettings.value.padding * 1000 // Convert to milliseconds
+        );
         
         // Clean up old blob URL to prevent memory leaks
         if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
-          const oldUrl = userAudioUrl.value;
-          console.log('🗑️ AUTO-ALIGN: Revoking old URL:', oldUrl.slice(0, 50) + '...');
           URL.revokeObjectURL(userAudioUrl.value);
         }
         
-        console.log('📝 AUTO-ALIGN: Before update - userAudioBlob size:', userAudioBlob.value?.size);
-        console.log('📝 AUTO-ALIGN: Before update - userAudioUrl:', userAudioUrl.value?.slice(0, 50) + '...');
+        userAudioBlob.value = normalizedBlob;
+        userAudioUrl.value = URL.createObjectURL(normalizedBlob);
         
-        userAudioBlob.value = result.blob;
-        userAudioUrl.value = URL.createObjectURL(result.blob);
-        
-        console.log('📝 AUTO-ALIGN: After update - userAudioBlob size:', userAudioBlob.value?.size);
-        console.log('📝 AUTO-ALIGN: After update - userAudioUrl:', userAudioUrl.value?.slice(0, 50) + '...');
-        console.log('🎵 AUTO-ALIGN: New user audio URL after trimming:', userAudioUrl.value);
+        console.log('🎵 SMART-ALIGN: User audio normalized with consistent padding:', userAudioUrl.value);
         
         // Force AudioPlayer to refresh by triggering reactive update
         await nextTick();
-        console.log('⏭️ AUTO-ALIGN: nextTick completed, AudioPlayer should refresh');
       } else {
-        console.log('📏 AUTO-ALIGN: No significant silence detected - keeping original recording');
+        console.log('📏 SMART-ALIGN: VAD processing failed - keeping original recording');
       }
     } catch (error) {
-      console.error('Error during smart alignment:', error);
-    }
-  } else if (targetBlob) {
-    // Even without auto-align, apply basic silence trimming to user recording
-    try {
-      console.log('🎧 Applying basic silence trimming...');
-      const { detectSilenceBoundaries, trimSilence } = useAudioProcessing();
-      
-      const boundaries = await detectSilenceBoundaries(blob);
-      if (boundaries.silenceStart > 0.2 || boundaries.silenceEnd > 0.2) {
-        const trimResult = await trimSilence(blob, {
-          trimStart: true,
-          trimEnd: true,
-          maxTrimStart: 2.0,
-          maxTrimEnd: 1.5,
-          padding: 0.05
-        });
-        
-        if (trimResult.blob && (trimResult.trimmedStart > 0.1 || trimResult.trimmedEnd > 0.1)) {
-          // Clean up old blob URL to prevent memory leaks
-          if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
-            URL.revokeObjectURL(userAudioUrl.value);
-          }
-          
-          userAudioBlob.value = trimResult.blob;
-          userAudioUrl.value = URL.createObjectURL(trimResult.blob);
-          
-          console.log('🎵 Updated user audio URL after basic trimming:', userAudioUrl.value.slice(0, 50) + '...');
-          
-          // Force AudioPlayer to refresh
-          await nextTick();
-          
-          const totalTrimmed = trimResult.trimmedStart + trimResult.trimmedEnd;
-          console.log(`✂️ Auto-trimmed ${totalTrimmed.toFixed(3)}s of silence`);
-        }
-      }
-    } catch (error) {
-      console.warn('Error during basic trimming:', error);
+      console.error('Error during smart VAD processing:', error);
     }
   }
   
@@ -485,44 +521,62 @@ const handleRecordedAudio = async (blob) => {
   }
 };
 
-// Enhanced manual alignment with user feedback
+// Enhanced manual alignment with smart VAD processing
 const manualAlign = async () => {
   const targetBlob = getTargetBlob();
   if (!targetBlob || !userAudioBlob.value) return;
   
   try {
-    console.log('🔄 Manual alignment triggered with VAD settings:', vadSettings.value);
+    console.log('🔄 Manual smart alignment triggered with VAD settings:', vadSettings.value);
     
-    // Use the new VAD trimming with user settings
-    const result = await trimAudioWithVAD(userAudioBlob.value, {
-      padding: vadSettings.value.padding,
-      maxTrimStart: vadSettings.value.maxTrimStart,
-      maxTrimEnd: vadSettings.value.maxTrimEnd
-    });
+    // Process both target and user audio with smart VAD alignment
+    const targetProcessed = await processAudio(targetBlob);
+    const userProcessed = await processAudio(userAudioBlob.value);
     
-    if (result.blob && result.blob !== userAudioBlob.value) {
-      const userTrimmed = result.trimmedStart + result.trimmedEnd;
-      console.log(`✂️ Manually trimmed ${userTrimmed.toFixed(3)}s from user recording`);
-      console.log(`🎯 Original duration: ${result.originalDuration?.toFixed(3)}s, New duration: ${result.newDuration?.toFixed(3)}s`);
+    if (targetProcessed.processed && userProcessed.processed) {
+      console.log('🎯 Both audios processed, performing smart alignment...');
       
-      // Clean up old blob URL to prevent memory leaks
+      // Align both audios using the new smart alignment
+      const alignmentResult = await alignTwoAudios(
+        targetProcessed,
+        userProcessed,
+        vadSettings.value.padding * 1000 // Convert to milliseconds
+      );
+      
+      console.log('✅ Smart alignment complete:', {
+        method: alignmentResult.alignmentInfo.method,
+        finalDuration: alignmentResult.alignmentInfo.finalDuration?.toFixed(3) + 's',
+        paddingAdded: alignmentResult.alignmentInfo.paddingAdded?.toFixed(3) + 's'
+      });
+      
+      // Clean up old blob URLs to prevent memory leaks
+      if (targetAudioUrl.value && targetAudioUrl.value.startsWith('blob:')) {
+        URL.revokeObjectURL(targetAudioUrl.value);
+      }
       if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
         URL.revokeObjectURL(userAudioUrl.value);
       }
       
-      userAudioBlob.value = result.blob;
-      userAudioUrl.value = URL.createObjectURL(result.blob);
+      // Update both target and user audio with aligned results
+      targetAudioBlob.value = alignmentResult.audio1Aligned;
+      targetAudioUrl.value = URL.createObjectURL(alignmentResult.audio1Aligned);
       
-      console.log('🎵 Updated user audio URL after manual trimming:', userAudioUrl.value.slice(0, 50) + '...');
+      userAudioBlob.value = alignmentResult.audio2Aligned;
+      userAudioUrl.value = URL.createObjectURL(alignmentResult.audio2Aligned);
+      
+      console.log('🎵 Updated audio URLs after smart alignment:', {
+        target: targetAudioUrl.value.slice(0, 50) + '...',
+        user: userAudioUrl.value.slice(0, 50) + '...'
+      });
       
       // Force AudioPlayer to refresh
       await nextTick();
       
       // Show detailed feedback
-      showAlignmentFeedback(result, true);
+      alert(`Smart alignment complete!\nMethod: ${alignmentResult.alignmentInfo.method}\nFinal duration: ${alignmentResult.alignmentInfo.finalDuration?.toFixed(3)}s`);
     } else {
-      console.log('📏 No significant improvements possible');
-      alert('No significant silence detected to trim. Recording is already well-aligned!');
+      console.log('📏 Smart alignment failed - VAD processing unsuccessful');
+      alert('VAD processing failed. Using original recordings.');
     }
   } catch (error) {
     console.error('Error during manual alignment:', error);
@@ -530,22 +584,7 @@ const manualAlign = async () => {
   }
 };
 
-// Show alignment feedback to user
-const showAlignmentFeedback = (result, isManual = false) => {
-  const userTrimmed = result.userTrimInfo.trimmedStart + result.userTrimInfo.trimmedEnd;
-  const quality = (result.alignmentQuality * 100).toFixed(1);
-  
-  if (userTrimmed > 0.1) {
-    const message = isManual 
-      ? `✅ Manual alignment complete!\n✂️ Trimmed ${userTrimmed.toFixed(2)}s of silence\n🎯 Alignment quality: ${quality}%`
-      : `✨ Audio automatically optimized!\n✂️ Removed ${userTrimmed.toFixed(2)}s of silence\n🎯 Alignment quality: ${quality}%`;
-    
-    // Only show alert for manual alignment or significant improvements
-    if (isManual || userTrimmed > 0.5 || result.alignmentQuality > 0.8) {
-      setTimeout(() => alert(message), 500); // Delay to avoid interfering with auto-play
-    }
-  }
-};
+// Note: showAlignmentFeedback removed - now using simple alerts with smart alignment feedback
 
 // Central playback control functions
 const playTarget = () => {

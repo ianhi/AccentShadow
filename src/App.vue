@@ -1,29 +1,42 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import PracticeView from './views/PracticeView.vue'
-import TestAudioVisualization from './views/TestAudioVisualization.vue'
-import TestVADTrimming from './views/TestVADTrimming.vue'
+import { useRoute } from 'vue-router'
+import { computed } from 'vue'
 
-const currentView = ref('main')
+const route = useRoute()
+
+// Show navigation only on main app routes, hide on mobile demos
+const showNavigation = computed(() => {
+  return !route.path.startsWith('/mobile')
+})
 </script>
 
 <template>
   <div>
-    <div class="view-switcher">
-      <button @click="currentView = 'main'" :class="{ active: currentView === 'main' }">
+    <!-- Navigation for main app views -->
+    <div v-if="showNavigation" class="view-switcher">
+      <router-link to="/" class="nav-btn" :class="{ active: route.path === '/' }">
         Main App
-      </button>
-      <button @click="currentView = 'debug'" :class="{ active: currentView === 'debug' }">
-        Audio Debug
-      </button>
-      <button @click="currentView = 'vad'" :class="{ active: currentView === 'vad' }">
+      </router-link>
+      <router-link to="/test-vad" class="nav-btn" :class="{ active: route.path === '/test-vad' }">
         VAD Debug
-      </button>
+      </router-link>
+      <router-link to="/alignment-test" class="nav-btn" :class="{ active: route.path === '/alignment-test' }">
+        Alignment Test
+      </router-link>
+      <router-link to="/mobile-demo" class="nav-btn mobile-demo-btn" :class="{ active: route.path.startsWith('/mobile') }">
+        📱 Mobile Demo
+      </router-link>
     </div>
     
-    <PracticeView v-if="currentView === 'main'" />
-    <TestAudioVisualization v-else-if="currentView === 'debug'" />
-    <TestVADTrimming v-else-if="currentView === 'vad'" />
+    <!-- Back button for mobile views -->
+    <div v-if="!showNavigation && route.path !== '/mobile-demo'" class="mobile-back">
+      <router-link to="/mobile-demo" class="back-btn">
+        ← Back to Mobile Demo
+      </router-link>
+    </div>
+    
+    <!-- Router view for all pages -->
+    <router-view />
   </div>
 </template>
 
@@ -38,24 +51,82 @@ const currentView = ref('main')
   flex-wrap: wrap;
 }
 
-.view-switcher button {
+.nav-btn {
   padding: 8px 16px;
   border: 2px solid #3b82f6;
   border-radius: 6px;
   background-color: white;
   color: #3b82f6;
-  cursor: pointer;
+  text-decoration: none;
   font-weight: 500;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
 }
 
-.view-switcher button:hover {
+.nav-btn:hover {
   background-color: #3b82f6;
   color: white;
 }
 
-.view-switcher button.active {
+.nav-btn.active {
   background-color: #3b82f6;
   color: white;
+}
+
+.mobile-demo-btn {
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.mobile-demo-btn:hover,
+.mobile-demo-btn.active {
+  background-color: #10b981;
+  color: white;
+}
+
+.mobile-back {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+}
+
+.back-btn {
+  padding: 8px 16px;
+  border: 2px solid #6b7280;
+  border-radius: 6px;
+  background-color: white;
+  color: #6b7280;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.back-btn:hover {
+  background-color: #6b7280;
+  color: white;
+}
+
+/* Hide navigation on small screens for mobile demos */
+@media (max-width: 768px) {
+  .view-switcher {
+    display: none;
+  }
+  
+  .mobile-back {
+    position: static;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+  }
+  
+  .back-btn {
+    border: none;
+    background: #f3f4f6;
+    color: #374151;
+  }
 }
 </style>
