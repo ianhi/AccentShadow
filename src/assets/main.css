@@ -1,0 +1,51 @@
+@import './base.css';
+
+#app {
+  font-weight: normal;
+  min-height: 100vh;
+  overflow-y: auto;
+}
+
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+  padding: 3px;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+@media (min-width: 1024px) {
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  #app {
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* Adjustments for PracticeView to reduce vertical space */
+.practice-view {
+  padding: 10px;
+}
+
+.practice-view .section {
+  margin-bottom: 10px;
+  padding: 15px;
+}
+
+.practice-view h1 {
+  margin-bottom: 15px;
+}
+
+.practice-view h2 {
+  margin-bottom: 10px;
+}
