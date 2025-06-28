@@ -37,7 +37,7 @@
 <script setup>
 import { ref, onUnmounted } from 'vue';
 import { useAudioRecorder } from '../composables/useAudioRecorder';
-import { useMicrophoneDevices } from '../composables/useMicrophoneDevices';
+import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts';
 
 const emit = defineEmits(['recorded', 'recording-started', 'recording-stopped']);
 

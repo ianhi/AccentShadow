@@ -2,7 +2,7 @@
 import { ref, shallowRef, onUnmounted } from 'vue';
 import WaveSurfer from 'wavesurfer.js';
 import Spectrogram from 'wavesurfer.js/dist/plugins/spectrogram.esm.js';
-import { audioManager } from './useAudioManager.js';
+import { audioManager } from './useAudioManager.ts';
 
 export function useWaveform(containerRef, spectrogramContainerRef, audioId = null, audioType = 'unknown') {
   const wavesurfer = shallowRef(null);

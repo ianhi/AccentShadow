@@ -227,11 +227,11 @@ import RecordingNavigation from '../components/RecordingNavigation.vue';
 import SessionStats from '../components/SessionStats.vue';
 import RecordingSetsManager from '../components/RecordingSetsManager.vue';
 import VADSettingsModal from '../components/VADSettingsModal.vue';
-import { useIndexedDB } from '../composables/useIndexedDB';
+import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment';
 import { useRecordingSets } from '../composables/useRecordingSets';
-import { useTimeSync } from '../composables/useTimeSync';
-import { audioManager } from '../composables/useAudioManager';
+import { useTimeSync } from '../composables/useTimeSync.ts';
+import { audioManager } from '../composables/useAudioManager.ts';
 
 const targetAudioUrl = ref(null);
 const targetAudioBlob = ref(null);
