@@ -1,8 +1,26 @@
 <template>
   <div class="audio-player">
+    <!-- Debug info display -->
+    <div class="debug-info" v-if="debugInfo">
+      <div class="debug-row">
+        <span class="debug-label">{{ props.audioType.toUpperCase() }}:</span>
+        <span class="debug-value">Raw: {{ debugInfo.rawDuration }}s</span>
+        <span class="debug-value">Final: {{ debugInfo.finalDuration }}s</span>
+        <span class="debug-value" v-if="debugInfo.trimmedAmount">Trimmed: {{ debugInfo.trimmedAmount }}s</span>
+      </div>
+    </div>
+    
     <div class="visualization-container" :style="{ width: visualizationWidth }">
       <!-- Background wrapper for consistent dark styling -->
-      <div class="visualization-wrapper">
+      <div class="visualization-wrapper" :class="{ 'updating': isUpdating }">
+        <!-- Loading overlay during audio updates -->
+        <div v-if="isUpdating" class="loading-overlay">
+          <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <span>Processing audio...</span>
+          </div>
+        </div>
+        
         <!-- Waveform positioned above spectrogram (vertical stack) -->
         <div ref="waveformContainer" class="waveform-container" :class="{ 'recording-active': props.isRecording }">
           <div v-if="props.isRecording && !props.audioUrl" class="recording-overlay">
@@ -13,21 +31,7 @@
         <div ref="spectrogramContainer" class="spectrogram-container"></div>
       </div>
     </div>
-    <div class="controls">
-      <button @click="playPause" :disabled="!isReady" class="play-btn">
-        {{ isPlaying ? '⏸' : '▶' }}
-      </button>
-      <div class="volume-control">
-        <span>🔊</span>
-        <input type="range" min="0" max="1" step="0.01" v-model="volume" @input="setVolume" :disabled="!isReady" />
-      </div>
-      <div class="speed-control">
-        <span>⚡</span>
-        <input type="range" min="0.25" max="2" step="0.25" :value="playbackRate" @input="handleSpeedChange" :disabled="!isReady" />
-        <span class="speed-display">{{ playbackRate }}x</span>
-      </div>
-      <span class="time-display">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
-    </div>
+    <!-- Individual controls removed - now using unified control panel -->
   </div>
 </template>
 
@@ -47,6 +51,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  debugInfo: {
+    type: Object,
+    default: null,
+  },
 });
 
 const waveformContainer = ref(null);
@@ -61,10 +69,12 @@ const {
 
 const { wavesurfer, isReady, isPlaying, currentTime, duration, volume, playbackRate, playerId, playerInfo, initWaveform, playPause, play, stop, setVolume, setPlaybackRate, loadAudio, destroyWaveform } = useWaveform(waveformContainer, spectrogramContainer, `${props.audioType}_player`, props.audioType);
 
-// Get the appropriate width for this audio type
+// Smooth transition state
+const isUpdating = ref(false);
+
+// Use consistent 100% width - no more duration-based scaling with smart alignment
 const visualizationWidth = computed(() => {
-  if (!syncEnabled.value) return '100%';
-  return props.audioType === 'target' ? targetWidthPercent.value : userWidthPercent.value;
+  return '100%'; // Always use full width since we have proper VAD trimming/padding
 });
 
 // Watch for duration changes and update time sync
@@ -78,25 +88,7 @@ watch(duration, (newDuration) => {
   }
 });
 
-// Debug width changes
-watch(visualizationWidth, (newWidth, oldWidth) => {
-  console.log(`🕒 ${props.audioType} visualization width changed:`, {
-    from: oldWidth,
-    to: newWidth,
-    syncEnabled: syncEnabled.value,
-    audioUrl: props.audioUrl ? 'present' : 'null'
-  });
-  
-  // Log container dimensions when width changes
-  if (waveformContainer.value) {
-    console.log(`🕒 ${props.audioType} container dimensions after width change:`, {
-      width: waveformContainer.value.offsetWidth,
-      height: waveformContainer.value.offsetHeight,
-      clientWidth: waveformContainer.value.clientWidth,
-      scrollWidth: waveformContainer.value.scrollWidth
-    });
-  }
-});
+// Note: No more width scaling - using consistent 100% width with smart alignment
 
 watch(() => props.audioUrl, async (newUrl, oldUrl) => {
   console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: audioUrl watcher triggered`);
@@ -107,6 +99,9 @@ watch(() => props.audioUrl, async (newUrl, oldUrl) => {
   
   if (newUrl && newUrl !== oldUrl) {
     console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Loading new audio URL`);
+    
+    // Light visual indicator during update
+    isUpdating.value = true;
     
     // Wait for next tick to ensure DOM is ready
     await nextTick();
@@ -120,13 +115,18 @@ watch(() => props.audioUrl, async (newUrl, oldUrl) => {
         if (waveformContainer.value && spectrogramContainer.value) {
           console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers ready after timeout, loading audio`);
           loadAudio(newUrl);
+          // End update indicator
+          setTimeout(() => { isUpdating.value = false; }, 200);
         } else {
           console.error(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers still not available after timeout`);
+          isUpdating.value = false;
         }
       }, 100);
     } else {
       console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers ready, loading audio immediately`);
       loadAudio(newUrl);
+      // End update indicator after WaveSurfer processes
+      setTimeout(() => { isUpdating.value = false; }, 200);
     }
   } else if (!newUrl) {
     console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: No URL provided, destroying waveform`);
@@ -194,6 +194,8 @@ defineExpose({
   playPause: debugPlayPause,
   play: debugPlay,
   stop: debugStop,
+  setPlaybackRate, // Expose playback rate control
+  wavesurfer, // Expose wavesurfer instance for direct control
   playerId,
   playerInfo,
   isReady,
@@ -226,6 +228,50 @@ defineExpose({
   flex-direction: column; /* Stack vertically */
   border-radius: 8px;
   overflow: hidden;
+  transition: opacity 0.2s ease-in-out;
+  position: relative; /* Required for absolute positioning of loading overlay */
+}
+
+.visualization-wrapper.updating {
+  opacity: 1; /* Keep full opacity, loading overlay will handle visual feedback */
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(26, 26, 26, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  border-radius: 8px;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid #60a5fa;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .waveform-container {
@@ -267,83 +313,31 @@ defineExpose({
   flex-shrink: 0; /* Don't shrink */
 }
 
-.controls {
+/* Individual audio player controls removed - using unified control panel */
+
+.debug-info {
+  background: rgba(0, 0, 0, 0.8);
+  color: #ffffff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+}
+
+.debug-row {
   display: flex;
+  gap: 12px;
   align-items: center;
-  gap: 15px;
-  padding: 15px;
-  background-color: #f8f9fa;
-  border-top: 1px solid #e0e0e0;
 }
 
-.play-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: #3B82F6;
-  color: white;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
+.debug-label {
+  font-weight: bold;
+  color: #60a5fa;
+  min-width: 60px;
 }
 
-.play-btn:hover:not(:disabled) {
-  background-color: #2563eb;
-}
-
-.play-btn:disabled {
-  background-color: #9ca3af;
-  cursor: not-allowed;
-}
-
-.volume-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-
-.volume-control span {
-  font-size: 14px;
-}
-
-.volume-control input[type="range"] {
-  flex: 1;
-  max-width: 120px;
-}
-
-.speed-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-
-.speed-control span {
-  font-size: 14px;
-}
-
-.speed-control input[type="range"] {
-  flex: 1;
-  max-width: 120px;
-}
-
-.speed-display {
-  font-family: monospace;
-  font-size: 12px;
-  color: #6b7280;
-  min-width: 35px;
-  text-align: center;
-}
-
-.time-display {
-  font-family: monospace;
-  font-size: 12px;
-  color: #6b7280;
-  white-space: nowrap;
+.debug-value {
+  color: #10b981;
 }
 </style>

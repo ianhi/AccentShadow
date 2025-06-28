@@ -40,13 +40,13 @@ export function useVADProcessor() {
       
       vadInstance = await window.vad.NonRealTimeVAD.new({
         // Use default v4 model - more stable and reliable
-        positiveSpeechThreshold: 0.25,  // Very sensitive to catch both peaks
-        negativeSpeechThreshold: 0.15,  // Very sensitive for hysteresis
-        redemptionFrames: 12,            // Allow gaps up to ~384ms between speech segments
+        positiveSpeechThreshold: 0.5,   // Increased from 0.25 - less sensitive to noise
+        negativeSpeechThreshold: 0.35,  // Increased from 0.15 - more hysteresis 
+        redemptionFrames: 24,            // Increased from 12 - allow larger gaps (~768ms)
         frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: 2,              // Minimum 2 frames (~64ms) for speech
-        preSpeechPadFrames: 2,           // Add 2 frames before speech
-        positiveSpeechPadFrames: 2       // Add 2 frames after speech  
+        minSpeechFrames: 8,              // Increased from 2 - minimum 8 frames (~256ms) for speech
+        preSpeechPadFrames: 4,           // Increased from 2 - more context before speech
+        positiveSpeechPadFrames: 4       // Increased from 2 - more context after speech  
       });
       
       vadReady.value = true;
@@ -138,24 +138,29 @@ export function useVADProcessor() {
       let overallStart = null;
       let overallEnd = null;
       let confidenceScore = 0;
+      let originalSpeechStart = null;
+      let originalSpeechEnd = null;
       
       if (speechSegments.length > 0) {
         // Filter out very early false positives (likely noise/artifacts)
         const minValidStartTime = 0.05; // Ignore speech detected in first 50ms
-        const filteredSegments = speechSegments.filter(s => s.startTime >= minValidStartTime);
+        let filteredSegments = speechSegments.filter(s => s.startTime >= minValidStartTime);
         
-        if (filteredSegments.length > 0) {
-          console.log(`🧹 FILTERED OUT ${speechSegments.length - filteredSegments.length} early false positive segments`);
-          
-          // Find earliest start and latest end from filtered segments
-          overallStart = Math.min(...filteredSegments.map(s => s.startTime));
-          overallEnd = Math.max(...filteredSegments.map(s => s.endTime));
-        } else {
+        if (filteredSegments.length === 0) {
           // If all segments were filtered out, use original segments
           console.log(`⚠️ All segments were early - using original segments`);
-          overallStart = Math.min(...speechSegments.map(s => s.startTime));
-          overallEnd = Math.max(...speechSegments.map(s => s.endTime));
+          filteredSegments = speechSegments;
+        } else {
+          console.log(`🧹 FILTERED OUT ${speechSegments.length - filteredSegments.length} early false positive segments`);
         }
+        
+        // Merge nearby short segments to create more reasonable speech boundaries
+        const mergedSegments = mergeNearbySegments(filteredSegments, 0.1); // Merge segments within 100ms
+        console.log(`🔗 MERGED ${filteredSegments.length} segments into ${mergedSegments.length} merged segments`);
+        
+        // Find earliest start and latest end from merged segments
+        overallStart = Math.min(...mergedSegments.map(s => s.startTime));
+        overallEnd = Math.max(...mergedSegments.map(s => s.endTime));
         
         console.log(`🔍 VAD SEGMENTS ANALYSIS:`, {
           totalSegments: speechSegments.length,
@@ -183,8 +188,8 @@ export function useVADProcessor() {
         confidenceScore = Math.min(1, totalSpeechDuration / (totalDuration * 0.8)); // Expect ~80% to be speech
         
         // Store original speech boundaries before padding
-        const originalSpeechStart = overallStart;
-        const originalSpeechEnd = overallEnd;
+        originalSpeechStart = overallStart;
+        originalSpeechEnd = overallEnd;
         
         // Apply generous padding to preserve natural speech endings
         const generousPadding = Math.max(padding, 0.1); // At least 100ms padding
@@ -241,6 +246,38 @@ export function useVADProcessor() {
       // Fallback to energy-based detection
       return await fallbackEnergyDetection(audioBlob);
     }
+  };
+
+  // Merge nearby segments to create more realistic speech boundaries
+  const mergeNearbySegments = (segments, maxGapSeconds = 0.1) => {
+    if (segments.length <= 1) return segments;
+    
+    // Sort segments by start time
+    const sortedSegments = [...segments].sort((a, b) => a.startTime - b.startTime);
+    const mergedSegments = [];
+    
+    let currentSegment = { ...sortedSegments[0] };
+    
+    for (let i = 1; i < sortedSegments.length; i++) {
+      const nextSegment = sortedSegments[i];
+      const gap = nextSegment.startTime - currentSegment.endTime;
+      
+      // If gap is small enough, merge the segments
+      if (gap <= maxGapSeconds) {
+        currentSegment.endTime = Math.max(currentSegment.endTime, nextSegment.endTime);
+        currentSegment.audioLength += nextSegment.audioLength;
+        console.log(`🔗 Merged segment ${nextSegment.startTime.toFixed(3)}s-${nextSegment.endTime.toFixed(3)}s into ${currentSegment.startTime.toFixed(3)}s-${currentSegment.endTime.toFixed(3)}s (gap: ${(gap * 1000).toFixed(0)}ms)`);
+      } else {
+        // Gap too large, finalize current segment and start new one
+        mergedSegments.push(currentSegment);
+        currentSegment = { ...nextSegment };
+      }
+    }
+    
+    // Add the final segment
+    mergedSegments.push(currentSegment);
+    
+    return mergedSegments;
   };
 
   // Resample audio buffer to target sample rate
@@ -313,6 +350,11 @@ export function useVADProcessor() {
         endTime: speechEnd || audioBuffer.duration,
         startSample: Math.floor((speechStart || 0) * sampleRate),
         endSample: Math.floor((speechEnd || audioBuffer.duration) * sampleRate),
+        
+        // Original speech boundaries (before padding applied) - fallback to detected values
+        originalSpeechStart: speechStart || 0,
+        originalSpeechEnd: speechEnd || audioBuffer.duration,
+        
         silenceStart: speechStart || 0,
         silenceEnd: audioBuffer.duration - (speechEnd || audioBuffer.duration),
         confidenceScore: 0.5 // Fallback confidence
@@ -324,6 +366,11 @@ export function useVADProcessor() {
         endTime: 0,
         startSample: 0,
         endSample: 0,
+        
+        // Original speech boundaries (before padding applied) - fallback to zero
+        originalSpeechStart: 0,
+        originalSpeechEnd: 0,
+        
         silenceStart: 0,
         silenceEnd: 0,
         confidenceScore: 0

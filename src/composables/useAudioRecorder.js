@@ -10,9 +10,9 @@ let audioChunks = [];
 const wavesurferMic = shallowRef(null);
 let recordPluginInstance = null; // To store the record plugin instance
 
-async function startRecording(waveformContainer) {
+async function startRecording(waveformContainer, existingStream = null) {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = existingStream || await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder = new MediaRecorder(stream);
     audioChunks = [];
 

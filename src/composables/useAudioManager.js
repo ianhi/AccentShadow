@@ -120,7 +120,7 @@ export function useAudioManager() {
         return;
       }
 
-      if (!player.wavesurfer || !player.wavesurfer.isReady) {
+      if (!player.wavesurfer || (!player.isReady && !player.wavesurfer.isReady)) {
         console.warn(`🎼 Player ${player.id} not ready, skipping`);
         continue;
       }

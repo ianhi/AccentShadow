@@ -36,6 +36,7 @@
           ref="targetAudioPlayerRef" 
           :audioUrl="getTargetAudioUrl()" 
           :audioType="'target'"
+          :debugInfo="targetDebugInfo"
           :key="getTargetAudioKey()"
         />
         <div v-else class="placeholder">
@@ -46,13 +47,6 @@
       <div class="audio-column">
         <div class="column-header">
           <h3>User Recording</h3>
-          <div class="recording-controls">
-            <AudioRecorder 
-              @recorded="handleRecordedAudio" 
-              @recording-started="handleRecordingStarted"
-              @recording-stopped="handleRecordingStopped"
-            />
-          </div>
         </div>
         <AudioPlayer 
           v-if="currentRecording?.userRecording?.audioUrl || userAudioUrl" 
@@ -60,6 +54,7 @@
           :audioUrl="currentRecording?.userRecording?.audioUrl || userAudioUrl" 
           :audioType="'user'"
           :isRecording="isRecordingActive"
+          :debugInfo="userDebugInfo"
           :key="getUserAudioKey()"
         />
         <div v-else class="placeholder" :class="{ 'recording-placeholder': isRecordingActive }">
@@ -71,33 +66,68 @@
       </div>
     </div>
 
-    <div class="central-playback-controls" v-if="targetAudioUrl || userAudioUrl">
-      <h3>Quick Playback Controls</h3>
-      <div class="playback-buttons">
-        <button @click="playTarget" :disabled="!targetAudioUrl" class="playback-btn target-btn">
-          <span class="btn-icon">🎯</span>
-          <span>Play Target</span>
-        </button>
-        <button @click="playUser" :disabled="!userAudioUrl" class="playback-btn user-btn">
-          <span class="btn-icon">🎤</span>
-          <span>Play Recording</span>
-        </button>
-        <button @click="playBoth" :disabled="!targetAudioUrl || !userAudioUrl" class="playback-btn both-btn">
-          <span class="btn-icon">🔄</span>
-          <span>Play Both</span>
-        </button>
-        <button @click="stopAll" class="playback-btn stop-btn">
-          <span class="btn-icon">⏹</span>
-          <span>Stop All</span>
-        </button>
+    <div class="central-playback-controls">
+      <h3>Recording & Playback Controls</h3>
+      
+      <!-- Main Controls Row: Recording + Playback -->
+      <div class="main-controls-row">
+        <!-- Recording Controls -->
+        <div class="recording-controls">
+          <AudioRecorder 
+            @recorded="handleRecordedAudio" 
+            @recording-started="handleRecordingStarted"
+            @recording-stopped="handleRecordingStopped"
+          />
+        </div>
+        
+        <!-- Playback Controls -->
+        <div class="playback-buttons">
+          <button @click="playTarget" :disabled="!targetAudioUrl" class="playback-btn target-btn">
+            <span class="btn-icon">🎯</span>
+            <span>Play Target</span>
+          </button>
+          <button @click="playUser" :disabled="!userAudioUrl" class="playback-btn user-btn">
+            <span class="btn-icon">🎤</span>
+            <span>Play Recording</span>
+          </button>
+          <button @click="playOverlapping" :disabled="!targetAudioUrl || !userAudioUrl" class="playback-btn overlapping-btn">
+            <span class="btn-icon">🔄</span>
+            <span>Play Overlapping</span>
+          </button>
+          <button @click="playSequential" :disabled="!targetAudioUrl || !userAudioUrl" class="playback-btn sequential-btn">
+            <span class="btn-icon">📋</span>
+            <span>Play Sequential</span>
+          </button>
+          <button @click="stopAll" class="playback-btn stop-btn">
+            <span class="btn-icon">⏹</span>
+            <span>Stop All</span>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Speed Control Section -->
+      <div class="speed-control-section" v-if="targetAudioUrl || userAudioUrl">
+        <div class="speed-control">
+          <span class="speed-label">⚡ Playback Speed:</span>
+          <input 
+            type="range" 
+            min="0.25" 
+            max="2" 
+            step="0.25" 
+            v-model="globalPlaybackSpeed" 
+            @input="updatePlaybackSpeed"
+            class="speed-slider"
+          />
+          <span class="speed-display">{{ globalPlaybackSpeed }}x</span>
+        </div>
       </div>
     </div>
 
     <div class="bottom-controls">
       <div class="options-group">
         <label class="auto-play-toggle">
-          <input type="checkbox" v-model="autoPlayEnabled" />
-          Auto-play after recording
+          <input type="checkbox" v-model="autoPlayBoth" />
+          🔄 Auto-play both after recording
         </label>
         <div class="alignment-controls">
           <label class="trim-silence-toggle">
@@ -115,6 +145,18 @@
           <input type="checkbox" v-model="syncEnabled" />
           Sync time scales
         </label>
+        <div class="sequential-delay-control">
+          <label class="delay-label">📋 Sequential delay:</label>
+          <input 
+            type="range" 
+            min="0" 
+            max="2000" 
+            step="100" 
+            v-model="sequentialDelay" 
+            class="delay-slider"
+          />
+          <span class="delay-display">{{ sequentialDelay }}ms</span>
+        </div>
       </div>
       <button @click="saveRecording" :disabled="!getTargetBlob() || !userAudioBlob" class="save-btn">Save Recording</button>
       <button 
@@ -195,14 +237,16 @@ const targetAudioUrl = ref(null);
 const targetAudioBlob = ref(null);
 const userAudioUrl = ref(null);
 const userAudioBlob = ref(null);
-const autoPlayEnabled = ref(true);
 const autoAlignEnabled = ref(true); // Enable robust VAD trimming by default
+const globalPlaybackSpeed = ref(1); // Global playback speed control
 // Always use VAD-based trimming when enabled
 const currentAudioSource = ref('');
 const showUrlModal = ref(false);
 const tempAudioUrl = ref('');
 const hiddenFileInput = ref(null);
 const isRecordingActive = ref(false);
+const autoPlayBoth = ref(true); // Auto-play both audios after recording
+const sequentialDelay = ref(0); // Sequential playback delay in milliseconds
 const showVADSettings = ref(false);
 const vadSettings = ref({
   padding: 0.2,
@@ -212,6 +256,13 @@ const vadSettings = ref({
   maxTrimStart: 3.0,
   maxTrimEnd: 2.0
 });
+
+// Cache for target audio VAD processing to avoid reprocessing on each recording
+const targetAudioProcessed = ref(null);
+
+// Debug info for audio processing
+const targetDebugInfo = ref(null);
+const userDebugInfo = ref(null);
 
 const { initDB, addRecording, deleteRecording } = useIndexedDB();
 const { 
@@ -265,6 +316,14 @@ const handleFileSelection = async (event) => {
     try {
       console.log('📁 Processing target audio file:', file.name);
       
+      // Store raw duration for debugging
+      const rawDuration = await getAudioDuration(file);
+      targetDebugInfo.value = {
+        rawDuration: rawDuration.toFixed(3),
+        finalDuration: rawDuration.toFixed(3),
+        trimmedAmount: '0.000'
+      };
+      
       // Process target audio with VAD
       const targetProcessed = await processAudio(file);
       
@@ -286,11 +345,24 @@ const handleFileSelection = async (event) => {
         targetAudioBlob.value = normalizedBlob;
         targetAudioUrl.value = URL.createObjectURL(normalizedBlob);
         
+        // Cache the processed target audio for future recordings
+        targetAudioProcessed.value = targetProcessed;
+        
+        // Update debug info with normalized duration
+        const finalDuration = await getAudioDuration(normalizedBlob);
+        targetDebugInfo.value = {
+          rawDuration: rawDuration.toFixed(3),
+          finalDuration: finalDuration.toFixed(3),
+          trimmedAmount: (rawDuration - finalDuration).toFixed(3)
+        };
+        
         console.log('🎵 SMART-ALIGN: Target audio normalized with consistent padding');
       } else {
         console.log('📏 SMART-ALIGN: Target VAD processing failed - using original file');
         targetAudioBlob.value = file;
         targetAudioUrl.value = URL.createObjectURL(file);
+        // Clear cache since processing failed
+        targetAudioProcessed.value = null;
       }
       
       currentAudioSource.value = file.name;
@@ -301,6 +373,8 @@ const handleFileSelection = async (event) => {
       targetAudioBlob.value = file;
       targetAudioUrl.value = URL.createObjectURL(file);
       currentAudioSource.value = file.name;
+      // Clear cache since processing failed
+      targetAudioProcessed.value = null;
     }
     
     // Reset the input so the same file can be selected again if needed
@@ -335,6 +409,14 @@ const handleUrlLoad = async () => {
     try {
       console.log('🌐 Processing target audio from URL:', url);
       
+      // Store raw duration for debugging
+      const rawDuration = await getAudioDuration(blob);
+      targetDebugInfo.value = {
+        rawDuration: rawDuration.toFixed(3),
+        finalDuration: rawDuration.toFixed(3),
+        trimmedAmount: '0.000'
+      };
+      
       // Process target audio with VAD
       const targetProcessed = await processAudio(blob);
       
@@ -356,17 +438,32 @@ const handleUrlLoad = async () => {
         targetAudioBlob.value = normalizedBlob;
         targetAudioUrl.value = URL.createObjectURL(normalizedBlob);
         
+        // Cache the processed target audio for future recordings
+        targetAudioProcessed.value = targetProcessed;
+        
+        // Update debug info with normalized duration
+        const finalDuration = await getAudioDuration(normalizedBlob);
+        targetDebugInfo.value = {
+          rawDuration: rawDuration.toFixed(3),
+          finalDuration: finalDuration.toFixed(3),
+          trimmedAmount: (rawDuration - finalDuration).toFixed(3)
+        };
+        
         console.log('🎵 SMART-ALIGN: Target audio from URL normalized with consistent padding');
       } else {
         console.log('📏 SMART-ALIGN: Target VAD processing failed - using original URL audio');
         targetAudioBlob.value = blob;
         targetAudioUrl.value = URL.createObjectURL(blob);
+        // Clear cache since processing failed
+        targetAudioProcessed.value = null;
       }
     } catch (audioError) {
       console.error('Error processing target audio from URL:', audioError);
       // Fallback to original blob
       targetAudioBlob.value = blob;
       targetAudioUrl.value = URL.createObjectURL(blob);
+      // Clear cache since processing failed
+      targetAudioProcessed.value = null;
     }
     
     currentAudioSource.value = url;
@@ -419,6 +516,14 @@ const handleRecordedAudio = async (blob) => {
   userAudioUrl.value = URL.createObjectURL(blob);
   console.log('🎤 Initial User Audio URL created:', userAudioUrl.value);
   
+  // Store raw duration for debugging
+  const rawUserDuration = await getAudioDuration(blob);
+  userDebugInfo.value = {
+    rawDuration: rawUserDuration.toFixed(3),
+    finalDuration: rawUserDuration.toFixed(3),
+    trimmedAmount: '0.000'
+  };
+  
   // Update the current recording if we have an active set
   if (currentRecording.value && blob) {
     updateUserRecording(blob, userAudioUrl.value);
@@ -440,61 +545,167 @@ const handleRecordedAudio = async (blob) => {
           paddedEnd: userProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
         });
         
-        // Normalize the audio to have consistent 200ms padding
-        const normalizedBlob = await normalizeAudioSilence(
-          userProcessed.audioBlob,
-          userProcessed.vadBoundaries,
-          vadSettings.value.padding * 1000 // Convert to milliseconds
-        );
-        
-        // Clean up old blob URL to prevent memory leaks
-        if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
-          URL.revokeObjectURL(userAudioUrl.value);
+        // If we have both target and user audio, align them together for matching lengths
+        if (targetAudioBlob.value) {
+          console.log('🔄 Both target and user audio available - performing smart alignment...');
+          
+          try {
+            // Use cached target processing if available, otherwise process target audio
+            let targetProcessed;
+            if (targetAudioProcessed.value) {
+              console.log('🎯 Using cached target audio VAD processing');
+              targetProcessed = targetAudioProcessed.value;
+            } else {
+              console.log('🎯 Processing target audio VAD for first time');
+              targetProcessed = await processAudio(targetAudioBlob.value);
+              // Cache the processed target for future recordings
+              if (targetProcessed.processed) {
+                targetAudioProcessed.value = targetProcessed;
+              }
+            }
+            
+            if (targetProcessed.processed && userProcessed.processed) {
+              // Align both audios using smart alignment
+              const alignmentResult = await alignTwoAudios(
+                targetProcessed,
+                userProcessed,
+                vadSettings.value.padding * 1000 // Convert to milliseconds
+              );
+              
+              console.log('✅ Smart two-audio alignment complete:', {
+                method: alignmentResult.alignmentInfo.method,
+                finalDuration: alignmentResult.alignmentInfo.finalDuration?.toFixed(3) + 's',
+                paddingAdded: alignmentResult.alignmentInfo.paddingAdded?.toFixed(3) + 's'
+              });
+              
+              // Clean up old blob URLs to prevent memory leaks
+              if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
+                URL.revokeObjectURL(userAudioUrl.value);
+              }
+              
+              // Only update target audio if it actually needs to change
+              const targetNeedsUpdate = alignmentResult.alignmentInfo.method !== 'already_aligned' && 
+                                       alignmentResult.alignmentInfo.paddingAdded > 0;
+              
+              if (targetNeedsUpdate) {
+                console.log('🎯 Target audio needs updating for alignment');
+                if (targetAudioUrl.value && targetAudioUrl.value.startsWith('blob:')) {
+                  URL.revokeObjectURL(targetAudioUrl.value);
+                }
+                targetAudioBlob.value = alignmentResult.audio1Aligned;
+                targetAudioUrl.value = URL.createObjectURL(alignmentResult.audio1Aligned);
+              } else {
+                console.log('🎯 Target audio unchanged - no reload needed');
+              }
+              
+              // Always update user audio with aligned result
+              userAudioBlob.value = alignmentResult.audio2Aligned;
+              userAudioUrl.value = URL.createObjectURL(alignmentResult.audio2Aligned);
+              
+              // Update debug info for user audio
+              const finalUserDuration = await getAudioDuration(alignmentResult.audio2Aligned);
+              userDebugInfo.value = {
+                rawDuration: rawUserDuration.toFixed(3),
+                finalDuration: finalUserDuration.toFixed(3),
+                trimmedAmount: (rawUserDuration - finalUserDuration).toFixed(3)
+              };
+              
+              console.log('🎵 SMART-ALIGN: Audio alignment complete', {
+                targetUpdated: targetNeedsUpdate,
+                userUpdated: true
+              });
+            } else {
+              // Fallback to individual normalization
+              const normalizedBlob = await normalizeAudioSilence(
+                userProcessed.audioBlob,
+                userProcessed.vadBoundaries,
+                vadSettings.value.padding * 1000
+              );
+              
+              if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
+                URL.revokeObjectURL(userAudioUrl.value);
+              }
+              
+              userAudioBlob.value = normalizedBlob;
+              userAudioUrl.value = URL.createObjectURL(normalizedBlob);
+              
+              // Update debug info for user audio
+              const finalUserDuration = await getAudioDuration(normalizedBlob);
+              userDebugInfo.value = {
+                rawDuration: rawUserDuration.toFixed(3),
+                finalDuration: finalUserDuration.toFixed(3),
+                trimmedAmount: (rawUserDuration - finalUserDuration).toFixed(3)
+              };
+              
+              console.log('🎵 SMART-ALIGN: User audio normalized individually (target processing failed)');
+            }
+          } catch (alignmentError) {
+            console.error('Error during smart alignment:', alignmentError);
+            // Fallback to individual normalization
+            const normalizedBlob = await normalizeAudioSilence(
+              userProcessed.audioBlob,
+              userProcessed.vadBoundaries,
+              vadSettings.value.padding * 1000
+            );
+            
+            if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
+              URL.revokeObjectURL(userAudioUrl.value);
+            }
+            
+            userAudioBlob.value = normalizedBlob;
+            userAudioUrl.value = URL.createObjectURL(normalizedBlob);
+            
+            // Update debug info for user audio
+            const finalUserDuration = await getAudioDuration(normalizedBlob);
+            userDebugInfo.value = {
+              rawDuration: rawUserDuration.toFixed(3),
+              finalDuration: finalUserDuration.toFixed(3),
+              trimmedAmount: (rawUserDuration - finalUserDuration).toFixed(3)
+            };
+          }
+        } else {
+          // No target audio - just normalize user audio individually
+          const normalizedBlob = await normalizeAudioSilence(
+            userProcessed.audioBlob,
+            userProcessed.vadBoundaries,
+            vadSettings.value.padding * 1000 // Convert to milliseconds
+          );
+          
+          // Clean up old blob URL to prevent memory leaks
+          if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
+            URL.revokeObjectURL(userAudioUrl.value);
+          }
+          
+          userAudioBlob.value = normalizedBlob;
+          userAudioUrl.value = URL.createObjectURL(normalizedBlob);
+          
+          // Update debug info for user audio
+          const finalUserDuration = await getAudioDuration(normalizedBlob);
+          userDebugInfo.value = {
+            rawDuration: rawUserDuration.toFixed(3),
+            finalDuration: finalUserDuration.toFixed(3),
+            trimmedAmount: (rawUserDuration - finalUserDuration).toFixed(3)
+          };
+          
+          console.log('🎵 SMART-ALIGN: User audio normalized individually (no target audio)');
         }
-        
-        userAudioBlob.value = normalizedBlob;
-        userAudioUrl.value = URL.createObjectURL(normalizedBlob);
-        
-        console.log('🎵 SMART-ALIGN: User audio normalized with consistent padding:', userAudioUrl.value);
         
         // Force AudioPlayer to refresh by triggering reactive update
         await nextTick();
       } else {
         console.log('📏 SMART-ALIGN: VAD processing failed - keeping original recording');
+        // Keep the original debug info since no processing was done
       }
     } catch (error) {
       console.error('Error during smart VAD processing:', error);
     }
   }
   
-  // Auto-play sequence: target first, then user recording
-  if (autoPlayEnabled.value) {
-    console.log('🎵 Auto-play is enabled, starting sequential playback...');
+  // Auto-play both audios simultaneously after recording
+  if (autoPlayBoth.value) {
+    console.log('🎵 Auto-play both is enabled, preparing simultaneous playback...');
     
-    const startSequentialPlayback = async () => {
-      try {
-        // First, play the target audio if available
-        if (targetAudioPlayerRef.value && targetAudioPlayerRef.value.isReady) {
-          console.log('🎵 Step 1: Playing target audio');
-          await playAudioAndWait(targetAudioPlayerRef.value);
-          
-          // Small pause between target and user recording
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-        
-        // Then, play the user recording
-        if (userAudioPlayerRef.value && userAudioPlayerRef.value.isReady) {
-          console.log('🎵 Step 2: Playing user recording');
-          await playAudioAndWait(userAudioPlayerRef.value);
-        }
-        
-        console.log('🎵 Sequential playback completed');
-      } catch (error) {
-        console.error('🎵 Error during sequential playback:', error);
-      }
-    };
-    
-    // Wait for both players to be ready, then start sequence
+    // Wait for both players to be ready, then play both
     const waitAndPlay = (attempts = 0) => {
       const maxAttempts = 15; // 3 seconds of retries
       
@@ -507,17 +718,23 @@ const handleRecordedAudio = async (blob) => {
       const userReady = userAudioPlayerRef.value && userAudioPlayerRef.value.isReady;
       
       if (targetReady && userReady) {
-        console.log('🎵 Both players ready, starting sequential playback');
-        startManagedSequentialPlayback();
+        console.log('🎵 Both players ready, starting overlapping playback');
+        playOverlapping();
       } else {
-        console.log(`🎵 Waiting for players to be ready... attempt ${attempts + 1}/${maxAttempts}`);
+        console.log(`🎵 Waiting for players to be ready... attempt ${attempts + 1}/${maxAttempts}`, {
+          targetReady,
+          userReady,
+          hasTarget: !!getTargetAudioUrl(),
+          targetPlayerRef: !!targetAudioPlayerRef.value,
+          userPlayerRef: !!userAudioPlayerRef.value
+        });
         setTimeout(() => waitAndPlay(attempts + 1), 200);
       }
     };
     
-    setTimeout(() => waitAndPlay(0), 300);
+    setTimeout(() => waitAndPlay(0), 1000); // Longer delay to ensure both players are fully ready
   } else {
-    console.log('🎵 Auto-play is disabled');
+    console.log('🎵 Auto-play both is disabled');
   }
 };
 
@@ -601,14 +818,170 @@ const playUser = () => {
   }
 };
 
-const playBoth = async () => {
-  console.log('🔄 Playing both audio tracks sequentially');
-  await startManagedSequentialPlayback();
+const playOverlapping = async () => {
+  console.log('🔄 Playing both audio tracks overlapping (simultaneously)');
+  
+  // Stop any current playback first
+  stopAll();
+  
+  // Wait a bit longer for stop to complete and players to stabilize
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  // Bypass audio manager and play both WaveSurfer instances directly
+  let targetPlayed = false;
+  let userPlayed = false;
+  
+  // More thorough checking for target audio
+  if (targetAudioPlayerRef.value?.isReady) {
+    console.log('🎯 Starting target audio playback directly');
+    try {
+      const wavesurfer = targetAudioPlayerRef.value.wavesurfer;
+      console.log('🎯 Target wavesurfer details:', {
+        hasWavesurfer: !!wavesurfer,
+        hasValue: !!wavesurfer?.value,
+        isPlaying: wavesurfer?.value?.isPlaying?.(),
+        isReady: targetAudioPlayerRef.value.isReady
+      });
+      
+      if (wavesurfer?.value && typeof wavesurfer.value.play === 'function') {
+        await wavesurfer.value.seekTo(0); // Start from beginning
+        await wavesurfer.value.play();
+        targetPlayed = true;
+        console.log('🎯 Target audio started successfully');
+      } else if (wavesurfer && typeof wavesurfer.play === 'function') {
+        // Try direct access if .value doesn't work
+        await wavesurfer.seekTo(0);
+        await wavesurfer.play();
+        targetPlayed = true;
+        console.log('🎯 Target audio started successfully (direct access)');
+      } else {
+        console.warn('🎯 Target wavesurfer not available or missing play method');
+      }
+    } catch (e) {
+      console.error('🎯 Error playing target:', e);
+    }
+  } else {
+    console.warn('🎯 Target audio not ready:', {
+      hasRef: !!targetAudioPlayerRef.value,
+      isReady: targetAudioPlayerRef.value?.isReady
+    });
+  }
+  
+  // More thorough checking for user audio
+  if (userAudioPlayerRef.value?.isReady) {
+    console.log('🎤 Starting user audio playback directly');
+    try {
+      const wavesurfer = userAudioPlayerRef.value.wavesurfer;
+      console.log('🎤 User wavesurfer details:', {
+        hasWavesurfer: !!wavesurfer,
+        hasValue: !!wavesurfer?.value,
+        isPlaying: wavesurfer?.value?.isPlaying?.(),
+        isReady: userAudioPlayerRef.value.isReady
+      });
+      
+      if (wavesurfer?.value && typeof wavesurfer.value.play === 'function') {
+        await wavesurfer.value.seekTo(0); // Start from beginning
+        await wavesurfer.value.play();
+        userPlayed = true;
+        console.log('🎤 User audio started successfully');
+      } else if (wavesurfer && typeof wavesurfer.play === 'function') {
+        // Try direct access if .value doesn't work
+        await wavesurfer.seekTo(0);
+        await wavesurfer.play();
+        userPlayed = true;
+        console.log('🎤 User audio started successfully (direct access)');
+      } else {
+        console.warn('🎤 User wavesurfer not available or missing play method');
+      }
+    } catch (e) {
+      console.error('🎤 Error playing user:', e);
+    }
+  } else {
+    console.warn('🎤 User audio not ready:', {
+      hasRef: !!userAudioPlayerRef.value,
+      isReady: userAudioPlayerRef.value?.isReady
+    });
+  }
+  
+  if (targetPlayed || userPlayed) {
+    console.log('🎵 Successfully started overlapping playback:', { target: targetPlayed, user: userPlayed });
+  } else {
+    console.warn('🎵 Failed to start any audio playback');
+  }
+};
+
+const playSequential = async () => {
+  console.log('📋 Playing audio tracks sequentially (target then user)');
+  
+  // Stop any current playback first
+  stopAll();
+  
+  // Wait for stop to complete
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  // Prepare player info for audio manager sequential playback
+  const players = [];
+  
+  // Add target player if ready
+  if (targetAudioPlayerRef.value?.isReady && targetAudioUrl.value) {
+    const wavesurfer = targetAudioPlayerRef.value.wavesurfer?.value || targetAudioPlayerRef.value.wavesurfer;
+    const targetPlayerInfo = {
+      id: targetAudioPlayerRef.value.playerId || 'target-player',
+      type: 'target',
+      wavesurfer: wavesurfer,
+      isReady: true // We already checked isReady above
+    };
+    players.push(targetPlayerInfo);
+    console.log('📋 Added target player to sequence');
+  }
+  
+  // Add user player if ready
+  if (userAudioPlayerRef.value?.isReady && userAudioUrl.value) {
+    const wavesurfer = userAudioPlayerRef.value.wavesurfer?.value || userAudioPlayerRef.value.wavesurfer;
+    const userPlayerInfo = {
+      id: userAudioPlayerRef.value.playerId || 'user-player', 
+      type: 'user',
+      wavesurfer: wavesurfer,
+      isReady: true // We already checked isReady above
+    };
+    players.push(userPlayerInfo);
+    console.log('📋 Added user player to sequence');
+  }
+  
+  if (players.length === 0) {
+    console.warn('📋 No players available for sequential playback');
+    return;
+  }
+  
+  console.log(`📋 Starting sequential playback with ${players.length} players`);
+  
+  // Use audio manager for sequential playback with configurable delay between tracks
+  try {
+    await audioManager.playSequential(players, [0, sequentialDelay.value]); // Configurable delay between target and user
+    console.log('📋 Sequential playback completed');
+  } catch (error) {
+    console.error('📋 Error during sequential playback:', error);
+  }
 };
 
 const stopAll = () => {
   console.log('🛑 Stopping all audio');
   audioManager.stopAll();
+};
+
+// Update playback speed for both audio players
+const updatePlaybackSpeed = () => {
+  console.log('⚡ Updating global playback speed to:', globalPlaybackSpeed.value + 'x');
+  
+  // Update target audio player speed
+  if (targetAudioPlayerRef.value && targetAudioPlayerRef.value.setPlaybackRate) {
+    targetAudioPlayerRef.value.setPlaybackRate(globalPlaybackSpeed.value);
+  }
+  
+  // Update user audio player speed
+  if (userAudioPlayerRef.value && userAudioPlayerRef.value.setPlaybackRate) {
+    userAudioPlayerRef.value.setPlaybackRate(globalPlaybackSpeed.value);
+  }
 };
 
 // Helper function to play audio and wait for it to finish
@@ -647,6 +1020,26 @@ const playAudioAndWait = (playerRef) => {
 // Helper function to get target blob from current recording or manual upload
 const getTargetBlob = () => {
   return currentRecording.value?.audioBlob || targetAudioBlob.value;
+};
+
+// Helper function to get audio duration
+const getAudioDuration = async (audioBlob) => {
+  return new Promise((resolve) => {
+    const audio = new Audio();
+    const url = URL.createObjectURL(audioBlob);
+    
+    audio.addEventListener('loadedmetadata', () => {
+      URL.revokeObjectURL(url);
+      resolve(audio.duration);
+    });
+    
+    audio.addEventListener('error', () => {
+      URL.revokeObjectURL(url);
+      resolve(0);
+    });
+    
+    audio.src = url;
+  });
 };
 
 // Helper function to get target audio URL with proper fallback
@@ -792,6 +1185,7 @@ h1 {
   color: #1f2937;
   font-weight: 600;
   font-size: 18px;
+  text-shadow: none; /* Ensure good contrast */
 }
 
 .target-controls {
@@ -1034,6 +1428,55 @@ h1 {
   cursor: pointer;
 }
 
+.sequential-delay-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.delay-label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.delay-slider {
+  width: 100px;
+  height: 4px;
+  border-radius: 2px;
+  background: #e5e7eb;
+  outline: none;
+  cursor: pointer;
+}
+
+.delay-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.delay-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  border: none;
+}
+
+.delay-display {
+  font-weight: 600;
+  color: #3b82f6;
+  min-width: 45px;
+  text-align: right;
+}
+
 .align-btn {
   padding: 8px 16px;
   font-size: 14px;
@@ -1100,19 +1543,41 @@ h1 {
 }
 
 .central-playback-controls {
-  background-color: #f8fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  margin: 16px 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 16px;
+  padding: 24px;
+  margin: 20px 0;
   text-align: center;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
 }
 
 .central-playback-controls h3 {
-  margin: 0 0 15px 0;
-  color: #1e293b;
-  font-size: 18px;
-  font-weight: 600;
+  margin: 0 0 20px 0;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.main-controls-row {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 768px) {
+  .main-controls-row {
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+  }
+}
+
+.recording-controls {
+  flex-shrink: 0;
 }
 
 .playback-buttons {
@@ -1120,8 +1585,8 @@ h1 {
   flex-wrap: wrap;
   gap: 12px;
   justify-content: center;
-  max-width: 600px;
-  margin: 0 auto;
+  max-width: 800px;
+  flex: 1;
 }
 
 .playback-btn {
@@ -1130,18 +1595,19 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 15px 12px;
+  padding: 16px 12px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   transition: all 0.2s;
-  min-height: 70px;
-  min-width: 110px;
+  min-height: 80px;
+  min-width: 120px;
   flex: 1 1 auto;
   white-space: nowrap;
   overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 @media (max-width: 640px) {
@@ -1162,49 +1628,145 @@ h1 {
 }
 
 .target-btn {
-  background-color: #3b82f6;
+  background-color: rgba(255, 255, 255, 0.15);
   color: white;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .target-btn:hover:not(:disabled) {
-  background-color: #2563eb;
+  background-color: rgba(255, 255, 255, 0.25);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
 }
 
 .user-btn {
-  background-color: #10b981;
+  background-color: rgba(255, 255, 255, 0.15);
   color: white;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .user-btn:hover:not(:disabled) {
-  background-color: #059669;
+  background-color: rgba(255, 255, 255, 0.25);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
 }
 
-.both-btn {
-  background-color: #8b5cf6;
+.overlapping-btn {
+  background-color: rgba(255, 255, 255, 0.15);
   color: white;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.both-btn:hover:not(:disabled) {
-  background-color: #7c3aed;
+.overlapping-btn:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.25);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+}
+
+.sequential-btn {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sequential-btn:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
 }
 
 .stop-btn {
-  background-color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.8);
   color: white;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .stop-btn:hover:not(:disabled) {
-  background-color: #dc2626;
+  background-color: rgba(239, 68, 68, 0.9);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 .playback-btn:disabled {
-  background-color: #94a3b8;
+  background-color: rgba(148, 163, 184, 0.5);
+  color: rgba(255, 255, 255, 0.5);
   cursor: not-allowed;
   transform: none;
+  backdrop-filter: blur(5px);
+}
+
+.speed-control-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.speed-label {
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+.speed-slider {
+  flex: 1;
+  max-width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  outline: none;
+  cursor: pointer;
+}
+
+.speed-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.speed-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.speed-display {
+  color: white;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  width: 65px; /* Fixed width to prevent layout shifts */
+  text-align: center;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px 12px;
+  border-radius: 8px;
+  backdrop-filter: blur(5px);
+  flex-shrink: 0; /* Prevent shrinking */
 }
 
 .visualization-container {
@@ -1216,25 +1778,26 @@ h1 {
 }
 
 .audio-column {
-  background-color: #1a1a1a; /* Darker background to match visualization */
-  border: 1px solid #444;
-  border-radius: 8px;
-  padding: 12px;
+  background-color: #ffffff; /* Light background for better text contrast */
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
   min-width: 0;
   min-height: 300px;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 
 .placeholder {
   padding: 40px;
   text-align: center;
-  color: #9ca3af;
-  border: 2px dashed #555;
+  color: #6b7280;
+  border: 2px dashed #d1d5db;
   border-radius: 8px;
   font-size: 14px;
-  background-color: #1a1a1a;
+  background-color: #f9fafb;
   flex: 1;
   display: flex;
   align-items: center;
@@ -1244,9 +1807,9 @@ h1 {
 }
 
 .recording-placeholder {
-  background-color: #1a1a1a;
+  background-color: #fef2f2;
   border-color: #ef4444;
-  color: #ef4444;
+  color: #dc2626;
 }
 
 .recording-indicator-text {
@@ -1263,9 +1826,10 @@ h1 {
 }
 
 h2 {
-  color: #555;
+  color: #374151;
   margin-top: 0;
   margin-bottom: 15px;
+  font-weight: 600;
 }
 
 button {
