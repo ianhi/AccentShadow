@@ -12,6 +12,8 @@
         .error { background: #f8d7da; }
         .warning { background: #fff3cd; }
     </style>
+    <!-- Load ONNX runtime first, then VAD -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.19/dist/bundle.min.js"></script>
 </head>
 <body>
@@ -36,16 +38,30 @@
             addResult('Testing with minimal VAD configuration...');
             
             try {
+                // Check for ONNX runtime first
+                if (!window.ort) {
+                    addResult('ONNX runtime not available!', 'error');
+                    addResult('This is required for VAD to work.', 'error');
+                    return;
+                }
+                
                 // Wait for VAD
                 if (!window.vad) {
                     addResult('Waiting for VAD library...', 'warning');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    let retries = 0;
+                    while (!window.vad && retries < 50) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        retries++;
+                    }
                 }
                 
                 if (!window.vad) {
-                    addResult('VAD library not available!', 'error');
+                    addResult('VAD library not available after waiting!', 'error');
                     return;
                 }
+                
+                addResult(`ONNX runtime version: ${window.ort.version || 'unknown'}`, 'success');
+                addResult(`VAD library loaded: ${Object.keys(window.vad).join(', ')}`, 'success');
                 
                 // Create the most lenient VAD possible
                 addResult('Creating VAD with most lenient settings...');
