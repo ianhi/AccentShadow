@@ -70,14 +70,14 @@ export function useVADProcessor() {
       console.log('📦 Creating VAD instance...');
       
       vadInstance = await (window as any).vad.NonRealTimeVAD.new({
-        // Use very lenient settings that should work for all audio types
-        positiveSpeechThreshold: 0.2,   // Very sensitive - should detect any speech
-        negativeSpeechThreshold: 0.1,   // Very low threshold for speech continuation
-        redemptionFrames: 64,            // Allow very large gaps (~2048ms) for natural speech
+        // Use conservative settings from working configuration (commit 3f94da2)
+        positiveSpeechThreshold: 0.5,   // More conservative - less sensitive to noise
+        negativeSpeechThreshold: 0.35,  // Higher threshold for better hysteresis
+        redemptionFrames: 24,            // Smaller gaps for more accurate detection (~768ms)
         frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: 1,              // Minimum possible - allow any speech segments
-        preSpeechPadFrames: 8,           // Generous context before speech starts
-        positiveSpeechPadFrames: 8       // Generous context after speech ends
+        minSpeechFrames: 8,              // Minimum 8 frames (~256ms) for valid speech
+        preSpeechPadFrames: 4,           // Reasonable context before speech starts
+        positiveSpeechPadFrames: 4       // Reasonable context after speech ends
       });
       
       vadReady.value = true;
@@ -205,15 +205,15 @@ export function useVADProcessor() {
       // Create a VAD instance with the provided runtime options
       console.log('🎛️ Creating VAD instance with runtime options');
       
-      // Use extremely lenient settings for debugging
+      // Use conservative settings from working configuration (commit 3f94da2)
       const vadConfig = {
-        positiveSpeechThreshold: positiveSpeechThreshold,
-        negativeSpeechThreshold: negativeSpeechThreshold,
-        redemptionFrames: 128,           // Double the gap allowance for very interrupted speech
+        positiveSpeechThreshold: Math.max(positiveSpeechThreshold, 0.5), // Use at least 0.5
+        negativeSpeechThreshold: Math.max(negativeSpeechThreshold, 0.35), // Use at least 0.35
+        redemptionFrames: 24,            // Balanced gap allowance from working config
         frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: minSpeechFrames,
-        preSpeechPadFrames: 16,          // More generous context before speech starts
-        positiveSpeechPadFrames: 16      // More generous context after speech ends
+        minSpeechFrames: Math.max(minSpeechFrames, 8), // Use at least 8 frames
+        preSpeechPadFrames: 4,           // Conservative context before speech
+        positiveSpeechPadFrames: 4       // Conservative context after speech
       };
       
       console.log('🔧 ACTUAL VAD INSTANCE CONFIG:', vadConfig);
@@ -298,7 +298,7 @@ export function useVADProcessor() {
         originalSpeechStart = overallStart;
         originalSpeechEnd = overallEnd;
         
-        // Apply generous padding to preserve natural speech endings
+        // Apply conservative padding to preserve natural speech endings
         const generousPadding = Math.max(padding, 0.1); // At least 100ms padding
         overallStart = Math.max(0, overallStart - generousPadding);
         overallEnd = Math.min(resampledBuffer.duration, overallEnd + generousPadding);
@@ -504,28 +504,22 @@ export function useVADProcessor() {
       const sampleRate = audioBuffer.sampleRate;
       const paddingSamples = Math.floor(padding * sampleRate);
       
-      // Convert VAD boundaries from 16kHz to actual sample rate
-      const vadSampleRate = 16000; // VAD always processes at 16kHz
-      const sampleRateRatio = sampleRate / vadSampleRate;
+      // VAD returns times in seconds - convert directly to original sample rate samples
+      // No complex sample rate conversion needed since boundaries use time values
+      const adjustedStartSample = Math.floor(boundaries.startTime * sampleRate);
+      const adjustedEndSample = Math.floor(boundaries.endTime * sampleRate);
       
-      const adjustedStartSample = Math.floor(boundaries.startSample * sampleRateRatio);
-      const adjustedEndSample = Math.floor(boundaries.endSample * sampleRateRatio);
-      
-      console.log('🔄 SAMPLE RATE CONVERSION:', {
-        vadSampleRate,
-        actualSampleRate: sampleRate,
-        ratio: sampleRateRatio,
+      console.log('🔄 AUDIO TRIMMING BOUNDARIES:', {
+        originalSampleRate: sampleRate,
         vadBoundaries: {
-          startSample: boundaries.startSample,
-          endSample: boundaries.endSample,
-          startTime: boundaries.startSample / vadSampleRate,
-          endTime: boundaries.endSample / vadSampleRate
+          startTime: boundaries.startTime?.toFixed(3) + 's',
+          endTime: boundaries.endTime?.toFixed(3) + 's'
         },
         adjustedBoundaries: {
           startSample: adjustedStartSample,
           endSample: adjustedEndSample,
-          startTime: adjustedStartSample / sampleRate,
-          endTime: adjustedEndSample / sampleRate
+          startTime: (adjustedStartSample / sampleRate).toFixed(3) + 's',
+          endTime: (adjustedEndSample / sampleRate).toFixed(3) + 's'
         }
       });
       
