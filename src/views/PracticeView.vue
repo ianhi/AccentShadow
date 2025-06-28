@@ -530,7 +530,7 @@ const handleRecordedAudio = async (blob) => {
   }
   
   // Smart VAD-based audio processing with normalized padding
-  if (autoAlignEnabled.value) {
+  if (false && autoAlignEnabled.value) { // TEMPORARY: Disable auto-align to debug over-trimming
     try {
       console.log('🎧 Starting smart VAD-based audio processing...');
       
