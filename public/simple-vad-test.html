@@ -311,16 +311,16 @@ Audio level: ${maxAmp > 0.1 ? 'Good' : maxAmp > 0.01 ? 'Low' : 'Very Low'}`, 'su
                 addResult(`ONNX runtime version: ${window.ort.version || 'unknown'}`, 'success');
                 addResult(`VAD library loaded: ${Object.keys(window.vad).join(', ')}`, 'success');
                 
-                // Create the most lenient VAD possible
-                addResult('Creating VAD with most lenient settings...');
+                // Create ultra-sensitive VAD to catch all speech
+                addResult('Creating VAD with ultra-sensitive settings to catch all speech...');
                 const vadInstance = await window.vad.NonRealTimeVAD.new({
-                    positiveSpeechThreshold: 0.01,  // Extremely low
-                    negativeSpeechThreshold: 0.001, // Extremely low
-                    redemptionFrames: 1000,         // Huge gap allowance
+                    positiveSpeechThreshold: 0.005, // Ultra-sensitive
+                    negativeSpeechThreshold: 0.001, // Almost zero
+                    redemptionFrames: 512,          // Massive gap allowance
                     frameSamples: 1536,
                     minSpeechFrames: 1,             // Minimum possible
-                    preSpeechPadFrames: 100,        // Lots of padding
-                    positiveSpeechPadFrames: 100    // Lots of padding
+                    preSpeechPadFrames: 64,         // Lots of padding
+                    positiveSpeechPadFrames: 64     // Lots of padding
                 });
                 
                 addResult('VAD instance created successfully', 'success');

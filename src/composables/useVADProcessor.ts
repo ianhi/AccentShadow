@@ -70,14 +70,14 @@ export function useVADProcessor() {
       console.log('📦 Creating VAD instance...');
       
       vadInstance = await (window as any).vad.NonRealTimeVAD.new({
-        // Use very sensitive settings to ensure we detect something
-        positiveSpeechThreshold: 0.1,   // Very sensitive
-        negativeSpeechThreshold: 0.05,  // Very low threshold
-        redemptionFrames: 64,            // Large gap allowance
+        // Ultra-sensitive settings to catch all speech content
+        positiveSpeechThreshold: 0.01,  // Extremely sensitive
+        negativeSpeechThreshold: 0.005, // Almost zero threshold
+        redemptionFrames: 128,           // Very large gap allowance
         frameSamples: 1536,              // Default frame size for v4 model
         minSpeechFrames: 1,              // Minimum possible
-        preSpeechPadFrames: 8,           // More context
-        positiveSpeechPadFrames: 8       // More context
+        preSpeechPadFrames: 16,          // Lots of context
+        positiveSpeechPadFrames: 16      // Lots of context
       });
       
       vadReady.value = true;
@@ -230,15 +230,15 @@ export function useVADProcessor() {
       // Create a VAD instance with the provided runtime options
       console.log('🎛️ Creating VAD instance with runtime options');
       
-      // Very sensitive settings to ensure detection
+      // Ultra-sensitive settings to catch obvious speech content
       const vadConfig = {
-        positiveSpeechThreshold: Math.min(positiveSpeechThreshold, 0.1), // Force sensitive detection
-        negativeSpeechThreshold: Math.min(negativeSpeechThreshold, 0.05), // Very low threshold
-        redemptionFrames: 64,            // Large gap allowance
+        positiveSpeechThreshold: Math.min(positiveSpeechThreshold, 0.01), // Force ultra-sensitive detection
+        negativeSpeechThreshold: Math.min(negativeSpeechThreshold, 0.005), // Almost zero threshold
+        redemptionFrames: 256,           // Huge gap allowance to connect speech segments
         frameSamples: 1536,              // Default frame size for v4 model
         minSpeechFrames: 1,              // Minimum possible
-        preSpeechPadFrames: 8,           // More context
-        positiveSpeechPadFrames: 8       // More context
+        preSpeechPadFrames: 32,          // Lots of context
+        positiveSpeechPadFrames: 32      // Lots of context
       };
       
       console.log('🔧 ACTUAL VAD INSTANCE CONFIG:', vadConfig);
@@ -293,20 +293,12 @@ export function useVADProcessor() {
       let originalSpeechEnd = null;
       
       if (speechSegments.length > 0) {
-        // Filter out very early false positives (likely noise/artifacts)
-        const minValidStartTime = 0.05; // Ignore speech detected in first 50ms
-        let filteredSegments = speechSegments.filter(s => s.startTime >= minValidStartTime);
+        // Don't filter out early segments - we need all detected speech
+        console.log(`🎯 KEEPING ALL ${speechSegments.length} detected segments (no filtering)`);
+        let filteredSegments = speechSegments; // Keep everything
         
-        if (filteredSegments.length === 0) {
-          // If all segments were filtered out, use original segments
-          console.log(`⚠️ All segments were early - using original segments`);
-          filteredSegments = speechSegments;
-        } else {
-          console.log(`🧹 FILTERED OUT ${speechSegments.length - filteredSegments.length} early false positive segments`);
-        }
-        
-        // Merge nearby short segments to create more reasonable speech boundaries
-        const mergedSegments = mergeNearbySegments(filteredSegments, 0.1); // Merge segments within 100ms
+        // Merge nearby segments with a larger gap to connect speech parts
+        const mergedSegments = mergeNearbySegments(filteredSegments, 0.5); // Merge segments within 500ms
         console.log(`🔗 MERGED ${filteredSegments.length} segments into ${mergedSegments.length} merged segments`);
         
         // Find earliest start and latest end from merged segments
