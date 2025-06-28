@@ -578,10 +578,8 @@ const handleRecordedAudio = async (blob) => {
                 paddingAdded: alignmentResult.alignmentInfo.paddingAdded?.toFixed(3) + 's'
               });
               
-              // Clean up old blob URLs to prevent memory leaks
-              if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
-                URL.revokeObjectURL(userAudioUrl.value);
-              }
+              // Store old URL for cleanup after new audio is loaded
+              const oldUserUrl = userAudioUrl.value;
               
               // Only update target audio if it actually needs to change
               const targetNeedsUpdate = alignmentResult.alignmentInfo.method !== 'already_aligned' && 
@@ -589,9 +587,8 @@ const handleRecordedAudio = async (blob) => {
               
               if (targetNeedsUpdate) {
                 console.log('🎯 Target audio needs updating for alignment');
-                if (targetAudioUrl.value && targetAudioUrl.value.startsWith('blob:')) {
-                  URL.revokeObjectURL(targetAudioUrl.value);
-                }
+                // Store old target URL for cleanup after new audio is loaded
+                const oldTargetUrl = targetAudioUrl.value;
                 targetAudioBlob.value = alignmentResult.audio1Aligned;
                 targetAudioUrl.value = URL.createObjectURL(alignmentResult.audio1Aligned);
               } else {
@@ -614,6 +611,16 @@ const handleRecordedAudio = async (blob) => {
                 targetUpdated: targetNeedsUpdate,
                 userUpdated: true
               });
+              
+              // Cleanup old blob URLs after a delay to ensure new audio is loaded
+              setTimeout(() => {
+                if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
+                  URL.revokeObjectURL(oldUserUrl);
+                }
+                if (targetNeedsUpdate && oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+                  URL.revokeObjectURL(oldTargetUrl);
+                }
+              }, 3000); // 3 second delay to ensure audio players have loaded
             } else {
               // Fallback to individual normalization
               const normalizedBlob = await normalizeAudioSilence(
@@ -622,12 +629,18 @@ const handleRecordedAudio = async (blob) => {
                 vadSettings.value.padding * 1000
               );
               
-              if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
-                URL.revokeObjectURL(userAudioUrl.value);
-              }
+              // Store old URL for later cleanup
+              const oldUserUrl = userAudioUrl.value;
               
               userAudioBlob.value = normalizedBlob;
               userAudioUrl.value = URL.createObjectURL(normalizedBlob);
+              
+              // Cleanup old blob URL after delay
+              setTimeout(() => {
+                if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
+                  URL.revokeObjectURL(oldUserUrl);
+                }
+              }, 3000);
               
               // Update debug info for user audio
               const finalUserDuration = await getAudioDuration(normalizedBlob);
@@ -648,12 +661,18 @@ const handleRecordedAudio = async (blob) => {
               vadSettings.value.padding * 1000
             );
             
-            if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
-              URL.revokeObjectURL(userAudioUrl.value);
-            }
+            // Store old URL for later cleanup
+            const oldUserUrl = userAudioUrl.value;
             
             userAudioBlob.value = normalizedBlob;
             userAudioUrl.value = URL.createObjectURL(normalizedBlob);
+            
+            // Cleanup old blob URL after delay
+            setTimeout(() => {
+              if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(oldUserUrl);
+              }
+            }, 3000);
             
             // Update debug info for user audio
             const finalUserDuration = await getAudioDuration(normalizedBlob);
@@ -671,13 +690,18 @@ const handleRecordedAudio = async (blob) => {
             vadSettings.value.padding * 1000 // Convert to milliseconds
           );
           
-          // Clean up old blob URL to prevent memory leaks
-          if (userAudioUrl.value && userAudioUrl.value.startsWith('blob:')) {
-            URL.revokeObjectURL(userAudioUrl.value);
-          }
+          // Store old URL for later cleanup
+          const oldUserUrl = userAudioUrl.value;
           
           userAudioBlob.value = normalizedBlob;
           userAudioUrl.value = URL.createObjectURL(normalizedBlob);
+          
+          // Cleanup old blob URL after delay
+          setTimeout(() => {
+            if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
+              URL.revokeObjectURL(oldUserUrl);
+            }
+          }, 3000);
           
           // Update debug info for user audio
           const finalUserDuration = await getAudioDuration(normalizedBlob);
