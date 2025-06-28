@@ -68,7 +68,7 @@ export function useTimeSync() {
     return `${Math.max(ratio * 100, 20)}%`; // Minimum 20% width for visibility
   });
 
-  const setTargetDuration = (duration) => {
+  const setTargetDuration = (duration: number): void => {
     targetDuration.value = duration;
     console.log('🕒 Target duration set:', duration, 'seconds');
     console.log('🕒 Audio lengths - Target:', targetDuration.value + 's', 'User:', userDuration.value + 's', 'Max:', maxDuration.value + 's');
@@ -77,7 +77,7 @@ export function useTimeSync() {
     console.log('🕒 Sync enabled:', syncEnabled.value);
   };
 
-  const setUserDuration = (duration) => {
+  const setUserDuration = (duration: number): void => {
     userDuration.value = duration;
     console.log('🕒 User duration set:', duration, 'seconds');
     console.log('🕒 Audio lengths - Target:', targetDuration.value + 's', 'User:', userDuration.value + 's', 'Max:', maxDuration.value + 's');

@@ -1,11 +1,23 @@
 
-import { ref, shallowRef, onUnmounted } from 'vue';
+import { ref, shallowRef, onUnmounted, type Ref } from 'vue';
 import WaveSurfer from 'wavesurfer.js';
 import Spectrogram from 'wavesurfer.js/dist/plugins/spectrogram.esm.js';
 import { audioManager } from './useAudioManager';
 
-export function useWaveform(containerRef, spectrogramContainerRef, audioId = null, audioType = 'unknown') {
-  const wavesurfer = shallowRef(null);
+interface PlayerInfo {
+  id: string;
+  type: string;
+  wavesurfer: WaveSurfer;
+  isReady?: boolean;
+}
+
+export function useWaveform(
+  containerRef: Ref<HTMLElement | null>, 
+  spectrogramContainerRef: Ref<HTMLElement | null>, 
+  audioId: string | null = null, 
+  audioType: string = 'unknown'
+) {
+  const wavesurfer = shallowRef<WaveSurfer | null>(null);
   const isReady = ref(false);
   const isPlaying = ref(false);
   const currentTime = ref(0);
@@ -13,7 +25,7 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
   const volume = ref(0.5);
   const playbackRate = ref(1.0);
   const playerId = audioId || `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-  let playerInfo = null;
+  let playerInfo: PlayerInfo | null = null;
 
   // Detect if we're on mobile device
   const isMobileDevice = () => {
@@ -43,23 +55,23 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
       const waveformHeight = isMobile ? 40 : 60;
       const spectrogramHeight = isMobile ? 120 : 200;
       
-      wavesurfer.value = WaveSurfer.create({
+      const instance = WaveSurfer.create({
         container: containerRef.value,
         waveColor: 'rgba(96, 165, 250, 0.8)', // Original semi-transparent blue
         progressColor: 'rgba(59, 130, 246, 0.9)', // Original slightly more opaque progress
         cursorColor: '#ff0000', // Red cursor/progress bar
         cursorWidth: 2, // 2px width for the progress cursor
-        backgroundColor: 'transparent',
         height: waveformHeight,
         normalize: true,
         barWidth: 2,
         barRadius: 3, // Original setting
-        responsive: true, // Original setting
         interact: true, // Original setting
         fillParent: true, // Original setting
         // Remove backend specification to avoid media element issues
         mediaControls: false
       });
+      
+      wavesurfer.value = instance;
       
       // Create spectrogram plugin
       try {
@@ -79,11 +91,13 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
       }
 
       // Add loading event handler
-      wavesurfer.value.on('loading', (progress) => {
+      wavesurfer.value?.on('loading', (progress: number) => {
         // Could emit loading progress here if needed
       });
       
-      wavesurfer.value.on('ready', () => {
+      wavesurfer.value?.on('ready', () => {
+        if (!wavesurfer.value) return;
+        
         const audioDuration = wavesurfer.value.getDuration();
         console.log(`🎵 WaveSurfer ready [${audioType}]: ${audioDuration.toFixed(3)}s`);
         
@@ -96,7 +110,7 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
         
         // Force manual resize and render for WaveSurfer v7+
         setTimeout(() => {
-          if (wavesurfer.value && wavesurfer.value.renderer) {
+          if (wavesurfer.value && (wavesurfer.value as any).renderer) {
             try {
               const container = containerRef.value;
               if (container) {
@@ -104,11 +118,11 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
                 const height = container.offsetHeight;
                 
                 // Try gentle redraw methods
-                if (wavesurfer.value.redraw) {
-                  wavesurfer.value.redraw();
+                if ((wavesurfer.value as any).redraw) {
+                  (wavesurfer.value as any).redraw();
                 }
-                if (wavesurfer.value.renderer.setSize) {
-                  wavesurfer.value.renderer.setSize(width, height);
+                if ((wavesurfer.value as any).renderer.setSize) {
+                  (wavesurfer.value as any).renderer.setSize(width, height);
                 }
               }
             } catch (e) {
@@ -118,25 +132,27 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
         }, 200);
       });
 
-      wavesurfer.value.on('error', (error) => {
+      wavesurfer.value?.on('error', (error: any) => {
         console.error('🎵 WaveSurfer error:', error?.message || error);
         isReady.value = false;
         isPlaying.value = false;
       });
 
-      wavesurfer.value.on('play', () => {
+      wavesurfer.value?.on('play', () => {
         isPlaying.value = true;
       });
 
-      wavesurfer.value.on('pause', () => {
+      wavesurfer.value?.on('pause', () => {
         isPlaying.value = false;
       });
 
-      wavesurfer.value.on('timeupdate', () => {
-        currentTime.value = wavesurfer.value.getCurrentTime();
+      wavesurfer.value?.on('timeupdate', () => {
+        if (wavesurfer.value) {
+          currentTime.value = wavesurfer.value.getCurrentTime();
+        }
       });
 
-      wavesurfer.value.on('finish', () => {
+      wavesurfer.value?.on('finish', () => {
         isPlaying.value = false;
         currentTime.value = 0;
       });
@@ -145,7 +161,7 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
     }
   };
 
-  const loadAudio = (url) => {
+  const loadAudio = (url: string): void => {
     if (!url) {
       console.warn(`🎵 Cannot load audio: no URL provided`);
       return;
@@ -166,7 +182,7 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
   };
   
   // Separate function for direct audio loading (no recreation)
-  const loadAudioDirect = (url) => {
+  const loadAudioDirect = (url: string): void => {
     if (!wavesurfer.value || !url) {
       console.warn(`🎵 Cannot load audio - missing wavesurfer or url`);
       return;
@@ -219,14 +235,15 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
     }
   };
 
-  const setVolume = (event) => {
-    volume.value = parseFloat(event.target.value);
+  const setVolume = (event: Event): void => {
+    const target = event.target as HTMLInputElement;
+    volume.value = parseFloat(target.value);
     if (wavesurfer.value) {
       wavesurfer.value.setVolume(volume.value);
     }
   };
 
-  const setPlaybackRate = (rate) => {
+  const setPlaybackRate = (rate: number): void => {
     playbackRate.value = rate;
     if (wavesurfer.value) {
       wavesurfer.value.setPlaybackRate(rate);

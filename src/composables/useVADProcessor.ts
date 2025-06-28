@@ -1,12 +1,43 @@
 import { ref } from 'vue';
 
 
+interface VADOptions {
+  positiveSpeechThreshold?: number;
+  negativeSpeechThreshold?: number;
+  minSpeechFrames?: number;
+  padding?: number;
+  threshold?: number;
+  minSpeechDuration?: number;
+  maxSilenceDuration?: number;
+}
+
+interface VADBoundaries {
+  startTime: number;
+  endTime: number;
+  startSample: number;
+  endSample: number;
+  originalSpeechStart: number;
+  originalSpeechEnd: number;
+  silenceStart: number;
+  silenceEnd: number;
+  speechSegments: number;
+  confidenceScore: number;
+  vadFailed?: boolean;
+  error?: string;
+}
+
+interface TrimOptions {
+  padding?: number;
+  maxTrimStart?: number;
+  maxTrimEnd?: number;
+}
+
 export function useVADProcessor() {
   const isProcessing = ref(false);
   const vadReady = ref(false);
   
   // Initialize VAD model
-  let vadInstance = null;
+  let vadInstance: any = null;
   
   const initVAD = async () => {
     try {
@@ -24,36 +55,36 @@ export function useVADProcessor() {
       
       // Poll for the global vad object
       let retries = 0;
-      while (!window.vad && retries < 50) {
+      while (!(window as any).vad && retries < 50) {
         await new Promise(resolve => setTimeout(resolve, 100));
         retries++;
       }
       
-      if (!window.vad) {
+      if (!(window as any).vad) {
         throw new Error('VAD library not loaded from CDN');
       }
       
-      console.log('🔍 VAD global object available:', window.vad);
-      console.log('🔍 Available VAD methods:', Object.keys(window.vad));
+      console.log('🔍 VAD global object available:', (window as any).vad);
+      console.log('🔍 Available VAD methods:', Object.keys((window as any).vad));
       
       console.log('📦 Creating VAD instance...');
       
-      vadInstance = await window.vad.NonRealTimeVAD.new({
-        // Use default v4 model - more stable and reliable
-        positiveSpeechThreshold: 0.5,   // Increased from 0.25 - less sensitive to noise
-        negativeSpeechThreshold: 0.35,  // Increased from 0.15 - more hysteresis 
-        redemptionFrames: 24,            // Increased from 12 - allow larger gaps (~768ms)
+      vadInstance = await (window as any).vad.NonRealTimeVAD.new({
+        // Use very lenient settings that should work for all audio types
+        positiveSpeechThreshold: 0.2,   // Very sensitive - should detect any speech
+        negativeSpeechThreshold: 0.1,   // Very low threshold for speech continuation
+        redemptionFrames: 64,            // Allow very large gaps (~2048ms) for natural speech
         frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: 8,              // Increased from 2 - minimum 8 frames (~256ms) for speech
-        preSpeechPadFrames: 4,           // Increased from 2 - more context before speech
-        positiveSpeechPadFrames: 4       // Increased from 2 - more context after speech  
+        minSpeechFrames: 1,              // Minimum possible - allow any speech segments
+        preSpeechPadFrames: 8,           // Generous context before speech starts
+        positiveSpeechPadFrames: 8       // Generous context after speech ends
       });
       
       vadReady.value = true;
       console.log('✅ Silero VAD model ready');
       
     } catch (error) {
-      console.warn('⚠️ VAD initialization failed, will use fallback detection:', error.message);
+      console.warn('⚠️ VAD initialization failed, will use fallback detection:', (error as Error).message);
       vadReady.value = false;
       vadInstance = null;
       
@@ -63,16 +94,20 @@ export function useVADProcessor() {
   };
 
   // Professional speech boundary detection using Silero VAD
-  const detectSpeechBoundariesVAD = async (audioBlob, options = {}) => {
+  const detectSpeechBoundariesVAD = async (audioBlob: Blob, options: VADOptions = {}): Promise<VADBoundaries> => {
     const {
-      positiveSpeechThreshold = 0.5,
-      negativeSpeechThreshold = 0.35,
-      minSpeechFrames = 3,
+      positiveSpeechThreshold: providedPositiveThreshold,
+      negativeSpeechThreshold: providedNegativeThreshold,
+      minSpeechFrames = 1, // Allow minimum possible speech frames
       padding = 0.1, // 100ms padding
-      threshold = 0.5, // VAD sensitivity
+      threshold = 0.5, // VAD sensitivity - this maps to positiveSpeechThreshold
       minSpeechDuration = 50, // Minimum speech segment in ms
       maxSilenceDuration = 300 // Maximum silence gap in ms
     } = options;
+    
+    // Map threshold to positiveSpeechThreshold if not explicitly provided
+    const positiveSpeechThreshold = providedPositiveThreshold !== undefined ? providedPositiveThreshold : threshold;
+    const negativeSpeechThreshold = providedNegativeThreshold !== undefined ? providedNegativeThreshold : Math.max(0.1, threshold * 0.7);
 
     try {
       isProcessing.value = true;
@@ -80,26 +115,62 @@ export function useVADProcessor() {
       if (!vadReady.value || !vadInstance) {
         await initVAD();
         
-        // If VAD still not ready after init attempt, use fallback
+        // If VAD still not ready after init attempt, return original audio
         if (!vadReady.value || !vadInstance) {
-          console.log('🔄 VAD not available, using fallback energy detection');
-          return await fallbackEnergyDetection(audioBlob);
+          console.log('🔄 VAD not available - using original audio without trimming');
+          
+          // Return original audio boundaries (no trimming)
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          
+          return {
+            startTime: 0,
+            endTime: audioBuffer.duration,
+            startSample: 0,
+            endSample: audioBuffer.length,
+            
+            // Original speech boundaries (no VAD detection available)
+            originalSpeechStart: 0,
+            originalSpeechEnd: audioBuffer.duration,
+            
+            silenceStart: 0,
+            silenceEnd: 0,
+            speechSegments: 0,
+            confidenceScore: 0,
+            vadFailed: true  // Indicate VAD was not available
+          };
         }
       }
 
       console.log('🔍 Analyzing audio with Silero VAD...');
       
       // Convert audio blob to AudioBuffer
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       
       // Resample to 16kHz for VAD (Silero VAD expects 16kHz)
       const targetSampleRate = 16000;
+      console.log('🔄 Original audio properties:', {
+        sampleRate: audioBuffer.sampleRate,
+        duration: audioBuffer.duration.toFixed(3) + 's',
+        numberOfChannels: audioBuffer.numberOfChannels,
+        length: audioBuffer.length
+      });
+      
       let resampledBuffer = audioBuffer;
       
       if (audioBuffer.sampleRate !== targetSampleRate) {
+        console.log(`🔄 Resampling from ${audioBuffer.sampleRate}Hz to ${targetSampleRate}Hz...`);
         resampledBuffer = await resampleAudioBuffer(audioBuffer, targetSampleRate);
+        console.log('🔄 Resampled audio properties:', {
+          sampleRate: resampledBuffer.sampleRate,
+          duration: resampledBuffer.duration.toFixed(3) + 's',
+          length: resampledBuffer.length
+        });
+      } else {
+        console.log('🔄 No resampling needed - already at 16kHz');
       }
       
       // Get audio data as Float32Array (VAD expects mono)
@@ -112,16 +183,52 @@ export function useVADProcessor() {
         threshold,
         minSpeechDuration,
         maxSilenceDuration,
-        padding
+        padding,
+        positiveSpeechThreshold,
+        negativeSpeechThreshold,
+        minSpeechFrames
       });
       
-      // Use NonRealTimeVAD to get speech segments - let it use the instance configuration
+      // Use NonRealTimeVAD to get speech segments - create instance with runtime options
       const speechSegments = [];
       
-      console.log('🎛️ Using VAD instance with optimized settings (v4 model)');
+      console.log('🔍 Audio data analysis:', {
+        length: audioData.length,
+        sampleRate: resampledBuffer.sampleRate,
+        maxAmplitude: Math.max(...Array.from(audioData.slice(0, 1000))), // Sample first 1000 points to avoid memory issues
+        minAmplitude: Math.min(...Array.from(audioData.slice(0, 1000))), // Sample first 1000 points to avoid memory issues
+        rmsLevel: Math.sqrt(audioData.reduce((sum, val) => sum + val * val, 0) / audioData.length),
+        hasNonZeroSamples: audioData.some(val => Math.abs(val) > 0.001),
+        averageAmplitude: Array.from(audioData).reduce((sum, val) => sum + Math.abs(val), 0) / audioData.length
+      });
       
-      // Use instance configuration without runtime overrides
-      for await (const { audio, start, end } of vadInstance.run(audioData, resampledBuffer.sampleRate)) {
+      // Create a VAD instance with the provided runtime options
+      console.log('🎛️ Creating VAD instance with runtime options');
+      
+      // Use extremely lenient settings for debugging
+      const vadConfig = {
+        positiveSpeechThreshold: positiveSpeechThreshold,
+        negativeSpeechThreshold: negativeSpeechThreshold,
+        redemptionFrames: 128,           // Double the gap allowance for very interrupted speech
+        frameSamples: 1536,              // Default frame size for v4 model
+        minSpeechFrames: minSpeechFrames,
+        preSpeechPadFrames: 16,          // More generous context before speech starts
+        positiveSpeechPadFrames: 16      // More generous context after speech ends
+      };
+      
+      console.log('🔧 ACTUAL VAD INSTANCE CONFIG:', vadConfig);
+      
+      let runtimeVADInstance = null;
+      try {
+        runtimeVADInstance = await (window as any).vad.NonRealTimeVAD.new(vadConfig);
+        console.log('✅ Runtime VAD instance created with custom settings');
+      } catch (error) {
+        console.warn('⚠️ Failed to create runtime VAD instance, using default:', error);
+        runtimeVADInstance = vadInstance;
+      }
+      
+      // Use runtime VAD instance with provided settings
+      for await (const { audio, start, end } of runtimeVADInstance.run(audioData, resampledBuffer.sampleRate)) {
         // Convert frame indices to seconds
         const startTimeSeconds = start / resampledBuffer.sampleRate;
         const endTimeSeconds = end / resampledBuffer.sampleRate;
@@ -159,8 +266,8 @@ export function useVADProcessor() {
         console.log(`🔗 MERGED ${filteredSegments.length} segments into ${mergedSegments.length} merged segments`);
         
         // Find earliest start and latest end from merged segments
-        overallStart = Math.min(...mergedSegments.map(s => s.startTime));
-        overallEnd = Math.max(...mergedSegments.map(s => s.endTime));
+        overallStart = Math.min(...mergedSegments.map((s: any) => s.startTime));
+        overallEnd = Math.max(...mergedSegments.map((s: any) => s.endTime));
         
         console.log(`🔍 VAD SEGMENTS ANALYSIS:`, {
           totalSegments: speechSegments.length,
@@ -204,9 +311,29 @@ export function useVADProcessor() {
           finalEnd: overallEnd.toFixed(3) + 's'
         });
       } else {
-        console.warn('⚠️ No speech segments detected by VAD');
-        // Fallback to energy-based detection
-        return await fallbackEnergyDetection(audioBlob);
+        console.warn('⚠️ No speech segments detected by VAD - using original audio without trimming');
+        
+        // Return original audio boundaries (no trimming)
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        
+        return {
+          startTime: 0,
+          endTime: audioBuffer.duration,
+          startSample: 0,
+          endSample: audioBuffer.length,
+          
+          // Original speech boundaries (no VAD detection available)
+          originalSpeechStart: 0,
+          originalSpeechEnd: audioBuffer.duration,
+          
+          silenceStart: 0,
+          silenceEnd: 0,
+          speechSegments: 0,
+          confidenceScore: 0,
+          vadFailed: true  // Indicate VAD failed to detect speech
+        };
       }
       
       // VAD returns times in seconds relative to the original audio duration
@@ -243,13 +370,54 @@ export function useVADProcessor() {
       console.error('❌ Silero VAD analysis failed:', error);
       isProcessing.value = false;
       
-      // Fallback to energy-based detection
-      return await fallbackEnergyDetection(audioBlob);
+      // Return original audio boundaries when VAD fails (no trimming)
+      try {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        
+        console.log('🔄 VAD failed - using original audio without processing');
+        return {
+          startTime: 0,
+          endTime: audioBuffer.duration,
+          startSample: 0,
+          endSample: audioBuffer.length,
+          
+          // Original speech boundaries (no VAD detection available)
+          originalSpeechStart: 0,
+          originalSpeechEnd: audioBuffer.duration,
+          
+          silenceStart: 0,
+          silenceEnd: 0,
+          speechSegments: 0,
+          confidenceScore: 0,
+          vadFailed: true  // Indicate VAD processing failed
+        };
+      } catch (decodeError) {
+        console.error('❌ Failed to decode audio for fallback:', decodeError as Error);
+        return {
+          startTime: 0,
+          endTime: 0,
+          startSample: 0,
+          endSample: 0,
+          
+          // Original speech boundaries (completely failed)
+          originalSpeechStart: 0,
+          originalSpeechEnd: 0,
+          
+          silenceStart: 0,
+          silenceEnd: 0,
+          speechSegments: 0,
+          confidenceScore: 0,
+          vadFailed: true,  // Indicate complete VAD failure
+          error: (error as Error).message
+        };
+      }
     }
   };
 
   // Merge nearby segments to create more realistic speech boundaries
-  const mergeNearbySegments = (segments, maxGapSeconds = 0.1) => {
+  const mergeNearbySegments = (segments: any[], maxGapSeconds = 0.1) => {
     if (segments.length <= 1) return segments;
     
     // Sort segments by start time
@@ -281,7 +449,7 @@ export function useVADProcessor() {
   };
 
   // Resample audio buffer to target sample rate
-  const resampleAudioBuffer = async (audioBuffer, targetSampleRate) => {
+  const resampleAudioBuffer = async (audioBuffer: AudioBuffer, targetSampleRate: number): Promise<AudioBuffer> => {
     if (audioBuffer.sampleRate === targetSampleRate) {
       return audioBuffer;
     }
@@ -300,89 +468,9 @@ export function useVADProcessor() {
     return await offlineContext.startRendering();
   };
 
-  // Fallback energy-based detection
-  const fallbackEnergyDetection = async (audioBlob) => {
-    console.log('🔄 Using fallback energy-based detection');
-    
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      
-      const channelData = audioBuffer.getChannelData(0);
-      const sampleRate = audioBuffer.sampleRate;
-      const windowSize = Math.floor(sampleRate * 0.02); // 20ms windows
-      const threshold = 0.01;
-      
-      let speechStart = null;
-      let speechEnd = null;
-      
-      // Forward pass
-      for (let i = 0; i < channelData.length - windowSize; i += windowSize) {
-        let sum = 0;
-        for (let j = i; j < i + windowSize; j++) {
-          sum += channelData[j] * channelData[j];
-        }
-        const rms = Math.sqrt(sum / windowSize);
-        
-        if (rms > threshold && speechStart === null) {
-          speechStart = i / sampleRate;
-          break;
-        }
-      }
-      
-      // Backward pass
-      for (let i = channelData.length - windowSize; i >= 0; i -= windowSize) {
-        let sum = 0;
-        for (let j = i; j < i + windowSize && j < channelData.length; j++) {
-          sum += channelData[j] * channelData[j];
-        }
-        const rms = Math.sqrt(sum / windowSize);
-        
-        if (rms > threshold && speechEnd === null) {
-          speechEnd = (i + windowSize) / sampleRate;
-          break;
-        }
-      }
-      
-      const paddedStart = speechStart || 0;
-      const paddedEnd = speechEnd || audioBuffer.duration;
-      
-      return {
-        startTime: paddedStart,
-        endTime: paddedEnd,
-        startSample: Math.floor(paddedStart * sampleRate),
-        endSample: Math.floor(paddedEnd * sampleRate),
-        
-        // Original speech boundaries (before padding applied) - fallback to detected values
-        originalSpeechStart: speechStart || 0,
-        originalSpeechEnd: speechEnd || audioBuffer.duration,
-        
-        silenceStart: paddedStart,
-        silenceEnd: audioBuffer.duration - paddedEnd,
-        confidenceScore: 0.5 // Fallback confidence
-      };
-    } catch (error) {
-      console.error('❌ Fallback detection failed:', error);
-      return {
-        startTime: 0,
-        endTime: 0,
-        startSample: 0,
-        endSample: 0,
-        
-        // Original speech boundaries (before padding applied) - fallback to zero
-        originalSpeechStart: 0,
-        originalSpeechEnd: 0,
-        
-        silenceStart: 0,
-        silenceEnd: 0,
-        confidenceScore: 0
-      };
-    }
-  };
 
   // Trim audio based on VAD boundaries and return new AudioBuffer + Blob
-  const trimAudioWithVAD = async (audioBlob, options = {}) => {
+  const trimAudioWithVAD = async (audioBlob: Blob, options: TrimOptions = {}) => {
     const {
       padding = 0.15, // 150ms padding to preserve natural speech
       maxTrimStart = 3.0,
@@ -409,7 +497,7 @@ export function useVADProcessor() {
       }
       
       // Process the actual audio trimming
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       
@@ -586,7 +674,7 @@ export function useVADProcessor() {
       };
       
     } catch (error) {
-      console.error('❌ VAD trimming failed:', error);
+      console.error('❌ VAD trimming failed:', error as Error);
       isProcessing.value = false;
       return {
         blob: audioBlob,
@@ -594,13 +682,13 @@ export function useVADProcessor() {
         trimmedEnd: 0,
         originalDuration: 0,
         newDuration: 0,
-        error: error.message
+        error: (error as Error).message
       };
     }
   };
 
   // Convert AudioBuffer to Blob (WAV format)
-  const audioBufferToBlob = async (audioBuffer) => {
+  const audioBufferToBlob = async (audioBuffer: AudioBuffer): Promise<Blob> => {
     const numberOfChannels = audioBuffer.numberOfChannels;
     const sampleRate = audioBuffer.sampleRate;
     const length = audioBuffer.length;
@@ -614,7 +702,7 @@ export function useVADProcessor() {
     const view = new DataView(arrayBuffer);
     
     // Write WAV header
-    const writeString = (offset, string) => {
+    const writeString = (offset: number, string: string) => {
       for (let i = 0; i < string.length; i++) {
         view.setUint8(offset + i, string.charCodeAt(i));
       }

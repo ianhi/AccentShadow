@@ -1,13 +1,20 @@
 import { ref, reactive, readonly } from 'vue';
 
+interface PlayerInfo {
+  id: string;
+  type: string;
+  wavesurfer: any;
+  isReady?: boolean;
+}
+
 // Global audio manager state
-const currentlyPlaying = ref(null); // { id, type, wavesurfer }
-const playQueue = ref([]);
+const currentlyPlaying = ref<PlayerInfo | null>(null);
+const playQueue = ref<PlayerInfo[]>([]);
 const isSequentialPlaybackActive = ref(false);
 
 export function useAudioManager() {
   // Register an audio player with the manager
-  const registerPlayer = (id, type, wavesurferInstance) => {
+  const registerPlayer = (id: string, type: string, wavesurferInstance: any): PlayerInfo => {
     console.log(`🎼 Registering audio player: ${id} (${type})`);
     return {
       id,
@@ -38,7 +45,7 @@ export function useAudioManager() {
   };
 
   // Start playing a specific audio with exclusive control
-  const play = (playerInfo, onFinish = null) => {
+  const play = (playerInfo: PlayerInfo, onFinish: (() => void) | null = null): boolean => {
     console.log(`🎼 Request to play: ${playerInfo.id} (${playerInfo.type})`);
     
     // Stop any currently playing audio first
@@ -90,7 +97,7 @@ export function useAudioManager() {
   };
 
   // Sequential playback with proper coordination
-  const playSequential = async (players, delays = []) => {
+  const playSequential = async (players: PlayerInfo[], delays: number[] = []): Promise<void> => {
     console.log('🎼 Starting sequential playback with', players.length, 'players');
     
     // Stop any current playback
@@ -126,8 +133,8 @@ export function useAudioManager() {
       }
 
       // Play and wait for completion
-      await new Promise((resolve) => {
-        const success = play(player, resolve);
+      await new Promise<void>((resolve) => {
+        const success = play(player, () => resolve());
         if (!success) {
           console.warn(`🎼 Failed to play ${player.id}, continuing sequence`);
           resolve();
@@ -140,12 +147,12 @@ export function useAudioManager() {
   };
 
   // Get current playback state
-  const getCurrentlyPlaying = () => currentlyPlaying.value;
-  const isPlaying = () => !!currentlyPlaying.value;
-  const isSequentialActive = () => isSequentialPlaybackActive.value;
+  const getCurrentlyPlaying = (): PlayerInfo | null => currentlyPlaying.value;
+  const isPlaying = (): boolean => !!currentlyPlaying.value;
+  const isSequentialActive = (): boolean => isSequentialPlaybackActive.value;
 
   // Emergency stop for recordings or other interruptions
-  const emergencyStop = (reason = 'Emergency stop') => {
+  const emergencyStop = (reason: string = 'Emergency stop'): void => {
     console.log(`🎼 ${reason} - stopping all audio`);
     stopAll();
   };

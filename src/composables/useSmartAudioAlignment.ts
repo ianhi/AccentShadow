@@ -1,6 +1,36 @@
 import { ref } from 'vue';
 import { useVADProcessor } from './useVADProcessor';
 
+interface VADOptions {
+  threshold?: number;
+  minSpeechDuration?: number;
+  maxSilenceDuration?: number;
+  padding?: number;
+  [key: string]: any;
+}
+
+interface ProcessAudioResult {
+  audioBlob: Blob;
+  vadBoundaries: any;
+  processed: boolean;
+}
+
+interface AudioWithBoundaries {
+  audioBlob: Blob;
+  vadBoundaries: any;
+}
+
+interface AlignmentResult {
+  audio1Aligned: Blob;
+  audio2Aligned: Blob;
+  alignmentInfo: {
+    paddingAdded: number;
+    finalDuration: number;
+    method: string;
+    error?: string;
+  };
+}
+
 export function useSmartAudioAlignment() {
   const isProcessing = ref(false);
   const { detectSpeechBoundariesVAD, vadReady, initVAD } = useVADProcessor();
@@ -11,21 +41,22 @@ export function useSmartAudioAlignment() {
   /**
    * Process single audio: run VAD and store boundaries with raw audio
    * @param {Blob} audioBlob - Raw audio blob
+   * @param {Object} vadOptions - Optional VAD configuration options
    * @returns {Object} - { audioBlob, vadBoundaries, processed: boolean }
    */
-  const processAudio = async (audioBlob) => {
+  const processAudio = async (audioBlob: Blob, vadOptions: VADOptions = {}): Promise<ProcessAudioResult> => {
     try {
       isProcessing.value = true;
-      console.log('🎙️ Processing audio with VAD...');
+      console.log('🎙️ Processing audio with VAD...', vadOptions.threshold ? `(threshold: ${vadOptions.threshold})` : '(default settings)');
       
-      // Run VAD analysis
-      const vadBoundaries = await detectSpeechBoundariesVAD(audioBlob);
+      // Run VAD analysis with provided options
+      const vadBoundaries = await detectSpeechBoundariesVAD(audioBlob, vadOptions);
       
-      if (!vadBoundaries || vadBoundaries.error) {
+      if (!vadBoundaries || vadBoundaries.error || vadBoundaries.vadFailed) {
         console.warn('⚠️ VAD processing failed, keeping original audio');
         return {
           audioBlob,
-          vadBoundaries: null,
+          vadBoundaries: vadBoundaries?.vadFailed ? vadBoundaries : null,
           processed: false
         };
       }
@@ -62,7 +93,7 @@ export function useSmartAudioAlignment() {
    * @param {number} paddingMs - Desired padding in milliseconds (default: 200)
    * @returns {Promise<Blob>} - Normalized audio blob
    */
-  const normalizeAudioSilence = async (audioBlob, vadBoundaries, paddingMs = null) => {
+  const normalizeAudioSilence = async (audioBlob: Blob, vadBoundaries: any, paddingMs: number | null = null): Promise<Blob> => {
     const padding = paddingMs || defaultPaddingMs.value;
     
     console.log('🔍 normalizeAudioSilence called with:', {
@@ -86,7 +117,7 @@ export function useSmartAudioAlignment() {
       isProcessing.value = true;
       console.log(`🔧 Normalizing audio with ${padding}ms padding...`);
       
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       
@@ -164,7 +195,7 @@ export function useSmartAudioAlignment() {
    * @param {number} paddingMs - Desired padding in milliseconds (default: 200)
    * @returns {Promise<Object>} - { audio1Aligned, audio2Aligned, alignmentInfo }
    */
-  const alignTwoAudios = async (audio1, audio2, paddingMs = null) => {
+  const alignTwoAudios = async (audio1: AudioWithBoundaries, audio2: AudioWithBoundaries, paddingMs: number | null = null): Promise<AlignmentResult> => {
     const padding = paddingMs || defaultPaddingMs.value;
     
     try {
@@ -176,7 +207,7 @@ export function useSmartAudioAlignment() {
       const normalized2 = await normalizeAudioSilence(audio2.audioBlob, audio2.vadBoundaries, padding);
       
       // Get durations of normalized audios
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       
       const buffer1 = await audioContext.decodeAudioData(await normalized1.arrayBuffer());
       const buffer2 = await audioContext.decodeAudioData(await normalized2.arrayBuffer());
@@ -205,8 +236,9 @@ export function useSmartAudioAlignment() {
       }
       
       // Determine which audio needs padding
-      let shorterAudio, longerAudio, shorterBuffer, targetDuration;
-      let audio1Final, audio2Final;
+      let shorterAudio: Blob, longerAudio: Blob, shorterBuffer: AudioBuffer, targetDuration: number;
+      let audio1Final: Blob = normalized1;
+      let audio2Final: Blob = normalized2;
       
       if (duration1 < duration2) {
         shorterAudio = normalized1;
@@ -254,7 +286,9 @@ export function useSmartAudioAlignment() {
         audio1Aligned: audio1.audioBlob,
         audio2Aligned: audio2.audioBlob,
         alignmentInfo: {
-          error: error.message,
+          paddingAdded: 0,
+          finalDuration: 0,
+          error: (error as Error).message,
           method: 'error_fallback'
         }
       };
@@ -269,8 +303,8 @@ export function useSmartAudioAlignment() {
    * @param {number} paddingSeconds - Seconds of silence to add
    * @returns {Promise<Blob>} - Padded audio blob
    */
-  const padAudioAtEnd = async (audioBlob, paddingSeconds) => {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const padAudioAtEnd = async (audioBlob: Blob, paddingSeconds: number): Promise<Blob> => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     const arrayBuffer = await audioBlob.arrayBuffer();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
     
@@ -303,7 +337,7 @@ export function useSmartAudioAlignment() {
    * @param {AudioBuffer} audioBuffer 
    * @returns {Blob}
    */
-  const audioBufferToBlob = (audioBuffer) => {
+  const audioBufferToBlob = (audioBuffer: AudioBuffer): Blob => {
     const numberOfChannels = audioBuffer.numberOfChannels;
     const sampleRate = audioBuffer.sampleRate;
     const length = audioBuffer.length;
@@ -312,7 +346,7 @@ export function useSmartAudioAlignment() {
     const view = new DataView(buffer);
     
     // WAV header
-    const writeString = (offset, string) => {
+    const writeString = (offset: number, string: string): void => {
       for (let i = 0; i < string.length; i++) {
         view.setUint8(offset + i, string.charCodeAt(i));
       }

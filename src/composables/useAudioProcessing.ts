@@ -1,12 +1,39 @@
 import { ref } from 'vue';
 import { useVADProcessor } from './useVADProcessor';
 
+interface ProcessingOptions {
+  trimSilence?: boolean;
+  padding?: number;
+  maxTrimStart?: number;
+  maxTrimEnd?: number;
+  returnSilenceInfo?: boolean;
+  [key: string]: any;
+}
+
+interface SilenceInfo {
+  originalSilenceStart: number;
+  originalSilenceEnd: number;
+  trimmedStart: number;
+  trimmedEnd: number;
+  finalSilenceStart: number;
+  finalSilenceEnd: number;
+}
+
+interface ProcessingResult {
+  blob: Blob;
+  boundaries: any;
+  silenceInfo?: SilenceInfo;
+  vadUsed: boolean;
+  processingTime?: number;
+  error?: string;
+}
+
 export function useAudioProcessing() {
   const isProcessing = ref(false);
   const { trimAudioWithVAD, detectSpeechBoundariesVAD, vadReady, initVAD } = useVADProcessor();
 
   // Main VAD-based processing function with silence tracking
-  const processAudio = async (audioBlob, options = {}) => {
+  const processAudio = async (audioBlob: Blob, options: ProcessingOptions = {}): Promise<ProcessingResult> => {
     const {
       trimSilence = true,
       padding = 0.15, // 150ms padding
@@ -77,13 +104,13 @@ export function useAudioProcessing() {
           finalSilenceEnd: 0
         } : undefined,
         vadUsed: false,
-        error: error.message
+        error: (error as Error).message
       };
     }
   };
 
   // Align two audio recordings using VAD-based processing
-  const alignRecordings = async (targetBlob, userBlob, options = {}) => {
+  const alignRecordings = async (targetBlob: Blob, userBlob: Blob, options: ProcessingOptions = {}) => {
     const {
       trimUserSilence = true,
       trimTargetSilence = false,
@@ -128,10 +155,10 @@ export function useAudioProcessing() {
           
           // Adjust padding to preserve similar silence structure
           if (targetStartSilence < 0.2) {
-            trimOptions.padding = Math.min(trimOptions.padding || 0.15, targetStartSilence + 0.05);
+            trimOptions.padding = Math.min((trimOptions.padding as number) || 0.15, targetStartSilence + 0.05);
           }
           
-          console.log(`🔄 Syncing user padding to target silence pattern: ${trimOptions.padding.toFixed(3)}s`);
+          console.log(`🔄 Syncing user padding to target silence pattern: ${(trimOptions.padding as number).toFixed(3)}s`);
         }
 
         const userTrimResult = await trimAudioWithVAD(userBlob, trimOptions);
@@ -185,13 +212,13 @@ export function useAudioProcessing() {
         targetTrimInfo: { trimmedStart: 0, trimmedEnd: 0 },
         alignmentQuality: 0,
         vadUsed: false,
-        error: error.message
+        error: (error as Error).message
       };
     }
   };
 
   // Calculate alignment quality for VAD results
-  const calculateVADAlignmentQuality = (targetBoundaries, userBoundaries, userTrimInfo) => {
+  const calculateVADAlignmentQuality = (targetBoundaries: any, userBoundaries: any, userTrimInfo: any): number => {
     try {
       if (!targetBoundaries || !userBoundaries) return 0.3;
       
@@ -222,13 +249,13 @@ export function useAudioProcessing() {
   };
 
   // Legacy compatibility function for backward compatibility
-  const detectSpeechOnset = async (audioBlob, threshold = 0.01) => {
+  const detectSpeechOnset = async (audioBlob: Blob, threshold: number = 0.01): Promise<number> => {
     const result = await processAudio(audioBlob, { trimSilence: false });
     return result.boundaries ? result.boundaries.startTime : 0;
   };
 
   // Legacy compatibility function
-  const trimSilence = async (audioBlob, options = {}) => {
+  const trimSilence = async (audioBlob: Blob, options: ProcessingOptions = {}) => {
     const result = await processAudio(audioBlob, { 
       trimSilence: true,
       ...options
@@ -248,7 +275,7 @@ export function useAudioProcessing() {
   };
 
   // Legacy compatibility function
-  const autoAlignRecordings = async (targetBlob, userBlob, options = {}) => {
+  const autoAlignRecordings = async (targetBlob: Blob, userBlob: Blob, options: ProcessingOptions = {}) => {
     return await alignRecordings(targetBlob, userBlob, options);
   };
 

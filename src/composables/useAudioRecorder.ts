@@ -5,24 +5,24 @@ import RecordPlugin from 'wavesurfer.js/dist/plugins/record.esm.js';
 
 const isRecording = ref(false);
 const recordingTime = ref(0);
-let mediaRecorder = null;
-let audioChunks = [];
-const wavesurferMic = shallowRef(null);
-let recordPluginInstance = null; // To store the record plugin instance
+let mediaRecorder: MediaRecorder | null = null;
+let audioChunks: BlobPart[] = [];
+const wavesurferMic = shallowRef<WaveSurfer | null>(null);
+let recordPluginInstance: any = null; // To store the record plugin instance
 
-async function startRecording(waveformContainer, existingStream = null) {
+async function startRecording(waveformContainer?: HTMLElement | null, existingStream: MediaStream | null = null): Promise<void> {
   try {
     const stream = existingStream || await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder = new MediaRecorder(stream);
     audioChunks = [];
 
-    mediaRecorder.ondataavailable = (event) => {
+    mediaRecorder.ondataavailable = (event: BlobEvent) => {
       audioChunks.push(event.data);
     };
 
     mediaRecorder.onstop = () => {
       // Clean up stream tracks
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
       if (wavesurferMic.value) {
         wavesurferMic.value.destroy();
         wavesurferMic.value = null;
@@ -40,7 +40,6 @@ async function startRecording(waveformContainer, existingStream = null) {
           cursorColor: '#3B82F6',
           barWidth: 3,
           barRadius: 3,
-          responsive: true,
           height: 80,
           normalize: true,
         });
@@ -55,7 +54,7 @@ async function startRecording(waveformContainer, existingStream = null) {
           console.log('Recording started!');
         });
 
-        recordPluginInstance.on('record-end', (blob) => {
+        recordPluginInstance.on('record-end', (blob: Blob) => {
           console.log('Recording ended!', blob);
         });
 
@@ -75,7 +74,7 @@ async function startRecording(waveformContainer, existingStream = null) {
   }
 }
 
-function stopRecording() {
+function stopRecording(): Promise<Blob | null> {
   return new Promise((resolve) => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.onstop = () => {

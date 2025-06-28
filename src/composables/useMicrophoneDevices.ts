@@ -1,10 +1,16 @@
 import { ref, onMounted } from 'vue';
 
+interface MicrophoneDevice {
+  deviceId: string;
+  label: string;
+  groupId: string;
+}
+
 export function useMicrophoneDevices() {
-  const availableDevices = ref([]);
-  const selectedDeviceId = ref(null);
+  const availableDevices = ref<MicrophoneDevice[]>([]);
+  const selectedDeviceId = ref<string | null>(null);
   const isLoading = ref(false);
-  const error = ref(null);
+  const error = ref<string | null>(null);
 
   // Get list of available microphone devices
   const getAvailableDevices = async () => {
@@ -44,7 +50,7 @@ export function useMicrophoneDevices() {
   };
 
   // Get media stream with selected device
-  const getMediaStream = async (deviceId = null) => {
+  const getMediaStream = async (deviceId: string | null = null): Promise<MediaStream> => {
     try {
       const constraints = {
         audio: deviceId ? { deviceId: { exact: deviceId } } : true
@@ -58,13 +64,13 @@ export function useMicrophoneDevices() {
   };
 
   // Set selected device
-  const setSelectedDevice = (deviceId) => {
+  const setSelectedDevice = (deviceId: string): void => {
     selectedDeviceId.value = deviceId;
     console.log('🎤 Selected microphone device:', deviceId);
   };
 
   // Get currently selected device info
-  const getSelectedDevice = () => {
+  const getSelectedDevice = (): MicrophoneDevice | undefined => {
     return availableDevices.value.find(device => device.deviceId === selectedDeviceId.value);
   };
 
@@ -77,7 +83,7 @@ export function useMicrophoneDevices() {
   };
 
   onMounted(() => {
-    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    if (typeof navigator.mediaDevices?.enumerateDevices === 'function') {
       getAvailableDevices();
       setupDeviceChangeListener();
     } else {

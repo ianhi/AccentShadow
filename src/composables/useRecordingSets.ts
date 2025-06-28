@@ -1,15 +1,78 @@
 import { ref, computed } from 'vue';
 
+interface RecordingMetadata {
+  speaker?: string;
+  difficulty?: string;
+  category?: string;
+  duration?: number;
+  fileName?: string;
+  fileSize?: number;
+  filePath?: string;
+  [key: string]: any;
+}
+
+interface UserRecording {
+  audioUrl: string | null;
+  audioBlob: Blob | null;
+  attempts: number;
+  lastPracticed: string | null;
+  isCompleted: boolean;
+}
+
+interface Recording {
+  id: string;
+  name: string;
+  translation: string;
+  audioUrl: string;
+  audioBlob: Blob;
+  metadata: RecordingMetadata;
+  userRecording: UserRecording;
+}
+
+interface Progress {
+  completed: number;
+  total: number;
+  percentage: number;
+}
+
+interface RecordingSet {
+  id: string;
+  name: string;
+  source: string;
+  language: string;
+  createdAt: string;
+  recordings: Recording[];
+  currentIndex: number;
+  progress: Progress;
+}
+
+interface InputRecording {
+  name?: string;
+  translation?: string;
+  audioUrl: string;
+  audioBlob: Blob;
+  metadata?: Partial<RecordingMetadata>;
+}
+
+interface SessionState {
+  startTime: number | null;
+  totalTime: number;
+  recordingsCompleted: number;
+  totalAttempts: number;
+  averageAttempts: number;
+  isActive: boolean;
+}
+
 // Global state for recording sets
-const recordingSets = ref([]);
-const activeSetId = ref(null);
+const recordingSets = ref<RecordingSet[]>([]);
+const activeSetId = ref<string | null>(null);
 const currentRecordingIndex = ref(0);
 
 // Generate unique IDs
-const generateId = () => crypto.randomUUID();
+const generateId = (): string => crypto.randomUUID();
 
 // Create a new recording set
-const createRecordingSet = (name, source = 'manual', language = 'en', recordings = []) => {
+const createRecordingSet = (name: string, source: string = 'manual', language: string = 'en', recordings: InputRecording[] = []): RecordingSet => {
   const newSet = {
     id: generateId(),
     name,
@@ -62,7 +125,7 @@ const currentRecording = computed(() => {
 });
 
 // Navigation functions
-const setActiveSet = (setId) => {
+const setActiveSet = (setId: string | null): void => {
   // End current session if switching sets
   if (activeSetId.value !== setId && sessionState.value.isActive) {
     endSession();
@@ -79,7 +142,7 @@ const setActiveSet = (setId) => {
   }
 };
 
-const goToRecording = (index) => {
+const goToRecording = (index: number): void => {
   if (!activeSet.value) return;
   
   const maxIndex = activeSet.value.recordings.length - 1;
@@ -91,7 +154,7 @@ const goToRecording = (index) => {
   console.log('📍 Navigated to recording:', newIndex + 1, 'of', activeSet.value.recordings.length);
 };
 
-const nextRecording = () => {
+const nextRecording = (): boolean => {
   if (!activeSet.value) return false;
   
   const nextIndex = currentRecordingIndex.value + 1;
@@ -102,7 +165,7 @@ const nextRecording = () => {
   return false; // No more recordings
 };
 
-const previousRecording = () => {
+const previousRecording = (): boolean => {
   if (!activeSet.value) return false;
   
   const prevIndex = currentRecordingIndex.value - 1;
@@ -113,7 +176,7 @@ const previousRecording = () => {
   return false; // At first recording
 };
 
-const randomRecording = () => {
+const randomRecording = (): void => {
   if (!activeSet.value || activeSet.value.recordings.length <= 1) return;
   
   let randomIndex;
@@ -125,7 +188,7 @@ const randomRecording = () => {
 };
 
 // Progress tracking
-const updateProgress = () => {
+const updateProgress = (): void => {
   if (!activeSet.value) return;
   
   const completed = activeSet.value.recordings.filter(r => r.userRecording.isCompleted).length;
@@ -138,7 +201,7 @@ const updateProgress = () => {
   };
 };
 
-const markRecordingCompleted = (recordingId = null) => {
+const markRecordingCompleted = (recordingId: string | null = null): void => {
   const recording = recordingId 
     ? activeSet.value?.recordings.find(r => r.id === recordingId)
     : currentRecording.value;
@@ -152,7 +215,7 @@ const markRecordingCompleted = (recordingId = null) => {
   }
 };
 
-const updateUserRecording = (audioBlob, audioUrl) => {
+const updateUserRecording = (audioBlob: Blob, audioUrl: string): void => {
   if (!currentRecording.value) return;
   
   const userRec = currentRecording.value.userRecording;
@@ -166,7 +229,7 @@ const updateUserRecording = (audioBlob, audioUrl) => {
 };
 
 // Delete recording set
-const deleteRecordingSet = (setId) => {
+const deleteRecordingSet = (setId: string): boolean => {
   const index = recordingSets.value.findIndex(set => set.id === setId);
   if (index !== -1) {
     const deletedSet = recordingSets.value.splice(index, 1)[0];
@@ -194,7 +257,7 @@ const deleteRecordingSet = (setId) => {
 };
 
 // Folder processing utilities
-const categorizeFromPath = (filePath) => {
+const categorizeFromPath = (filePath: string): string => {
   const pathParts = filePath.split('/');
   if (pathParts.length > 1) {
     // Use the parent directory as category
@@ -203,12 +266,12 @@ const categorizeFromPath = (filePath) => {
   return 'general';
 };
 
-const extractNameFromFile = (fileName) => {
+const extractNameFromFile = (fileName: string): string => {
   // Remove file extension and clean up the name
   return fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
 };
 
-const processUploadedFiles = (files) => {
+const processUploadedFiles = (files: File[]): InputRecording[] => {
   console.log('📁 Processing uploaded files:', files.length);
   
   // Filter audio files
@@ -249,7 +312,7 @@ const processUploadedFiles = (files) => {
 };
 
 // Session management
-const sessionState = ref({
+const sessionState = ref<SessionState>({
   startTime: null,
   totalTime: 0,
   recordingsCompleted: 0,
@@ -258,7 +321,7 @@ const sessionState = ref({
   isActive: false
 });
 
-const startSession = () => {
+const startSession = (): void => {
   sessionState.value = {
     startTime: Date.now(),
     totalTime: 0,
@@ -270,7 +333,7 @@ const startSession = () => {
   console.log('📊 Practice session started');
 };
 
-const endSession = () => {
+const endSession = (): void => {
   if (sessionState.value.isActive && sessionState.value.startTime) {
     sessionState.value.totalTime = Date.now() - sessionState.value.startTime;
     sessionState.value.isActive = false;
@@ -290,19 +353,21 @@ const endSession = () => {
   }
 };
 
-const updateSessionStats = () => {
+const updateSessionStats = (): void => {
   if (!sessionState.value.isActive || !activeSet.value) return;
   
   // Count completed recordings in current session
   const completedCount = activeSet.value.recordings.filter(r => 
     r.userRecording.isCompleted && 
     r.userRecording.lastPracticed && 
+    sessionState.value.startTime &&
     new Date(r.userRecording.lastPracticed).getTime() > sessionState.value.startTime
   ).length;
   
   // Count total attempts in current session
   const totalAttempts = activeSet.value.recordings.reduce((sum, r) => {
     if (r.userRecording.lastPracticed && 
+        sessionState.value.startTime &&
         new Date(r.userRecording.lastPracticed).getTime() > sessionState.value.startTime) {
       return sum + r.userRecording.attempts;
     }
@@ -318,7 +383,7 @@ const updateSessionStats = () => {
 };
 
 // Statistics
-const getSetStatistics = (setId) => {
+const getSetStatistics = (setId: string): { totalRecordings: number; completed: number; attempted: number; totalAttempts: number; categories: string[]; averageAttempts: number } | null => {
   const set = recordingSets.value.find(s => s.id === setId);
   if (!set) return null;
   
@@ -327,7 +392,7 @@ const getSetStatistics = (setId) => {
     completed: set.recordings.filter(r => r.userRecording.isCompleted).length,
     attempted: set.recordings.filter(r => r.userRecording.attempts > 0).length,
     totalAttempts: set.recordings.reduce((sum, r) => sum + r.userRecording.attempts, 0),
-    categories: [...new Set(set.recordings.map(r => r.metadata.category))],
+    categories: [...new Set(set.recordings.map(r => r.metadata.category).filter((cat): cat is string => typeof cat === 'string'))],
     averageAttempts: 0
   };
   
@@ -339,7 +404,7 @@ const getSetStatistics = (setId) => {
 };
 
 // Auto-suggestions for review
-const getReviewSuggestions = () => {
+const getReviewSuggestions = (): Recording[] => {
   if (!activeSet.value) return [];
   
   // Find recordings that need more practice
@@ -374,7 +439,7 @@ const getReviewSuggestions = () => {
 };
 
 // Auto-navigation features
-const goToNextIncomplete = () => {
+const goToNextIncomplete = (): boolean => {
   if (!activeSet.value) return false;
   
   // Find next incomplete recording starting from current position
@@ -392,9 +457,9 @@ const goToNextIncomplete = () => {
   return false; // All recordings completed
 };
 
-const goToReviewRecording = () => {
+const goToReviewRecording = (): boolean => {
   const suggestions = getReviewSuggestions();
-  if (suggestions.length > 0) {
+  if (suggestions.length > 0 && activeSet.value) {
     const recording = suggestions[0];
     const index = activeSet.value.recordings.findIndex(r => r.id === recording.id);
     if (index !== -1) {

@@ -26,6 +26,32 @@
           @change="onPaddingChange"
         />
       </div>
+      
+      <div class="vad-test-controls">
+        <h3>🎤 VAD Testing Controls</h3>
+        <div class="vad-buttons">
+          <button @click="testUserAudioWithSettings('conservative')" class="btn-test" :disabled="isProcessing">
+            Test Conservative VAD (0.5 threshold)
+          </button>
+          <button @click="testUserAudioWithSettings('lenient')" class="btn-test" :disabled="isProcessing">
+            Test Lenient VAD (0.3 threshold)
+          </button>
+          <button @click="testUserAudioWithSettings('very-sensitive')" class="btn-test" :disabled="isProcessing">
+            Test Very Sensitive VAD (0.2 threshold)
+          </button>
+        </div>
+        <div class="vad-results" v-if="vadTestResults.length > 0">
+          <h4>VAD Test Results:</h4>
+          <div v-for="(result, index) in vadTestResults" :key="index" class="vad-result">
+            <strong>{{ result.name }}:</strong> 
+            <span v-if="result.processed">
+              Speech: {{ result.speechStart }}s - {{ result.speechEnd }}s 
+              ({{ (result.speechEnd - result.speechStart).toFixed(3) }}s detected)
+            </span>
+            <span v-else class="error">VAD Failed</span>
+          </div>
+        </div>
+      </div>
     </div>
     
     <!-- Audio Processing Section -->
@@ -176,7 +202,7 @@ import { useAudioRecorder } from '@/composables/useAudioRecorder'
 
 // Test files
 const targetFile = ref('/path.mp3')
-const userFile = ref('/patth.wav')
+const userFile = ref('/test_said_three_words.wav')
 
 // DOM refs
 const targetWaveformContainer = ref(null)
@@ -209,6 +235,7 @@ const { isRecording, startRecording, stopRecording } = useAudioRecorder()
 const paddingMs = ref(200)
 const showDebug = ref(false)
 const processingTime = ref(0)
+const vadTestResults = ref([])
 
 // Audio processing results
 const targetProcessed = ref({
@@ -328,8 +355,13 @@ const loadTargetAudio = async () => {
     const mimeType = targetFile.value.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav'
     const audioBlob = new Blob([arrayBuffer], { type: mimeType })
     
-    // Process with VAD
-    const result = await processAudio(audioBlob)
+    // Process with VAD using lenient settings for target audio
+    const result = await processAudio(audioBlob, {
+      threshold: 0.2,           // Very sensitive for target audio
+      minSpeechDuration: 20,    // Very short minimum speech duration
+      maxSilenceDuration: 800,  // Allow very long silence gaps
+      padding: 0.1
+    })
     targetProcessed.value = result
     
     // Initialize waveform if needed
@@ -361,9 +393,23 @@ const loadUserAudio = async () => {
     const mimeType = userFile.value.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav'
     const audioBlob = new Blob([arrayBuffer], { type: mimeType })
     
-    // Process with VAD
-    const result = await processAudio(audioBlob)
+    // Process with VAD using very lenient settings for user audio
+    console.log('🎤 Processing user audio with very lenient VAD settings for microphone audio')
+    const result = await processAudio(audioBlob, {
+      threshold: 0.2,           // Very sensitive for user recordings
+      minSpeechDuration: 20,    // Very short minimum speech duration
+      maxSilenceDuration: 800,  // Allow very long silence gaps
+      padding: 0.1
+    })
     userProcessed.value = result
+    
+    console.log('🎯 User audio VAD results:', {
+      processed: result.processed,
+      speechStart: result.vadBoundaries?.originalSpeechStart?.toFixed(3) + 's',
+      speechEnd: result.vadBoundaries?.originalSpeechEnd?.toFixed(3) + 's',
+      paddedStart: result.vadBoundaries?.startTime?.toFixed(3) + 's',
+      paddedEnd: result.vadBoundaries?.endTime?.toFixed(3) + 's'
+    })
     
     // Initialize waveform if needed
     if (!userWaveformComposable) {
@@ -379,6 +425,67 @@ const loadUserAudio = async () => {
   } catch (error) {
     console.error('❌ Error loading user audio:', error)
     alert('Failed to load user audio: ' + error.message)
+  }
+}
+
+// VAD testing function
+const testUserAudioWithSettings = async (settingsType) => {
+  console.log(`🧪 Testing VAD with ${settingsType} settings...`)
+  
+  try {
+    // Load the audio file
+    const response = await fetch(userFile.value)
+    const arrayBuffer = await response.arrayBuffer()
+    const mimeType = userFile.value.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav'
+    const audioBlob = new Blob([arrayBuffer], { type: mimeType })
+    
+    // Define different VAD settings
+    const vadSettings = {
+      conservative: {
+        threshold: 0.5,
+        minSpeechDuration: 50,
+        maxSilenceDuration: 300,
+        padding: 0.1
+      },
+      lenient: {
+        threshold: 0.3,
+        minSpeechDuration: 30,
+        maxSilenceDuration: 500,
+        padding: 0.1
+      },
+      'very-sensitive': {
+        threshold: 0.2,
+        minSpeechDuration: 20,
+        maxSilenceDuration: 800,
+        padding: 0.15
+      }
+    }
+    
+    const settings = vadSettings[settingsType]
+    console.log(`🎚️ Using ${settingsType} VAD settings:`, settings)
+    
+    // Process with specific settings
+    const result = await processAudio(audioBlob, settings)
+    
+    // Add to results
+    const testResult = {
+      name: `${settingsType.charAt(0).toUpperCase() + settingsType.slice(1)} (threshold: ${settings.threshold})`,
+      processed: result.processed,
+      speechStart: result.vadBoundaries?.originalSpeechStart || 0,
+      speechEnd: result.vadBoundaries?.originalSpeechEnd || 0,
+      settings: settings
+    }
+    
+    // Update results (keep only last 5 results)
+    vadTestResults.value.unshift(testResult)
+    if (vadTestResults.value.length > 5) {
+      vadTestResults.value.pop()
+    }
+    
+    console.log(`✅ ${settingsType} VAD test complete:`, testResult)
+    
+  } catch (error) {
+    console.error(`❌ VAD test ${settingsType} failed:`, error)
   }
 }
 
@@ -1081,5 +1188,76 @@ h1 {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* VAD Testing Controls */
+.vad-test-controls {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.vad-test-controls h3 {
+  margin-bottom: 15px;
+  color: #2c3e50;
+}
+
+.vad-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.btn-test {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-test:hover:not(:disabled) {
+  background: #c0392b;
+  transform: translateY(-1px);
+}
+
+.btn-test:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.vad-results {
+  background: #ffffff;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 15px;
+}
+
+.vad-results h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #2c3e50;
+}
+
+.vad-result {
+  padding: 8px 0;
+  border-bottom: 1px solid #f8f9fa;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.vad-result:last-child {
+  border-bottom: none;
+}
+
+.vad-result .error {
+  color: #e74c3c;
+  font-weight: bold;
 }
 </style>

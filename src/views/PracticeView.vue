@@ -310,72 +310,152 @@ const handleVADSettingsSave = (newSettings) => {
   console.log('🔧 VAD settings updated:', vadSettings.value);
 };
 
-const handleFileSelection = async (event) => {
-  const file = event.target.files[0];
-  if (file) {
-    try {
-      console.log('📁 Processing target audio file:', file.name);
+// Unified function to set and process target audio from any source
+const setTargetAudio = async (audioBlob, source = {}) => {
+  if (!audioBlob) {
+    console.warn('🎯 setTargetAudio: No audio blob provided');
+    // Clear everything
+    const oldTargetUrl = targetAudioUrl.value;
+    targetDebugInfo.value = null;
+    targetAudioProcessed.value = null;
+    targetAudioUrl.value = null;
+    targetAudioBlob.value = null;
+    
+    // Cleanup old blob URL
+    if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+      setTimeout(() => {
+        URL.revokeObjectURL(oldTargetUrl);
+      }, 3000);
+    }
+    return;
+  }
+
+  try {
+    console.log('🎯 Processing target audio:', source.name || source.fileName || 'Unknown source');
+    
+    // Store old URL for cleanup
+    const oldTargetUrl = targetAudioUrl.value;
+    
+    // Get raw duration for debugging
+    const rawDuration = await getAudioDuration(audioBlob);
+    
+    // Initial debug info
+    targetDebugInfo.value = {
+      rawDuration: rawDuration.toFixed(3),
+      finalDuration: rawDuration.toFixed(3),
+      trimmedAmount: '0.000'
+    };
+    
+    // Process target audio with VAD using lenient settings for consistency with user recordings
+    console.log('🎯 Processing target audio with lenient VAD settings for optimal speech detection');
+    const targetProcessed = await processAudio(audioBlob, {
+      threshold: 0.3,           // More sensitive for target audio (matching user settings)
+      minSpeechDuration: 30,    // Shorter minimum speech duration
+      maxSilenceDuration: 500,  // Allow longer silence gaps
+      padding: 0.1
+    });
+    
+    if (targetProcessed.processed && targetProcessed.vadBoundaries) {
+      console.log('🎯 Target audio VAD analysis complete:', {
+        speechStart: targetProcessed.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
+        speechEnd: targetProcessed.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
+        paddedStart: targetProcessed.vadBoundaries.startTime?.toFixed(3) + 's',
+        paddedEnd: targetProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
+      });
       
-      // Store raw duration for debugging
-      const rawDuration = await getAudioDuration(file);
+      // Normalize target audio to have consistent padding
+      const normalizedBlob = await normalizeAudioSilence(
+        targetProcessed.audioBlob,
+        targetProcessed.vadBoundaries,
+        vadSettings.value.padding * 1000 // Convert to milliseconds
+      );
+      
+      // Update state with processed audio
+      targetAudioBlob.value = normalizedBlob;
+      targetAudioUrl.value = URL.createObjectURL(normalizedBlob);
+      
+      // Cache the processed target audio for future recordings
+      targetAudioProcessed.value = {
+        ...targetProcessed,
+        audioBlob: normalizedBlob
+      };
+      
+      // Update debug info with normalized duration
+      const finalDuration = await getAudioDuration(normalizedBlob);
+      targetDebugInfo.value = {
+        rawDuration: rawDuration.toFixed(3),
+        finalDuration: finalDuration.toFixed(3),
+        trimmedAmount: (rawDuration - finalDuration).toFixed(3)
+      };
+      
+      console.log('🎵 Target audio processed with VAD trimming');
+    } else {
+      console.log('📏 Target VAD processing failed - using original audio');
+      
+      // Use original audio when VAD processing fails
+      targetAudioBlob.value = audioBlob;
+      targetAudioUrl.value = URL.createObjectURL(audioBlob);
+      
+      // Clear cache since processing failed
+      targetAudioProcessed.value = null;
+      
+      // Keep basic debug info
       targetDebugInfo.value = {
         rawDuration: rawDuration.toFixed(3),
         finalDuration: rawDuration.toFixed(3),
         trimmedAmount: '0.000'
       };
-      
-      // Process target audio with VAD
-      const targetProcessed = await processAudio(file);
-      
-      if (targetProcessed.processed && targetProcessed.vadBoundaries) {
-        console.log('🎯 Target audio VAD analysis complete:', {
-          speechStart: targetProcessed.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
-          speechEnd: targetProcessed.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
-          paddedStart: targetProcessed.vadBoundaries.startTime?.toFixed(3) + 's',
-          paddedEnd: targetProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
-        });
-        
-        // Normalize target audio to have consistent padding
-        const normalizedBlob = await normalizeAudioSilence(
-          targetProcessed.audioBlob,
-          targetProcessed.vadBoundaries,
-          vadSettings.value.padding * 1000 // Convert to milliseconds
-        );
-        
-        targetAudioBlob.value = normalizedBlob;
-        targetAudioUrl.value = URL.createObjectURL(normalizedBlob);
-        
-        // Cache the processed target audio for future recordings
-        targetAudioProcessed.value = targetProcessed;
-        
-        // Update debug info with normalized duration
-        const finalDuration = await getAudioDuration(normalizedBlob);
-        targetDebugInfo.value = {
-          rawDuration: rawDuration.toFixed(3),
-          finalDuration: finalDuration.toFixed(3),
-          trimmedAmount: (rawDuration - finalDuration).toFixed(3)
-        };
-        
-        console.log('🎵 SMART-ALIGN: Target audio normalized with consistent padding');
-      } else {
-        console.log('📏 SMART-ALIGN: Target VAD processing failed - using original file');
-        targetAudioBlob.value = file;
-        targetAudioUrl.value = URL.createObjectURL(file);
-        // Clear cache since processing failed
-        targetAudioProcessed.value = null;
-      }
-      
-      currentAudioSource.value = file.name;
-      console.log('Target Audio File:', file.name);
-    } catch (error) {
-      console.error('Error processing target audio:', error);
-      // Fallback to original file
-      targetAudioBlob.value = file;
-      targetAudioUrl.value = URL.createObjectURL(file);
-      currentAudioSource.value = file.name;
-      // Clear cache since processing failed
-      targetAudioProcessed.value = null;
     }
+    
+    // Cleanup old blob URL after delay to ensure audio player has loaded
+    setTimeout(() => {
+      if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(oldTargetUrl);
+      }
+    }, 3000);
+    
+    // Update current audio source display
+    if (source.name) {
+      currentAudioSource.value = source.name;
+    } else if (source.fileName) {
+      currentAudioSource.value = source.fileName;
+    } else if (source.url) {
+      currentAudioSource.value = source.url;
+    }
+    
+  } catch (error) {
+    console.error('Error processing target audio:', error);
+    
+    // Fallback to original audio on error
+    const oldTargetUrl = targetAudioUrl.value;
+    targetAudioBlob.value = audioBlob;
+    targetAudioUrl.value = URL.createObjectURL(audioBlob);
+    targetAudioProcessed.value = null;
+    
+    try {
+      const rawDuration = await getAudioDuration(audioBlob);
+      targetDebugInfo.value = {
+        rawDuration: rawDuration.toFixed(3),
+        finalDuration: rawDuration.toFixed(3),
+        trimmedAmount: '0.000'
+      };
+    } catch (durationError) {
+      targetDebugInfo.value = null;
+    }
+    
+    // Cleanup old blob URL
+    setTimeout(() => {
+      if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(oldTargetUrl);
+      }
+    }, 3000);
+  }
+};
+
+const handleFileSelection = async (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    await setTargetAudio(file, { name: file.name, fileName: file.name });
     
     // Reset the input so the same file can be selected again if needed
     event.target.value = '';
@@ -406,67 +486,9 @@ const handleUrlLoad = async () => {
       throw new Error('URL does not point to an audio file');
     }
     
-    try {
-      console.log('🌐 Processing target audio from URL:', url);
-      
-      // Store raw duration for debugging
-      const rawDuration = await getAudioDuration(blob);
-      targetDebugInfo.value = {
-        rawDuration: rawDuration.toFixed(3),
-        finalDuration: rawDuration.toFixed(3),
-        trimmedAmount: '0.000'
-      };
-      
-      // Process target audio with VAD
-      const targetProcessed = await processAudio(blob);
-      
-      if (targetProcessed.processed && targetProcessed.vadBoundaries) {
-        console.log('🎯 Target audio VAD analysis complete:', {
-          speechStart: targetProcessed.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
-          speechEnd: targetProcessed.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
-          paddedStart: targetProcessed.vadBoundaries.startTime?.toFixed(3) + 's',
-          paddedEnd: targetProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
-        });
-        
-        // Normalize target audio to have consistent padding
-        const normalizedBlob = await normalizeAudioSilence(
-          targetProcessed.audioBlob,
-          targetProcessed.vadBoundaries,
-          vadSettings.value.padding * 1000 // Convert to milliseconds
-        );
-        
-        targetAudioBlob.value = normalizedBlob;
-        targetAudioUrl.value = URL.createObjectURL(normalizedBlob);
-        
-        // Cache the processed target audio for future recordings
-        targetAudioProcessed.value = targetProcessed;
-        
-        // Update debug info with normalized duration
-        const finalDuration = await getAudioDuration(normalizedBlob);
-        targetDebugInfo.value = {
-          rawDuration: rawDuration.toFixed(3),
-          finalDuration: finalDuration.toFixed(3),
-          trimmedAmount: (rawDuration - finalDuration).toFixed(3)
-        };
-        
-        console.log('🎵 SMART-ALIGN: Target audio from URL normalized with consistent padding');
-      } else {
-        console.log('📏 SMART-ALIGN: Target VAD processing failed - using original URL audio');
-        targetAudioBlob.value = blob;
-        targetAudioUrl.value = URL.createObjectURL(blob);
-        // Clear cache since processing failed
-        targetAudioProcessed.value = null;
-      }
-    } catch (audioError) {
-      console.error('Error processing target audio from URL:', audioError);
-      // Fallback to original blob
-      targetAudioBlob.value = blob;
-      targetAudioUrl.value = URL.createObjectURL(blob);
-      // Clear cache since processing failed
-      targetAudioProcessed.value = null;
-    }
+    // Use unified processing
+    await setTargetAudio(blob, { url: url, name: url });
     
-    currentAudioSource.value = url;
     showUrlModal.value = false;
     tempAudioUrl.value = '';
     console.log('Successfully loaded audio from URL');
@@ -486,83 +508,18 @@ watch(showUrlModal, (newValue) => {
   }
 });
 
-// Process folder recordings lazily when they become current
-// This ensures folder uploads get the same processing as single file uploads
+// Process recordings when they become current (unified processing for all sources)
 watch(currentRecording, async (newRecording, oldRecording) => {
   // Only process if we're switching to a new recording that has audio
   if (newRecording && newRecording !== oldRecording && newRecording.audioBlob) {
-    try {
-      console.log('📁 Processing folder recording:', newRecording.name);
-      
-      // Get raw duration for debugging (same as single file upload)
-      const rawDuration = await getAudioDuration(newRecording.audioBlob);
-      
-      // Process target audio with VAD (same as single file upload)
-      const targetProcessed = await processAudio(newRecording.audioBlob);
-      
-      if (targetProcessed.processed && targetProcessed.vadBoundaries) {
-        console.log('🎯 Folder recording VAD analysis complete:', {
-          speechStart: targetProcessed.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
-          speechEnd: targetProcessed.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
-          paddedStart: targetProcessed.vadBoundaries.startTime?.toFixed(3) + 's',
-          paddedEnd: targetProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
-        });
-        
-        // Normalize audio with consistent padding (same as single file upload)
-        const normalizedBlob = await normalizeAudioSilence(
-          targetProcessed.audioBlob,
-          targetProcessed.vadBoundaries,
-          200 // Same 200ms padding as single file uploads
-        );
-        
-        // Cache the processed audio for alignment (same as single file upload)
-        targetAudioProcessed.value = {
-          ...targetProcessed,
-          audioBlob: normalizedBlob
-        };
-        
-        // Update debug info with normalized duration (same as single file upload)
-        const finalDuration = await getAudioDuration(normalizedBlob);
-        targetDebugInfo.value = {
-          rawDuration: rawDuration.toFixed(3),
-          finalDuration: finalDuration.toFixed(3),
-          trimmedAmount: (rawDuration - finalDuration).toFixed(3)
-        };
-        
-        console.log('🎵 Folder recording processed with consistent padding');
-      } else {
-        // Clear cache since processing failed (same as single file upload)
-        targetAudioProcessed.value = null;
-        
-        // Set basic debug info (same as single file upload)
-        targetDebugInfo.value = {
-          rawDuration: rawDuration.toFixed(3),
-          finalDuration: rawDuration.toFixed(3),
-          trimmedAmount: '0.000'
-        };
-      }
-      
-      console.log('📁 Folder Recording Processed:', newRecording.name);
-    } catch (error) {
-      console.error('Error processing folder recording:', error);
-      
-      // Clear cache and set fallback debug info
-      targetAudioProcessed.value = null;
-      try {
-        const rawDuration = await getAudioDuration(newRecording.audioBlob);
-        targetDebugInfo.value = {
-          rawDuration: rawDuration.toFixed(3),
-          finalDuration: rawDuration.toFixed(3),
-          trimmedAmount: '0.000'
-        };
-      } catch (durationError) {
-        targetDebugInfo.value = null;
-      }
-    }
+    await setTargetAudio(newRecording.audioBlob, {
+      name: newRecording.name,
+      fileName: newRecording.metadata?.fileName,
+      source: 'folder'
+    });
   } else if (!newRecording) {
-    // Clear debug info and cache when no recording is selected
-    targetDebugInfo.value = null;
-    targetAudioProcessed.value = null;
+    // Clear when no recording is selected
+    await setTargetAudio(null);
   }
   // Note: if newRecording === oldRecording, we don't reprocess (efficiency)
 });
@@ -616,7 +573,14 @@ const handleRecordedAudio = async (blob) => {
       console.log('🎧 Starting smart VAD-based audio processing...');
       
       // Process the recorded audio with VAD to get speech boundaries
-      const userProcessed = await processAudio(blob);
+      // Use more lenient settings for user recordings (microphone audio)
+      console.log('🎤 Processing user recording with lenient VAD settings for microphone audio');
+      const userProcessed = await processAudio(blob, {
+        threshold: 0.3,           // More sensitive for user recordings
+        minSpeechDuration: 30,    // Shorter minimum speech duration
+        maxSilenceDuration: 500,  // Allow longer silence gaps
+        padding: 0.1
+      });
       
       if (userProcessed.processed && userProcessed.vadBoundaries) {
         console.log('🎯 User audio VAD analysis complete:', {
@@ -628,20 +592,29 @@ const handleRecordedAudio = async (blob) => {
         
         // If we have both target and user audio, align them together for matching lengths
         if (targetAudioBlob.value) {
-          console.log('🔄 Both target and user audio available - performing smart alignment...');
+          console.log('🔄 Both target and user audio available - performing smart alignment...', {
+            hasTargetBlob: !!targetAudioBlob.value,
+            hasTargetProcessed: !!targetAudioProcessed.value,
+            targetBlobSize: targetAudioBlob.value?.size,
+            hasUserBlob: !!blob,
+            userBlobSize: blob?.size
+          });
           
           try {
             // Use cached target processing if available, otherwise process target audio
             let targetProcessed;
             if (targetAudioProcessed.value) {
-              console.log('🎯 Using cached target audio VAD processing');
+              console.log('🎯 Using cached target audio VAD processing for alignment');
               targetProcessed = targetAudioProcessed.value;
             } else {
-              console.log('🎯 Processing target audio VAD for first time');
+              console.log('🎯 No cached target processing - processing target audio for alignment');
               targetProcessed = await processAudio(targetAudioBlob.value);
               // Cache the processed target for future recordings
               if (targetProcessed.processed) {
                 targetAudioProcessed.value = targetProcessed;
+                console.log('🎯 Cached target audio processing for future use');
+              } else {
+                console.warn('🎯 Target audio VAD processing failed during alignment');
               }
             }
             
@@ -659,8 +632,9 @@ const handleRecordedAudio = async (blob) => {
                 paddingAdded: alignmentResult.alignmentInfo.paddingAdded?.toFixed(3) + 's'
               });
               
-              // Store old URL for cleanup after new audio is loaded
+              // Store old URLs for cleanup after new audio is loaded
               const oldUserUrl = userAudioUrl.value;
+              const oldTargetUrl = targetAudioUrl.value;
               
               // Only update target audio if it actually needs to change
               const targetNeedsUpdate = alignmentResult.alignmentInfo.method !== 'already_aligned' && 
@@ -668,8 +642,6 @@ const handleRecordedAudio = async (blob) => {
               
               if (targetNeedsUpdate) {
                 console.log('🎯 Target audio needs updating for alignment');
-                // Store old target URL for cleanup after new audio is loaded
-                const oldTargetUrl = targetAudioUrl.value;
                 targetAudioBlob.value = alignmentResult.audio1Aligned;
                 targetAudioUrl.value = URL.createObjectURL(alignmentResult.audio1Aligned);
               } else {
@@ -851,8 +823,17 @@ const manualAlign = async () => {
   try {
     console.log('🔄 Manual smart alignment triggered with VAD settings:', vadSettings.value);
     
-    // Process both target and user audio with smart VAD alignment
-    const targetProcessed = await processAudio(targetBlob);
+    // Use cached target processing if available, otherwise process target audio
+    let targetProcessed;
+    if (targetAudioProcessed.value) {
+      console.log('🎯 Using cached target audio VAD processing for manual alignment');
+      targetProcessed = targetAudioProcessed.value;
+    } else {
+      console.log('🎯 Processing target audio VAD for manual alignment');
+      targetProcessed = await processAudio(targetBlob);
+    }
+    
+    // Process user audio
     const userProcessed = await processAudio(userAudioBlob.value);
     
     if (targetProcessed.processed && userProcessed.processed) {
