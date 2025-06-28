@@ -70,14 +70,14 @@ export function useVADProcessor() {
       console.log('📦 Creating VAD instance...');
       
       vadInstance = await (window as any).vad.NonRealTimeVAD.new({
-        // Balanced settings - sensitive enough to detect silence but not over-trim
-        positiveSpeechThreshold: 0.4,   // Moderately sensitive for better silence detection
-        negativeSpeechThreshold: 0.25,  // Lower threshold for better speech continuation
-        redemptionFrames: 24,            // Balanced gap allowance (~768ms)
+        // Use very sensitive settings to ensure we detect something
+        positiveSpeechThreshold: 0.1,   // Very sensitive
+        negativeSpeechThreshold: 0.05,  // Very low threshold
+        redemptionFrames: 64,            // Large gap allowance
         frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: 6,              // Reduced minimum frames for better detection
-        preSpeechPadFrames: 4,           // Reasonable context before speech starts
-        positiveSpeechPadFrames: 4       // Reasonable context after speech ends
+        minSpeechFrames: 1,              // Minimum possible
+        preSpeechPadFrames: 8,           // More context
+        positiveSpeechPadFrames: 8       // More context
       });
       
       vadReady.value = true;
@@ -178,6 +178,31 @@ export function useVADProcessor() {
       
       console.log(`📊 Processing ${audioData.length} samples at ${targetSampleRate}Hz`);
       
+      // Debug audio data to ensure it's valid
+      let maxAmplitude = 0;
+      let minAmplitude = 0;
+      let avgAmplitude = 0;
+      let nonZeroSamples = 0;
+      
+      for (let i = 0; i < Math.min(audioData.length, 10000); i++) {
+        const sample = audioData[i];
+        maxAmplitude = Math.max(maxAmplitude, sample);
+        minAmplitude = Math.min(minAmplitude, sample);
+        avgAmplitude += Math.abs(sample);
+        if (Math.abs(sample) > 0.0001) nonZeroSamples++;
+      }
+      avgAmplitude /= Math.min(audioData.length, 10000);
+      
+      console.log('🔊 Audio data check:', {
+        dataType: audioData.constructor.name,
+        length: audioData.length,
+        maxAmplitude: maxAmplitude.toFixed(6),
+        minAmplitude: minAmplitude.toFixed(6),
+        avgAmplitude: avgAmplitude.toFixed(6),
+        nonZeroSamples: nonZeroSamples,
+        hasContent: maxAmplitude > 0.001
+      });
+      
       // Configure VAD parameters
       console.log('🔧 VAD CONFIGURATION:', {
         threshold,
@@ -205,15 +230,15 @@ export function useVADProcessor() {
       // Create a VAD instance with the provided runtime options
       console.log('🎛️ Creating VAD instance with runtime options');
       
-      // Balanced settings - allow for more sensitive detection when requested
+      // Very sensitive settings to ensure detection
       const vadConfig = {
-        positiveSpeechThreshold: Math.max(positiveSpeechThreshold, 0.3), // Allow more sensitive detection
-        negativeSpeechThreshold: Math.max(negativeSpeechThreshold, 0.2), // Allow lower continuation threshold
-        redemptionFrames: 24,            // Balanced gap allowance
+        positiveSpeechThreshold: Math.min(positiveSpeechThreshold, 0.1), // Force sensitive detection
+        negativeSpeechThreshold: Math.min(negativeSpeechThreshold, 0.05), // Very low threshold
+        redemptionFrames: 64,            // Large gap allowance
         frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: Math.max(minSpeechFrames, 4), // Allow shorter speech segments
-        preSpeechPadFrames: 4,           // Conservative context before speech
-        positiveSpeechPadFrames: 4       // Conservative context after speech
+        minSpeechFrames: 1,              // Minimum possible
+        preSpeechPadFrames: 8,           // More context
+        positiveSpeechPadFrames: 8       // More context
       };
       
       console.log('🔧 ACTUAL VAD INSTANCE CONFIG:', vadConfig);
@@ -228,18 +253,37 @@ export function useVADProcessor() {
       }
       
       // Use runtime VAD instance with provided settings
-      for await (const { audio, start, end } of runtimeVADInstance.run(audioData, resampledBuffer.sampleRate)) {
-        // Convert frame indices to seconds
-        const startTimeSeconds = start / resampledBuffer.sampleRate;
-        const endTimeSeconds = end / resampledBuffer.sampleRate;
+      console.log('🎯 Starting VAD iteration...');
+      let iterationCount = 0;
+      
+      try {
+        const vadIterator = runtimeVADInstance.run(audioData, resampledBuffer.sampleRate);
         
-        speechSegments.push({
-          startTime: startTimeSeconds,
-          endTime: endTimeSeconds,
-          audioLength: audio.length
-        });
-        console.log(`🎙 Speech segment detected: ${startTimeSeconds.toFixed(3)}s - ${endTimeSeconds.toFixed(3)}s`);
+        for await (const segment of vadIterator) {
+          iterationCount++;
+          console.log(`🔍 VAD iteration ${iterationCount}, segment:`, segment);
+          
+          if (!segment || typeof segment.start === 'undefined' || typeof segment.end === 'undefined') {
+            console.warn('⚠️ Invalid segment returned by VAD:', segment);
+            continue;
+          }
+          
+          // Convert frame indices to seconds
+          const startTimeSeconds = segment.start / resampledBuffer.sampleRate;
+          const endTimeSeconds = segment.end / resampledBuffer.sampleRate;
+          
+          speechSegments.push({
+            startTime: startTimeSeconds,
+            endTime: endTimeSeconds,
+            audioLength: segment.audio ? segment.audio.length : 0
+          });
+          console.log(`🎙 Speech segment detected: ${startTimeSeconds.toFixed(3)}s - ${endTimeSeconds.toFixed(3)}s`);
+        }
+      } catch (iterError) {
+        console.error('❌ Error during VAD iteration:', iterError);
       }
+      
+      console.log(`🎯 VAD iteration complete. Total iterations: ${iterationCount}, segments found: ${speechSegments.length}`);
       
       // Determine overall speech boundaries
       let overallStart = null;

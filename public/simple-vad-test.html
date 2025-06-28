@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple VAD Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .result { background: #f0f0f0; padding: 10px; margin: 10px 0; font-family: monospace; white-space: pre-wrap; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        .warning { background: #fff3cd; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.19/dist/bundle.min.js"></script>
+</head>
+<body>
+    <h1>🎤 Simple VAD Test</h1>
+    <p>Testing if VAD can detect ANY speech in our audio files</p>
+    
+    <button onclick="testMinimalVAD()">Test Minimal VAD</button>
+    <button onclick="testWithDifferentModel()">Test v5 Model</button>
+    <button onclick="generateTestTone()">Generate & Test Tone</button>
+    
+    <div id="results"></div>
+
+    <script>
+        function addResult(text, type = '') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.textContent = text;
+            document.getElementById('results').appendChild(div);
+        }
+
+        async function testMinimalVAD() {
+            addResult('Testing with minimal VAD configuration...');
+            
+            try {
+                // Wait for VAD
+                if (!window.vad) {
+                    addResult('Waiting for VAD library...', 'warning');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                
+                if (!window.vad) {
+                    addResult('VAD library not available!', 'error');
+                    return;
+                }
+                
+                // Create the most lenient VAD possible
+                addResult('Creating VAD with most lenient settings...');
+                const vadInstance = await window.vad.NonRealTimeVAD.new({
+                    positiveSpeechThreshold: 0.01,  // Extremely low
+                    negativeSpeechThreshold: 0.001, // Extremely low
+                    redemptionFrames: 1000,         // Huge gap allowance
+                    frameSamples: 1536,
+                    minSpeechFrames: 1,             // Minimum possible
+                    preSpeechPadFrames: 100,        // Lots of padding
+                    positiveSpeechPadFrames: 100    // Lots of padding
+                });
+                
+                addResult('VAD instance created successfully', 'success');
+                
+                // Load patth.wav
+                addResult('\nLoading patth.wav...');
+                const response = await fetch('/patth.wav');
+                const blob = await response.blob();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await blob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                addResult(`Audio loaded: ${audioBuffer.duration.toFixed(3)}s, ${audioBuffer.sampleRate}Hz`, 'success');
+                
+                // Check if audio has content
+                const channelData = audioBuffer.getChannelData(0);
+                let maxAmp = 0;
+                for (let i = 0; i < channelData.length; i++) {
+                    maxAmp = Math.max(maxAmp, Math.abs(channelData[i]));
+                }
+                addResult(`Max amplitude in audio: ${maxAmp.toFixed(6)}`);
+                
+                // Resample to 16kHz
+                addResult('\nResampling to 16kHz for VAD...');
+                let processBuffer = audioBuffer;
+                if (audioBuffer.sampleRate !== 16000) {
+                    const offlineContext = new OfflineAudioContext(1, Math.ceil(audioBuffer.duration * 16000), 16000);
+                    const bufferSource = offlineContext.createBufferSource();
+                    bufferSource.buffer = audioBuffer;
+                    bufferSource.connect(offlineContext.destination);
+                    bufferSource.start();
+                    processBuffer = await offlineContext.startRendering();
+                }
+                
+                const audioData = processBuffer.getChannelData(0);
+                addResult(`Resampled to ${audioData.length} samples`);
+                
+                // Run VAD
+                addResult('\nRunning VAD detection...');
+                let segmentCount = 0;
+                
+                for await (const segment of vadInstance.run(audioData, processBuffer.sampleRate)) {
+                    segmentCount++;
+                    const startTime = segment.start / processBuffer.sampleRate;
+                    const endTime = segment.end / processBuffer.sampleRate;
+                    addResult(`Segment ${segmentCount}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s`, 'success');
+                }
+                
+                if (segmentCount === 0) {
+                    addResult('\n❌ NO SEGMENTS DETECTED even with extreme sensitivity!', 'error');
+                    addResult('This suggests a fundamental issue with VAD or audio format.', 'error');
+                } else {
+                    addResult(`\n✅ Total segments detected: ${segmentCount}`, 'success');
+                }
+                
+            } catch (error) {
+                addResult(`ERROR: ${error.message}`, 'error');
+                console.error('Full error:', error);
+            }
+        }
+
+        async function testWithDifferentModel() {
+            addResult('\nTesting with v5 model instead of v4...');
+            
+            try {
+                if (!window.vad) {
+                    addResult('VAD library not available!', 'error');
+                    return;
+                }
+                
+                // Try to use v5 model
+                addResult('Creating VAD with v5 model...');
+                const vadInstance = await window.vad.NonRealTimeVAD.new({
+                    positiveSpeechThreshold: 0.3,
+                    negativeSpeechThreshold: 0.15,
+                    redemptionFrames: 32,
+                    frameSamples: 512,  // Different frame size for v5
+                    minSpeechFrames: 2,
+                    preSpeechPadFrames: 8,
+                    positiveSpeechPadFrames: 8,
+                    // Try to force v5 model if available
+                    modelURL: 'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.19/dist/silero_vad_v5.onnx'
+                });
+                
+                // Test with patth.wav
+                const response = await fetch('/patth.wav');
+                const blob = await response.blob();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await blob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                // Resample to 16kHz
+                let processBuffer = audioBuffer;
+                if (audioBuffer.sampleRate !== 16000) {
+                    const offlineContext = new OfflineAudioContext(1, Math.ceil(audioBuffer.duration * 16000), 16000);
+                    const bufferSource = offlineContext.createBufferSource();
+                    bufferSource.buffer = audioBuffer;
+                    bufferSource.connect(offlineContext.destination);
+                    bufferSource.start();
+                    processBuffer = await offlineContext.startRendering();
+                }
+                
+                const audioData = processBuffer.getChannelData(0);
+                
+                let segmentCount = 0;
+                for await (const segment of vadInstance.run(audioData, processBuffer.sampleRate)) {
+                    segmentCount++;
+                    const startTime = segment.start / processBuffer.sampleRate;
+                    const endTime = segment.end / processBuffer.sampleRate;
+                    addResult(`Segment ${segmentCount}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s`, 'success');
+                }
+                
+                if (segmentCount === 0) {
+                    addResult('❌ No segments with v5 model either', 'error');
+                } else {
+                    addResult(`✅ v5 model detected ${segmentCount} segments!`, 'success');
+                }
+                
+            } catch (error) {
+                addResult(`v5 test error: ${error.message}`, 'error');
+            }
+        }
+
+        async function generateTestTone() {
+            addResult('\nGenerating test tone to verify VAD works at all...');
+            
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const sampleRate = 16000;
+                const duration = 2; // 2 seconds
+                const frequency = 440; // A4 note
+                
+                // Create buffer with sine wave
+                const buffer = audioContext.createBuffer(1, sampleRate * duration, sampleRate);
+                const data = buffer.getChannelData(0);
+                
+                for (let i = 0; i < data.length; i++) {
+                    // Generate sine wave with envelope
+                    const t = i / sampleRate;
+                    const envelope = t < 0.5 ? 0 : t > 1.5 ? 0 : 1; // Silent at start/end
+                    data[i] = Math.sin(2 * Math.PI * frequency * t) * 0.5 * envelope;
+                }
+                
+                addResult('Generated 440Hz tone with 0.5s silence at start and end');
+                
+                // Test with VAD
+                const vadInstance = await window.vad.NonRealTimeVAD.new({
+                    positiveSpeechThreshold: 0.3,
+                    negativeSpeechThreshold: 0.15,
+                    redemptionFrames: 24,
+                    frameSamples: 1536,
+                    minSpeechFrames: 4,
+                    preSpeechPadFrames: 4,
+                    positiveSpeechPadFrames: 4
+                });
+                
+                const audioData = buffer.getChannelData(0);
+                let segmentCount = 0;
+                
+                for await (const segment of vadInstance.run(audioData, sampleRate)) {
+                    segmentCount++;
+                    const startTime = segment.start / sampleRate;
+                    const endTime = segment.end / sampleRate;
+                    addResult(`Tone segment ${segmentCount}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s`, 'success');
+                }
+                
+                if (segmentCount === 0) {
+                    addResult('❌ VAD cannot even detect a pure tone!', 'error');
+                    addResult('This indicates a fundamental VAD issue.', 'error');
+                } else {
+                    addResult('✅ VAD can detect synthetic audio', 'success');
+                    addResult('Problem might be specific to our audio files', 'warning');
+                }
+                
+            } catch (error) {
+                addResult(`Test tone error: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
