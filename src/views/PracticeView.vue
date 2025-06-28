@@ -486,6 +486,87 @@ watch(showUrlModal, (newValue) => {
   }
 });
 
+// Process folder recordings lazily when they become current
+// This ensures folder uploads get the same processing as single file uploads
+watch(currentRecording, async (newRecording, oldRecording) => {
+  // Only process if we're switching to a new recording that has audio
+  if (newRecording && newRecording !== oldRecording && newRecording.audioBlob) {
+    try {
+      console.log('📁 Processing folder recording:', newRecording.name);
+      
+      // Get raw duration for debugging (same as single file upload)
+      const rawDuration = await getAudioDuration(newRecording.audioBlob);
+      
+      // Process target audio with VAD (same as single file upload)
+      const targetProcessed = await processAudio(newRecording.audioBlob);
+      
+      if (targetProcessed.processed && targetProcessed.vadBoundaries) {
+        console.log('🎯 Folder recording VAD analysis complete:', {
+          speechStart: targetProcessed.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
+          speechEnd: targetProcessed.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
+          paddedStart: targetProcessed.vadBoundaries.startTime?.toFixed(3) + 's',
+          paddedEnd: targetProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
+        });
+        
+        // Normalize audio with consistent padding (same as single file upload)
+        const normalizedBlob = await normalizeAudioSilence(
+          targetProcessed.audioBlob,
+          targetProcessed.vadBoundaries,
+          200 // Same 200ms padding as single file uploads
+        );
+        
+        // Cache the processed audio for alignment (same as single file upload)
+        targetAudioProcessed.value = {
+          ...targetProcessed,
+          audioBlob: normalizedBlob
+        };
+        
+        // Update debug info with normalized duration (same as single file upload)
+        const finalDuration = await getAudioDuration(normalizedBlob);
+        targetDebugInfo.value = {
+          rawDuration: rawDuration.toFixed(3),
+          finalDuration: finalDuration.toFixed(3),
+          trimmedAmount: (rawDuration - finalDuration).toFixed(3)
+        };
+        
+        console.log('🎵 Folder recording processed with consistent padding');
+      } else {
+        // Clear cache since processing failed (same as single file upload)
+        targetAudioProcessed.value = null;
+        
+        // Set basic debug info (same as single file upload)
+        targetDebugInfo.value = {
+          rawDuration: rawDuration.toFixed(3),
+          finalDuration: rawDuration.toFixed(3),
+          trimmedAmount: '0.000'
+        };
+      }
+      
+      console.log('📁 Folder Recording Processed:', newRecording.name);
+    } catch (error) {
+      console.error('Error processing folder recording:', error);
+      
+      // Clear cache and set fallback debug info
+      targetAudioProcessed.value = null;
+      try {
+        const rawDuration = await getAudioDuration(newRecording.audioBlob);
+        targetDebugInfo.value = {
+          rawDuration: rawDuration.toFixed(3),
+          finalDuration: rawDuration.toFixed(3),
+          trimmedAmount: '0.000'
+        };
+      } catch (durationError) {
+        targetDebugInfo.value = null;
+      }
+    }
+  } else if (!newRecording) {
+    // Clear debug info and cache when no recording is selected
+    targetDebugInfo.value = null;
+    targetAudioProcessed.value = null;
+  }
+  // Note: if newRecording === oldRecording, we don't reprocess (efficiency)
+});
+
 const userAudioPlayerRef = ref(null);
 const targetAudioPlayerRef = ref(null);
 
