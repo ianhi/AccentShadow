@@ -75,6 +75,14 @@
             {{ userProcessed.processed ? '🔄 Reload' : '📁 Load' }} User Audio
           </button>
           <button 
+            @click="toggleRecording" 
+            :class="{ 'recording': isRecording }" 
+            class="btn-record" 
+            :disabled="isProcessing"
+          >
+            {{ isRecording ? '⏹ Stop Recording' : '🎤 Record Audio' }}
+          </button>
+          <button 
             @click="normalizeUserAudio" 
             class="btn-secondary" 
             :disabled="!userProcessed.processed || isProcessing"
@@ -164,6 +172,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useWaveform } from '@/composables/useWaveform'
 import { useSmartAudioAlignment } from '@/composables/useSmartAudioAlignment'
+import { useAudioRecorder } from '@/composables/useAudioRecorder'
 
 // Test files
 const targetFile = ref('/path.mp3')
@@ -192,6 +201,9 @@ const {
   normalizeAudioSilence,
   alignTwoAudios
 } = useSmartAudioAlignment()
+
+// Recording functionality
+const { isRecording, startRecording, stopRecording } = useAudioRecorder()
 
 // Reactive state
 const paddingMs = ref(200)
@@ -498,6 +510,120 @@ const resetToOriginal = async () => {
   }
   
   console.log('✅ Reset to original audios')
+}
+
+// Recording functions
+const toggleRecording = async () => {
+  console.log('🎤 Toggle recording, isRecording:', isRecording.value)
+  
+  if (isRecording.value) {
+    console.log('🎤 Stopping recording...')
+    const audioBlob = await stopRecording()
+    
+    if (audioBlob) {
+      console.log('🎤 Recording complete, blob size:', audioBlob.size)
+      console.log('🎤 Recording blob type:', audioBlob.type)
+      
+      // Process the recorded audio
+      await processRecordedAudio(audioBlob)
+    } else {
+      console.error('❌ No audio blob received from recording')
+    }
+  } else {
+    console.log('🎤 Starting recording...')
+    try {
+      await startRecording()
+      console.log('✅ Recording started')
+    } catch (error) {
+      console.error('❌ Failed to start recording:', error)
+      alert('Failed to start recording: ' + error.message)
+    }
+  }
+}
+
+const processRecordedAudio = async (audioBlob) => {
+  console.log('🔄 Processing recorded audio...')
+  
+  try {
+    // First, let's examine the raw audio properties
+    const arrayBuffer = await audioBlob.arrayBuffer()
+    console.log('📊 Raw recorded audio properties:', {
+      blobSize: audioBlob.size,
+      blobType: audioBlob.type,
+      arrayBufferLength: arrayBuffer.byteLength
+    })
+    
+    // Try to decode the audio to get duration and sample rate
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    try {
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice())
+      console.log('🎵 Decoded audio properties:', {
+        duration: audioBuffer.duration.toFixed(3) + 's',
+        sampleRate: audioBuffer.sampleRate + 'Hz',
+        numberOfChannels: audioBuffer.numberOfChannels,
+        length: audioBuffer.length + ' samples'
+      })
+      
+      // Check if audio has actual content
+      const channelData = audioBuffer.getChannelData(0)
+      let maxAmplitude = 0
+      let nonZeroSamples = 0
+      for (let i = 0; i < channelData.length; i++) {
+        const amplitude = Math.abs(channelData[i])
+        if (amplitude > 0.001) nonZeroSamples++
+        if (amplitude > maxAmplitude) maxAmplitude = amplitude
+      }
+      
+      console.log('🔊 Audio content analysis:', {
+        maxAmplitude: maxAmplitude.toFixed(6),
+        nonZeroSamples: nonZeroSamples,
+        percentageNonZero: ((nonZeroSamples / channelData.length) * 100).toFixed(2) + '%',
+        isEmpty: maxAmplitude < 0.001
+      })
+      
+    } catch (decodeError) {
+      console.error('❌ Failed to decode recorded audio:', decodeError)
+    }
+    
+    // Process with VAD
+    console.log('🎯 Starting VAD processing on recorded audio...')
+    const result = await processAudio(audioBlob)
+    
+    console.log('🎯 VAD processing result:', {
+      processed: result.processed,
+      vadBoundaries: result.vadBoundaries,
+      audioBlob: !!result.audioBlob
+    })
+    
+    if (result.vadBoundaries) {
+      console.log('📏 VAD boundaries detail:', {
+        startTime: result.vadBoundaries.startTime?.toFixed(3) + 's',
+        endTime: result.vadBoundaries.endTime?.toFixed(3) + 's',
+        originalSpeechStart: result.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
+        originalSpeechEnd: result.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
+        silenceStart: result.vadBoundaries.silenceStart?.toFixed(3) + 's',
+        silenceEnd: result.vadBoundaries.silenceEnd?.toFixed(3) + 's',
+        confidenceScore: result.vadBoundaries.confidenceScore
+      })
+    }
+    
+    userProcessed.value = result
+    
+    // Initialize waveform if needed
+    if (!userWaveformComposable) {
+      initUserWaveform()
+    }
+    
+    if (currentUserUrl.value) URL.revokeObjectURL(currentUserUrl.value)
+    currentUserUrl.value = createBlobUrl(audioBlob)
+    await userWaveformComposable.loadAudio(currentUserUrl.value)
+    
+    console.log('✅ Recorded audio loaded and processed')
+    
+  } catch (error) {
+    console.error('❌ Error processing recorded audio:', error)
+    alert('Failed to process recorded audio: ' + error.message)
+  }
 }
 
 // Playback functions
@@ -897,6 +1023,43 @@ h1 {
 
 .btn-debug:hover {
   background: #2c3e50;
+}
+
+.btn-record {
+  background: #27ae60;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-record:hover:not(:disabled) {
+  background: #229954;
+  transform: translateY(-1px);
+}
+
+.btn-record.recording {
+  background: #e74c3c;
+  animation: pulse 1.5s infinite;
+}
+
+.btn-record.recording:hover {
+  background: #c0392b;
+}
+
+.btn-record:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
 }
 
 /* Responsive */
