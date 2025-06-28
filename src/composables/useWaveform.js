@@ -12,7 +12,7 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
   const duration = ref(0);
   const volume = ref(0.5);
   const playbackRate = ref(1.0);
-  const playerId = audioId || `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const playerId = audioId || `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   let playerInfo = null;
 
   // Detect if we're on mobile device
@@ -70,7 +70,8 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
         container: containerRef.value,
         waveColor: 'rgba(96, 165, 250, 0.8)', // Original semi-transparent blue
         progressColor: 'rgba(59, 130, 246, 0.9)', // Original slightly more opaque progress
-        cursorColor: 'transparent', // Original setting
+        cursorColor: '#ff0000', // Red cursor/progress bar
+        cursorWidth: 2, // 2px width for the progress cursor
         backgroundColor: 'transparent',
         height: waveformHeight,
         normalize: true,
@@ -110,6 +111,12 @@ export function useWaveform(containerRef, spectrogramContainerRef, audioId = nul
 
       console.log('🎵 WaveSurfer created with overlay configuration');
 
+      // Add loading event handlers for smoother transitions
+      wavesurfer.value.on('loading', (progress) => {
+        console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: Loading... ${progress}%`);
+        // Could emit loading progress here if needed
+      });
+      
       wavesurfer.value.on('ready', () => {
         const audioDuration = wavesurfer.value.getDuration();
         console.log(`🎵 WAVEFORM [${audioType.toUpperCase()}]: WaveSurfer ready! Duration: ${audioDuration.toFixed(3)}s`);

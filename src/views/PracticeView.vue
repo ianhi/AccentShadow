@@ -801,8 +801,6 @@ const manualAlign = async () => {
   }
 };
 
-// Note: showAlignmentFeedback removed - now using simple alerts with smart alignment feedback
-
 // Central playback control functions
 const playTarget = () => {
   console.log('🎯 Playing target audio');

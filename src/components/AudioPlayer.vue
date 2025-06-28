@@ -88,7 +88,6 @@ watch(duration, (newDuration) => {
   }
 });
 
-// Note: No more width scaling - using consistent 100% width with smart alignment
 
 watch(() => props.audioUrl, async (newUrl, oldUrl) => {
   console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: audioUrl watcher triggered`);

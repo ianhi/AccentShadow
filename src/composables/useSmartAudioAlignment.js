@@ -73,8 +73,12 @@ export function useSmartAudioAlignment() {
       paddingMs: padding
     });
     
-    if (!vadBoundaries || !vadBoundaries.startTime || !vadBoundaries.endTime) {
-      console.log('📄 No valid VAD boundaries available, returning original audio');
+    if (!vadBoundaries || vadBoundaries.startTime === undefined || vadBoundaries.endTime === undefined) {
+      console.log('📄 No valid VAD boundaries available, returning original audio', {
+        hasVadBoundaries: !!vadBoundaries,
+        startTime: vadBoundaries?.startTime,
+        endTime: vadBoundaries?.endTime
+      });
       return audioBlob;
     }
     
