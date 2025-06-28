@@ -11,10 +11,57 @@
         .success { background: #d4edda; }
         .error { background: #f8d7da; }
         .warning { background: #fff3cd; }
+        .audio-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        #waveform, #spectrogram {
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            position: relative;
+        }
+        .vad-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            border-left: 2px solid #ff0000;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .vad-marker.start {
+            border-left: 3px solid #00ff00;
+        }
+        .vad-marker.end {
+            border-left: 3px solid #ff0000;
+        }
+        .vad-region {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(255, 255, 0, 0.2);
+            pointer-events: none;
+            z-index: 5;
+            border: 1px solid rgba(255, 255, 0, 0.6);
+        }
+        .marker-label {
+            position: absolute;
+            top: -20px;
+            font-size: 10px;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 1px 3px;
+            border-radius: 2px;
+            white-space: nowrap;
+        }
     </style>
     <!-- Load ONNX runtime first, then VAD -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.19/dist/bundle.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
 </head>
 <body>
     <h1>🎤 Simple VAD Test</h1>
@@ -23,15 +70,216 @@
     <button onclick="testMinimalVAD()">Test Minimal VAD</button>
     <button onclick="testWithDifferentModel()">Test v5 Model</button>
     <button onclick="generateTestTone()">Generate & Test Tone</button>
+    <button onclick="visualizeAudio()">Visualize Audio</button>
+    
+    <div class="audio-section">
+        <h3>Audio Visualization</h3>
+        <audio id="audio-player" controls style="width: 100%; margin-bottom: 10px;"></audio>
+        
+        <h4>Waveform:</h4>
+        <div id="waveform" style="height: 80px; background: #f0f0f0;"></div>
+        
+        <h4>Spectrogram with VAD Markers:</h4>
+        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+            🟢 Green lines = Speech start | 🔴 Red lines = Speech end | 🟡 Yellow regions = Detected speech
+        </div>
+        <div id="spectrogram" style="height: 200px; background: #f0f0f0;"></div>
+        
+        <h4>VAD Timeline:</h4>
+        <div id="vad-overlay" style="position: relative; height: 20px; background: rgba(0,0,0,0.1); margin-top: 5px;"></div>
+    </div>
     
     <div id="results"></div>
 
     <script>
+        let wavesurfer = null;
+        let currentAudioBuffer = null;
+        let currentVADSegments = [];
+        
         function addResult(text, type = '') {
             const div = document.createElement('div');
             div.className = `result ${type}`;
             div.textContent = text;
             document.getElementById('results').appendChild(div);
+        }
+        
+        async function visualizeAudio() {
+            addResult('Loading and visualizing patth.wav...');
+            
+            try {
+                // Load audio
+                const response = await fetch('/patth.wav');
+                const blob = await response.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                
+                // Set up audio player
+                document.getElementById('audio-player').src = audioUrl;
+                
+                // Decode audio for analysis
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await blob.arrayBuffer();
+                currentAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                // Initialize WaveSurfer
+                if (wavesurfer) {
+                    wavesurfer.destroy();
+                }
+                
+                // Import WaveSurfer plugins
+                const { default: WaveSurfer } = await import('https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js');
+                const { default: Spectrogram } = await import('https://unpkg.com/wavesurfer.js@7/dist/plugins/spectrogram.esm.js');
+                
+                wavesurfer = WaveSurfer.create({
+                    container: '#waveform',
+                    waveColor: '#4F4A85',
+                    progressColor: '#383351',
+                    height: 80,
+                    normalize: true,
+                    barWidth: 2,
+                    barRadius: 3
+                });
+                
+                // Add spectrogram
+                const spectrogramPlugin = Spectrogram.create({
+                    container: '#spectrogram',
+                    labels: true,
+                    height: 200,
+                    splitChannels: false,
+                    fftSamples: 512,
+                    windowFunc: 'hann'
+                });
+                
+                wavesurfer.registerPlugin(spectrogramPlugin);
+                wavesurfer.load(audioUrl);
+                
+                wavesurfer.on('ready', () => {
+                    addResult(`Visualization ready: ${currentAudioBuffer.duration.toFixed(3)}s`, 'success');
+                    drawVADOverlay();
+                    drawSpectrogramMarkers();
+                });
+                
+                // Analyze amplitude
+                analyzeAmplitude();
+                
+            } catch (error) {
+                addResult(`Visualization error: ${error.message}`, 'error');
+            }
+        }
+        
+        function analyzeAmplitude() {
+            if (!currentAudioBuffer) return;
+            
+            const channelData = currentAudioBuffer.getChannelData(0);
+            const windowSize = Math.floor(currentAudioBuffer.sampleRate * 0.01); // 10ms windows
+            
+            let maxAmp = 0, avgAmp = 0, nonZeroSamples = 0;
+            const amplitudes = [];
+            
+            // Calculate windowed amplitudes
+            for (let i = 0; i < channelData.length; i += windowSize) {
+                const windowEnd = Math.min(i + windowSize, channelData.length);
+                let windowSum = 0;
+                
+                for (let j = i; j < windowEnd; j++) {
+                    const sample = Math.abs(channelData[j]);
+                    windowSum += sample;
+                    if (sample > 0.001) nonZeroSamples++;
+                    maxAmp = Math.max(maxAmp, sample);
+                }
+                
+                amplitudes.push(windowSum / (windowEnd - i));
+            }
+            
+            avgAmp = amplitudes.reduce((a, b) => a + b, 0) / amplitudes.length;
+            
+            addResult(`Audio Analysis:
+Max amplitude: ${maxAmp.toFixed(6)}
+Avg amplitude: ${avgAmp.toFixed(6)}
+Non-zero samples: ${nonZeroSamples}/${channelData.length} (${(nonZeroSamples/channelData.length*100).toFixed(1)}%)
+Audio level: ${maxAmp > 0.1 ? 'Good' : maxAmp > 0.01 ? 'Low' : 'Very Low'}`, 'success');
+        }
+        
+        function drawVADOverlay() {
+            const overlay = document.getElementById('vad-overlay');
+            overlay.innerHTML = '';
+            
+            if (currentVADSegments.length === 0) {
+                overlay.innerHTML = '<div style="text-align: center; line-height: 20px; color: #999;">No VAD segments to display</div>';
+                return;
+            }
+            
+            const duration = currentAudioBuffer.duration;
+            
+            currentVADSegments.forEach((segment, index) => {
+                const startPercent = (segment.startTime / duration) * 100;
+                const widthPercent = ((segment.endTime - segment.startTime) / duration) * 100;
+                
+                const segmentDiv = document.createElement('div');
+                segmentDiv.style.cssText = `
+                    position: absolute;
+                    left: ${startPercent}%;
+                    width: ${widthPercent}%;
+                    height: 100%;
+                    background: rgba(255, 0, 0, 0.6);
+                    border: 1px solid red;
+                    box-sizing: border-box;
+                `;
+                segmentDiv.title = `Segment ${index + 1}: ${segment.startTime.toFixed(3)}s - ${segment.endTime.toFixed(3)}s`;
+                overlay.appendChild(segmentDiv);
+            });
+        }
+        
+        function drawSpectrogramMarkers() {
+            if (!currentAudioBuffer || currentVADSegments.length === 0) return;
+            
+            const spectrogramContainer = document.getElementById('spectrogram');
+            const duration = currentAudioBuffer.duration;
+            
+            // Clear existing markers
+            spectrogramContainer.querySelectorAll('.vad-marker, .vad-region, .marker-label').forEach(el => el.remove());
+            
+            currentVADSegments.forEach((segment, index) => {
+                const startPercent = (segment.startTime / duration) * 100;
+                const endPercent = (segment.endTime / duration) * 100;
+                const widthPercent = endPercent - startPercent;
+                
+                // Create background region
+                const region = document.createElement('div');
+                region.className = 'vad-region';
+                region.style.left = startPercent + '%';
+                region.style.width = widthPercent + '%';
+                region.title = `VAD Segment ${index + 1}: ${segment.startTime.toFixed(3)}s - ${segment.endTime.toFixed(3)}s`;
+                spectrogramContainer.appendChild(region);
+                
+                // Create start marker
+                const startMarker = document.createElement('div');
+                startMarker.className = 'vad-marker start';
+                startMarker.style.left = startPercent + '%';
+                spectrogramContainer.appendChild(startMarker);
+                
+                // Create start label
+                const startLabel = document.createElement('div');
+                startLabel.className = 'marker-label';
+                startLabel.style.left = startPercent + '%';
+                startLabel.textContent = `${segment.startTime.toFixed(3)}s`;
+                spectrogramContainer.appendChild(startLabel);
+                
+                // Create end marker
+                const endMarker = document.createElement('div');
+                endMarker.className = 'vad-marker end';
+                endMarker.style.left = endPercent + '%';
+                spectrogramContainer.appendChild(endMarker);
+                
+                // Create end label
+                const endLabel = document.createElement('div');
+                endLabel.className = 'marker-label';
+                endLabel.style.left = endPercent + '%';
+                endLabel.style.top = '-35px'; // Offset to avoid overlap with start label
+                endLabel.textContent = `${segment.endTime.toFixed(3)}s`;
+                spectrogramContainer.appendChild(endLabel);
+            });
+            
+            addResult(`Added ${currentVADSegments.length} VAD markers to spectrogram`, 'success');
         }
 
         async function testMinimalVAD() {
@@ -113,12 +361,17 @@
                 // Run VAD
                 addResult('\nRunning VAD detection...');
                 let segmentCount = 0;
+                currentVADSegments = []; // Store for visualization
                 
                 for await (const segment of vadInstance.run(audioData, processBuffer.sampleRate)) {
                     segmentCount++;
                     const startTime = segment.start / processBuffer.sampleRate;
                     const endTime = segment.end / processBuffer.sampleRate;
-                    addResult(`Segment ${segmentCount}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s`, 'success');
+                    const duration = endTime - startTime;
+                    
+                    currentVADSegments.push({ startTime, endTime });
+                    
+                    addResult(`Segment ${segmentCount}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s (${(duration * 1000).toFixed(0)}ms)`, 'success');
                 }
                 
                 if (segmentCount === 0) {
@@ -126,6 +379,19 @@
                     addResult('This suggests a fundamental issue with VAD or audio format.', 'error');
                 } else {
                     addResult(`\n✅ Total segments detected: ${segmentCount}`, 'success');
+                    
+                    // Auto-visualize if we have segments
+                    if (segmentCount > 0) {
+                        setTimeout(() => {
+                            addResult('\nAuto-loading visualization...', 'warning');
+                            visualizeAudio();
+                        }, 1000);
+                    }
+                    
+                    // If visualization already exists, update markers
+                    if (wavesurfer && currentAudioBuffer) {
+                        drawSpectrogramMarkers();
+                    }
                 }
                 
             } catch (error) {
