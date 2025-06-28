@@ -154,7 +154,7 @@
             <div class="control-group">
                 <label for="positiveSpeechThreshold">Positive Speech Threshold:</label>
                 <input type="range" id="positiveSpeechThreshold" min="0.1" max="0.9" step="0.05" value="0.3">
-                <span id="positiveSpeechThreshold-value">0.3</span>
+                <span id="positiveSpeechThreshold-value">0.5</span>
             </div>
             
             <div class="control-group">
@@ -220,6 +220,10 @@
         let wavesurfer = null;
         let currentAudioBuffer = null;
         let currentVADSegments = [];
+        let spectrogramErrorCount = 0;
+        let disableVisualizationUpdates = false;
+        let trimmedWavesurfer = null; // Track trimmed audio wavesurfer instance
+        let currentTrimmedUrl = null; // Track current trimmed audio blob URL for cleanup
         
         function addResult(text, type = '') {
             const div = document.createElement('div');
@@ -255,7 +259,8 @@
             addResult(`\n🎛️ Testing with custom settings:
 ${JSON.stringify(settings, null, 2)}`);
             
-            await testSimplifiedVADWithSettings(settings);
+            // Run VAD analysis only, don't recreate visualization
+            await runVADAnalysisOnly(settings);
         }
 
         // Reset to default settings (aggressive)
@@ -343,19 +348,22 @@ ${JSON.stringify(settings, null, 2)}`);
                     barRadius: 3
                 });
                 
-                // Add spectrogram with error handling
-                const spectrogramPlugin = Spectrogram.create({
-                    container: '#spectrogram',
-                    labels: true,
-                    height: 200,
-                    splitChannels: false,
-                    fftSamples: 512,
-                    windowFunc: 'hann',
-                    // Add error handling options
-                    colorMap: []  // Prevent undefined colorMap errors
-                });
-                
-                wavesurfer.registerPlugin(spectrogramPlugin);
+                // Add spectrogram with proper error handling
+                try {
+                    const spectrogramPlugin = Spectrogram.create({
+                        container: '#spectrogram',
+                        labels: true,
+                        height: 200,
+                        splitChannels: false,
+                        fftSamples: 512,
+                        windowFunc: 'hann'
+                    });
+                    
+                    wavesurfer.registerPlugin(spectrogramPlugin);
+                } catch (spectrogramError) {
+                    console.warn('Spectrogram plugin failed, continuing without spectrogram:', spectrogramError);
+                    addResult('Note: Spectrogram visualization unavailable, but VAD processing will continue', 'warning');
+                }
                 wavesurfer.load(audioUrl);
                 
                 wavesurfer.on('ready', () => {
@@ -379,8 +387,8 @@ ${JSON.stringify(settings, null, 2)}`);
             const overlay = document.getElementById('vad-overlay');
             overlay.innerHTML = '';
             
-            if (currentVADSegments.length === 0) {
-                overlay.innerHTML = '<div style="text-align: center; line-height: 20px; color: #999;">No VAD segments to display</div>';
+            if (!currentAudioBuffer || currentVADSegments.length === 0) {
+                overlay.innerHTML = '<div style="text-align: center; line-height: 20px; color: #999;">No VAD segments detected with current settings</div>';
                 return;
             }
             
@@ -406,64 +414,93 @@ ${JSON.stringify(settings, null, 2)}`);
         }
         
         function drawSpectrogramMarkers() {
-            if (!currentAudioBuffer || currentVADSegments.length === 0) return;
+            if (disableVisualizationUpdates) {
+                addResult('Visualization updates disabled due to persistent errors', 'warning');
+                return;
+            }
             
-            const spectrogramContainer = document.getElementById('spectrogram');
-            const duration = currentAudioBuffer.duration;
+            let spectrogramContainer;
+            let duration;
             
-            // Clear existing markers
-            spectrogramContainer.querySelectorAll('.vad-marker, .vad-region, .marker-label').forEach(el => el.remove());
+            try {
+                spectrogramContainer = document.getElementById('spectrogram');
+                duration = currentAudioBuffer ? currentAudioBuffer.duration : 1;
+                
+                // Always clear existing markers first
+                spectrogramContainer.querySelectorAll('.vad-marker, .vad-region, .marker-label').forEach(el => el.remove());
+                
+                // If no segments, just return after clearing
+                if (!currentAudioBuffer || currentVADSegments.length === 0) {
+                    addResult('🧹 Cleared previous VAD markers (no segments detected)', 'warning');
+                    return;
+                }
+            } catch (error) {
+                spectrogramErrorCount++;
+                console.warn('Error clearing spectrogram markers (non-critical):', error);
+                addResult('Note: Visualization update skipped due to spectrogram error', 'warning');
+                
+                if (spectrogramErrorCount >= 3) {
+                    disableVisualizationUpdates = true;
+                    addResult('Disabling visualization updates due to persistent errors - VAD analysis will continue', 'error');
+                }
+                return;
+            }
             
-            currentVADSegments.forEach((segment, index) => {
-                const startPercent = (segment.startTime / duration) * 100;
-                const endPercent = (segment.endTime / duration) * 100;
-                const widthPercent = endPercent - startPercent;
+            try {
+                currentVADSegments.forEach((segment, index) => {
+                    const startPercent = (segment.startTime / duration) * 100;
+                    const endPercent = (segment.endTime / duration) * 100;
+                    const widthPercent = endPercent - startPercent;
+                    
+                    // Create background region
+                    const region = document.createElement('div');
+                    region.className = 'vad-region';
+                    region.style.left = startPercent + '%';
+                    region.style.width = widthPercent + '%';
+                    region.title = `VAD Segment ${index + 1}: ${segment.startTime.toFixed(3)}s - ${segment.endTime.toFixed(3)}s`;
+                    spectrogramContainer.appendChild(region);
+                    
+                    // Create start marker
+                    const startMarker = document.createElement('div');
+                    startMarker.className = 'vad-marker start';
+                    startMarker.style.left = startPercent + '%';
+                    spectrogramContainer.appendChild(startMarker);
+                    
+                    // Create start label
+                    const startLabel = document.createElement('div');
+                    startLabel.className = 'marker-label';
+                    startLabel.style.left = startPercent + '%';
+                    startLabel.textContent = `${segment.startTime.toFixed(3)}s`;
+                    spectrogramContainer.appendChild(startLabel);
+                    
+                    // Create end marker
+                    const endMarker = document.createElement('div');
+                    endMarker.className = 'vad-marker end';
+                    endMarker.style.left = endPercent + '%';
+                    spectrogramContainer.appendChild(endMarker);
+                    
+                    // Create end label
+                    const endLabel = document.createElement('div');
+                    endLabel.className = 'marker-label';
+                    endLabel.style.left = endPercent + '%';
+                    endLabel.style.top = '-35px'; // Offset to avoid overlap with start label
+                    endLabel.textContent = `${segment.endTime.toFixed(3)}s`;
+                    spectrogramContainer.appendChild(endLabel);
+                });
                 
-                // Create background region
-                const region = document.createElement('div');
-                region.className = 'vad-region';
-                region.style.left = startPercent + '%';
-                region.style.width = widthPercent + '%';
-                region.title = `VAD Segment ${index + 1}: ${segment.startTime.toFixed(3)}s - ${segment.endTime.toFixed(3)}s`;
-                spectrogramContainer.appendChild(region);
-                
-                // Create start marker
-                const startMarker = document.createElement('div');
-                startMarker.className = 'vad-marker start';
-                startMarker.style.left = startPercent + '%';
-                spectrogramContainer.appendChild(startMarker);
-                
-                // Create start label
-                const startLabel = document.createElement('div');
-                startLabel.className = 'marker-label';
-                startLabel.style.left = startPercent + '%';
-                startLabel.textContent = `${segment.startTime.toFixed(3)}s`;
-                spectrogramContainer.appendChild(startLabel);
-                
-                // Create end marker
-                const endMarker = document.createElement('div');
-                endMarker.className = 'vad-marker end';
-                endMarker.style.left = endPercent + '%';
-                spectrogramContainer.appendChild(endMarker);
-                
-                // Create end label
-                const endLabel = document.createElement('div');
-                endLabel.className = 'marker-label';
-                endLabel.style.left = endPercent + '%';
-                endLabel.style.top = '-35px'; // Offset to avoid overlap with start label
-                endLabel.textContent = `${segment.endTime.toFixed(3)}s`;
-                spectrogramContainer.appendChild(endLabel);
-            });
-            
-            addResult(`Added ${currentVADSegments.length} VAD markers to spectrogram`, 'success');
+                addResult(`Added ${currentVADSegments.length} VAD markers to spectrogram`, 'success');
+            } catch (error) {
+                console.warn('Error drawing VAD markers (non-critical):', error);
+                addResult('Note: VAD markers could not be updated due to visualization error', 'warning');
+            }
         }
 
         // Test simplified VAD with custom settings
         async function testSimplifiedVADWithSettings(customSettings = null) {
             const settings = customSettings || {
-                positiveSpeechThreshold: 0.3,  // Aggressive default
+                positiveSpeechThreshold: 0.5,  // Aggressive default
                 negativeSpeechThreshold: 0.2,  // Aggressive default
-                minSpeechFrames: 3,            // Aggressive default
+                minSpeechFrames: 4,            // Aggressive default
                 redemptionFrames: 32,          // Aggressive default
                 padding: 0.05                  // Aggressive default
             };
@@ -578,6 +615,123 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
             await testSimplifiedVADWithSettings();
         }
 
+        // Run VAD analysis only without recreating visualization
+        async function runVADAnalysisOnly(customSettings) {
+            const settings = customSettings || {
+                positiveSpeechThreshold: 0.3,  // Aggressive default
+                negativeSpeechThreshold: 0.2,  // Aggressive default
+                minSpeechFrames: 3,            // Aggressive default
+                redemptionFrames: 32,          // Aggressive default
+                padding: 0.05                  // Aggressive default
+            };
+            
+            addResult(`=== RUNNING VAD ANALYSIS WITH CUSTOM SETTINGS ===`);
+            
+            try {
+                if (!window.vad) {
+                    addResult('VAD not available!', 'error');
+                    return;
+                }
+                
+                // Use existing audio buffer if available
+                if (!currentAudioBuffer) {
+                    addResult('No audio loaded. Please run initial test first.', 'error');
+                    return;
+                }
+                
+                addResult(`Using existing audio: ${currentAudioBuffer.duration.toFixed(3)}s at ${currentAudioBuffer.sampleRate}Hz`);
+                
+                // Create VAD instance with custom settings
+                addResult('--- Creating VAD with Custom Settings ---');
+                const vadConfig = {
+                    positiveSpeechThreshold: settings.positiveSpeechThreshold,
+                    negativeSpeechThreshold: settings.negativeSpeechThreshold,
+                    redemptionFrames: settings.redemptionFrames,
+                    frameSamples: 1536,
+                    minSpeechFrames: settings.minSpeechFrames,
+                    preSpeechPadFrames: 4,
+                    positiveSpeechPadFrames: 4
+                };
+                
+                addResult(`VAD Config: ${JSON.stringify(vadConfig, null, 2)}`);
+                
+                const myvad = await window.vad.NonRealTimeVAD.new(vadConfig);
+                addResult('✅ VAD instance created with custom settings');
+                
+                // Get audio data and native sample rate
+                const audioFileData = currentAudioBuffer.getChannelData(0);
+                const nativeSampleRate = currentAudioBuffer.sampleRate;
+                
+                addResult(`Processing ${audioFileData.length} samples at native ${nativeSampleRate}Hz...`);
+                
+                let segmentCount = 0;
+                const segments = [];
+                
+                // Use the exact pattern from documentation
+                for await (const {audio, start, end} of myvad.run(audioFileData, nativeSampleRate)) {
+                    segmentCount++;
+                    
+                    // start and end are in MILLISECONDS according to docs
+                    const startSeconds = start / 1000;
+                    const endSeconds = end / 1000;
+                    const durationMs = end - start;
+                    
+                    segments.push({ startSeconds, endSeconds, startMs: start, endMs: end });
+                    
+                    addResult(`Segment ${segmentCount}:`);
+                    addResult(`  Raw values: start=${start}ms, end=${end}ms`);
+                    addResult(`  Time: ${startSeconds.toFixed(3)}s - ${endSeconds.toFixed(3)}s`);
+                    addResult(`  Duration: ${durationMs}ms`);
+                    addResult(`  Audio samples: ${audio ? audio.length : 'N/A'}`);
+                    addResult(`  ✅ VAD detected speech segment`);
+                }
+                
+                addResult(`\n=== VAD ANALYSIS RESULTS ===`);
+                if (segmentCount === 0) {
+                    addResult(`❌ NO SPEECH SEGMENTS DETECTED`, 'error');
+                    addResult('Try adjusting sensitivity settings (lower thresholds)', 'warning');
+                    
+                    // Clear segments and update visualization
+                    currentVADSegments = [];
+                    if (wavesurfer && currentAudioBuffer) {
+                        drawSpectrogramMarkers();
+                        drawVADOverlay();
+                    }
+                } else {
+                    addResult(`✅ Found ${segmentCount} speech segments`, 'success');
+                    
+                    // Update visualization markers if available
+                    currentVADSegments = segments.map(seg => ({
+                        startTime: seg.startSeconds,
+                        endTime: seg.endSeconds
+                    }));
+                    
+                    if (wavesurfer && currentAudioBuffer) {
+                        drawSpectrogramMarkers();
+                        drawVADOverlay();
+                    }
+                    
+                    // Create trimmed audio preview with custom padding
+                    await createTrimmedAudioPreview(segments, settings.padding);
+                    
+                    // Show timing analysis
+                    addResult('\nTiming Analysis:');
+                    const earliestStart = Math.min(...segments.map(s => s.startSeconds));
+                    const latestEnd = Math.max(...segments.map(s => s.endSeconds));
+                    const totalSpeechDuration = segments.reduce((sum, seg) => sum + (seg.endSeconds - seg.startSeconds), 0);
+                    const speechCoverage = (totalSpeechDuration / currentAudioBuffer.duration * 100);
+                    
+                    addResult(`Detected speech span: ${earliestStart.toFixed(3)}s - ${latestEnd.toFixed(3)}s`);
+                    addResult(`Total speech duration: ${totalSpeechDuration.toFixed(3)}s`);
+                    addResult(`Speech coverage: ${speechCoverage.toFixed(1)}% of total audio`);
+                }
+                
+            } catch (error) {
+                addResult(`VAD analysis error: ${error.message}`, 'error');
+                console.error('VAD analysis error details:', error);
+            }
+        }
+
         // Add audio trimming preview functionality
         async function createTrimmedAudioPreview(segments, customPadding = 0.1) {
             if (!currentAudioBuffer || segments.length === 0) return;
@@ -612,6 +766,13 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
                 const endSample = Math.floor(trimEnd * sampleRate);
                 const trimmedLength = endSample - startSample;
                 
+                addResult(`Audio buffer creation debug:`);
+                addResult(`  Sample rate: ${sampleRate}Hz`);
+                addResult(`  Start sample: ${startSample} (${(startSample / sampleRate).toFixed(3)}s)`);
+                addResult(`  End sample: ${endSample} (${(endSample / sampleRate).toFixed(3)}s)`);
+                addResult(`  Trimmed length: ${trimmedLength} samples (${(trimmedLength / sampleRate).toFixed(3)}s)`);
+                addResult(`  Expected padding at start: ${(trimStart > 0 ? 'YES' : 'NO')} - ${((earliestStart - trimStart) * 1000).toFixed(0)}ms`);
+                
                 const trimmedBuffer = new AudioContext().createBuffer(
                     currentAudioBuffer.numberOfChannels,
                     trimmedLength,
@@ -627,11 +788,73 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
                         const sourceIndex = startSample + i;
                         trimmedData[i] = sourceIndex < originalData.length ? originalData[sourceIndex] : 0;
                     }
+                    
+                    // Debug: Check first few samples to verify silence/padding
+                    if (channel === 0) {
+                        const firstSamples = [];
+                        const sampleCheckCount = Math.min(100, trimmedLength);
+                        for (let i = 0; i < sampleCheckCount; i++) {
+                            firstSamples.push(Math.abs(trimmedData[i]).toFixed(6));
+                        }
+                        addResult(`First ${sampleCheckCount} samples: ${firstSamples.slice(0, 10).join(', ')}...`);
+                        addResult(`Max amplitude in first 100 samples: ${Math.max(...firstSamples.map(s => parseFloat(s))).toFixed(6)}`);
+                        
+                        // Check if we have actual silence at the start
+                        const silenceThreshold = 0.001;
+                        let silentSamples = 0;
+                        for (let i = 0; i < sampleCheckCount; i++) {
+                            if (Math.abs(trimmedData[i]) < silenceThreshold) {
+                                silentSamples++;
+                            } else {
+                                break;
+                            }
+                        }
+                        addResult(`Silent samples at start: ${silentSamples}/${sampleCheckCount} (${(silentSamples / sampleRate * 1000).toFixed(1)}ms)`);
+                        
+                        // Check what the original audio looks like at the trim start point
+                        const originalStartSample = startSample;
+                        const originalSamples = [];
+                        for (let i = Math.max(0, originalStartSample - 50); i < originalStartSample + 50; i++) {
+                            if (i < originalData.length) {
+                                originalSamples.push(Math.abs(originalData[i]).toFixed(6));
+                            }
+                        }
+                        addResult(`Original audio around trim start (±50 samples from ${originalStartSample}):`);
+                        addResult(`  Samples: ${originalSamples.slice(0, 10).join(', ')}...`);
+                        
+                        // Check if there's actual silence earlier in the file
+                        let foundSilence = false;
+                        let silenceStart = -1;
+                        for (let i = 0; i < Math.min(originalStartSample, originalData.length); i++) {
+                            if (Math.abs(originalData[i]) < silenceThreshold) {
+                                if (!foundSilence) {
+                                    silenceStart = i;
+                                    foundSilence = true;
+                                }
+                            } else {
+                                if (foundSilence && (i - silenceStart) > sampleRate * 0.01) { // At least 10ms of silence
+                                    addResult(`Found earlier silence at sample ${silenceStart} (${(silenceStart / sampleRate).toFixed(3)}s)`);
+                                    break;
+                                }
+                                foundSilence = false;
+                            }
+                        }
+                        if (!foundSilence) {
+                            addResult(`No significant silence found before current trim point`);
+                        }
+                    }
+                }
+                
+                // Clean up previous trimmed URL if it exists
+                if (currentTrimmedUrl) {
+                    URL.revokeObjectURL(currentTrimmedUrl);
+                    addResult('Cleaned up previous trimmed audio blob URL');
                 }
                 
                 // Convert to blob and create preview
                 const trimmedBlob = await audioBufferToBlob(trimmedBuffer);
-                const trimmedUrl = URL.createObjectURL(trimmedBlob);
+                currentTrimmedUrl = URL.createObjectURL(trimmedBlob);
+                const trimmedUrl = currentTrimmedUrl;
                 
                 // Create trimmed audio spectrogram
                 await createTrimmedSpectrogram(trimmedUrl, trimStart, trimEnd);
@@ -684,6 +907,17 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
             try {
                 addResult('Creating trimmed audio spectrogram...');
                 
+                // Destroy existing trimmed wavesurfer instance if it exists
+                if (trimmedWavesurfer) {
+                    try {
+                        trimmedWavesurfer.destroy();
+                        addResult('Cleaned up previous trimmed spectrogram instance');
+                    } catch (destroyError) {
+                        console.warn('Error destroying previous trimmed wavesurfer:', destroyError);
+                    }
+                    trimmedWavesurfer = null;
+                }
+                
                 // Show the trimmed spectrogram container
                 const trimmedSpectrogramContainer = document.getElementById('trimmed-spectrogram');
                 trimmedSpectrogramContainer.style.display = 'block';
@@ -696,7 +930,7 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
                 const { default: Spectrogram } = await import('https://unpkg.com/wavesurfer.js@7/dist/plugins/spectrogram.esm.js');
                 
                 // Create a new WaveSurfer instance for trimmed audio
-                const trimmedWavesurfer = WaveSurfer.create({
+                trimmedWavesurfer = WaveSurfer.create({
                     container: '#trimmed-spectrogram',
                     waveColor: '#28a745',
                     progressColor: '#155724',
@@ -706,18 +940,21 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
                     barRadius: 3
                 });
                 
-                // Add spectrogram plugin with error handling
-                const trimmedSpectrogramPlugin = Spectrogram.create({
-                    container: '#trimmed-spectrogram',
-                    labels: true,
-                    height: 120,
-                    splitChannels: false,
-                    fftSamples: 512,
-                    windowFunc: 'hann',
-                    colorMap: []  // Prevent undefined colorMap errors
-                });
-                
-                trimmedWavesurfer.registerPlugin(trimmedSpectrogramPlugin);
+                // Add spectrogram plugin with proper error handling  
+                try {
+                    const trimmedSpectrogramPlugin = Spectrogram.create({
+                        container: '#trimmed-spectrogram',
+                        labels: true,
+                        height: 120,
+                        splitChannels: false,
+                        fftSamples: 512,
+                        windowFunc: 'hann'
+                    });
+                    
+                    trimmedWavesurfer.registerPlugin(trimmedSpectrogramPlugin);
+                } catch (spectrogramError) {
+                    console.warn('Trimmed spectrogram plugin failed, continuing without spectrogram:', spectrogramError);
+                }
                 trimmedWavesurfer.load(trimmedUrl);
                 
                 trimmedWavesurfer.on('ready', () => {
@@ -808,6 +1045,24 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
         window.runCustomVAD = runCustomVAD;
         window.resetToDefaults = resetToDefaults;
         window.loadPreset = loadPreset;
+
+        // // Add global error handlers for spectrogram errors
+        // window.addEventListener('unhandledrejection', function(event) {
+        //     if (event.reason && event.reason.message && event.reason.message.includes('length')) {
+        //         console.warn('Suppressed spectrogram error (non-critical):', event.reason.message);
+        //         event.preventDefault(); // Prevent the error from showing in console
+        //         addResult('Note: Spectrogram visualization error suppressed - VAD processing continues normally', 'warning');
+        //     }
+        // });
+
+        // window.addEventListener('error', function(event) {
+        //     if (event.message && (event.message.includes('drawSpectrogram') || event.message.includes('length'))) {
+        //         console.warn('Suppressed spectrogram error (non-critical):', event.message);
+        //         event.preventDefault(); // Prevent the error from showing in console
+        //         addResult('Note: Spectrogram error suppressed - functionality continues', 'warning');
+        //         return true; // Prevent default error handling
+        //     }
+        // });
 
         // Initialize sliders and auto-run
         document.addEventListener('DOMContentLoaded', async () => {
