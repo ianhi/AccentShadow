@@ -346,13 +346,14 @@ const setTargetAudio = async (audioBlob, source = {}) => {
       trimmedAmount: '0.000'
     };
     
-    // Process target audio with VAD using lenient settings for consistency with user recordings
-    console.log('🎯 Processing target audio with lenient VAD settings for optimal speech detection');
+    // Process target audio with VAD using exact aggressive settings from tuner
+    console.log('🎯 Processing target audio with aggressive VAD settings from tuner testing');
     const targetProcessed = await processAudio(audioBlob, {
-      threshold: 0.3,           // More sensitive for target audio (matching user settings)
-      minSpeechDuration: 30,    // Shorter minimum speech duration
-      maxSilenceDuration: 500,  // Allow longer silence gaps
-      padding: 0.1
+      positiveSpeechThreshold: 0.3,  // Exact tuner setting
+      negativeSpeechThreshold: 0.2,  // Exact tuner setting
+      minSpeechFrames: 3,            // Exact tuner setting
+      redemptionFrames: 32,          // Exact tuner setting
+      padding: 0.05                  // Exact tuner setting (50ms padding)
     });
     
     if (targetProcessed.processed && targetProcessed.vadBoundaries) {

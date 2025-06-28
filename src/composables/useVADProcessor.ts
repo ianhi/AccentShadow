@@ -98,16 +98,16 @@ export function useVADProcessor() {
     const {
       positiveSpeechThreshold: providedPositiveThreshold,
       negativeSpeechThreshold: providedNegativeThreshold,
-      minSpeechFrames = 1, // Allow minimum possible speech frames
+      minSpeechFrames = 3, // Aggressive default from tuner
       padding = 0.15, // 150ms padding
       threshold = 0.5, // VAD sensitivity - this maps to positiveSpeechThreshold
       minSpeechDuration = 50, // Minimum speech segment in ms
       maxSilenceDuration = 300 // Maximum silence gap in ms
     } = options;
     
-    // Map threshold to positiveSpeechThreshold if not explicitly provided
-    const positiveSpeechThreshold = providedPositiveThreshold !== undefined ? providedPositiveThreshold : threshold;
-    const negativeSpeechThreshold = providedNegativeThreshold !== undefined ? providedNegativeThreshold : Math.max(0.1, threshold * 0.7);
+    // Use explicit settings if provided, otherwise use aggressive defaults
+    const positiveSpeechThreshold = providedPositiveThreshold !== undefined ? providedPositiveThreshold : 0.3;
+    const negativeSpeechThreshold = providedNegativeThreshold !== undefined ? providedNegativeThreshold : 0.2;
 
     try {
       isProcessing.value = true;
@@ -216,15 +216,15 @@ export function useVADProcessor() {
       // Create VAD instance using simplified approach from documentation
       console.log('🎛️ Creating simplified VAD instance following documentation pattern');
       
-      // Use aggressive settings from tuner for reliable detection
+      // Use passed parameters or aggressive defaults from tuner
       const vadConfig = {
-        positiveSpeechThreshold: 0.3,    // Aggressive default from tuner testing
-        negativeSpeechThreshold: 0.2,    // Aggressive default from tuner testing
-        redemptionFrames: 32,            // Aggressive default from tuner testing
-        frameSamples: 1536,              // Default frame size
-        minSpeechFrames: 3,              // Aggressive default from tuner testing
-        preSpeechPadFrames: 4,           // Balanced context
-        positiveSpeechPadFrames: 4       // Balanced context
+        positiveSpeechThreshold: positiveSpeechThreshold,  // From parameters or 0.3 default
+        negativeSpeechThreshold: negativeSpeechThreshold,  // From parameters or 0.2 default
+        redemptionFrames: options.redemptionFrames || 32,  // From parameters or aggressive default
+        frameSamples: 1536,                               // Default frame size
+        minSpeechFrames: minSpeechFrames,                 // From parameters or aggressive default
+        preSpeechPadFrames: 4,                            // Balanced context
+        positiveSpeechPadFrames: 4                        // Balanced context
       };
       
       console.log('🔧 VAD CONFIG (simplified approach):', vadConfig);
