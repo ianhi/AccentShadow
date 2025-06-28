@@ -35,8 +35,8 @@ export function useSmartAudioAlignment() {
   const isProcessing = ref(false);
   const { detectSpeechBoundariesVAD, vadReady, initVAD } = useVADProcessor();
   
-  // Settings - can be made configurable later
-  const defaultPaddingMs = ref(200);
+  // Settings - can be made configurable later (keep higher for length balancing)
+  const defaultPaddingMs = ref(200); // Keep 200ms for alignment to balance different length audios
   
   /**
    * Process single audio: run VAD and store boundaries with raw audio

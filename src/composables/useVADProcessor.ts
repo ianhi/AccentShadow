@@ -70,14 +70,14 @@ export function useVADProcessor() {
       console.log('📦 Creating VAD instance...');
       
       vadInstance = await (window as any).vad.NonRealTimeVAD.new({
-        // Ultra-sensitive settings to catch all speech content
-        positiveSpeechThreshold: 0.01,  // Extremely sensitive
-        negativeSpeechThreshold: 0.005, // Almost zero threshold
-        redemptionFrames: 128,           // Very large gap allowance
+        // Aggressive settings based on tuner results - reliable speech detection
+        positiveSpeechThreshold: 0.3,   // Aggressive default from tuner
+        negativeSpeechThreshold: 0.2,   // Aggressive default from tuner
+        redemptionFrames: 32,            // Standard gap allowance
         frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: 1,              // Minimum possible
-        preSpeechPadFrames: 16,          // Lots of context
-        positiveSpeechPadFrames: 16      // Lots of context
+        minSpeechFrames: 3,              // Aggressive default from tuner
+        preSpeechPadFrames: 4,           // Balanced context
+        positiveSpeechPadFrames: 4       // Balanced context
       });
       
       vadReady.value = true;
@@ -99,7 +99,7 @@ export function useVADProcessor() {
       positiveSpeechThreshold: providedPositiveThreshold,
       negativeSpeechThreshold: providedNegativeThreshold,
       minSpeechFrames = 1, // Allow minimum possible speech frames
-      padding = 0.1, // 100ms padding
+      padding = 0.15, // 150ms padding
       threshold = 0.5, // VAD sensitivity - this maps to positiveSpeechThreshold
       minSpeechDuration = 50, // Minimum speech segment in ms
       maxSilenceDuration = 300 // Maximum silence gap in ms
@@ -216,15 +216,15 @@ export function useVADProcessor() {
       // Create VAD instance using simplified approach from documentation
       console.log('🎛️ Creating simplified VAD instance following documentation pattern');
       
-      // Use reasonable settings for balanced detection
+      // Use aggressive settings from tuner for reliable detection
       const vadConfig = {
-        positiveSpeechThreshold: Math.min(positiveSpeechThreshold, 0.5), // Balanced detection
-        negativeSpeechThreshold: Math.min(negativeSpeechThreshold, 0.35), // Good continuation
-        redemptionFrames: 24,            // Standard gap allowance
+        positiveSpeechThreshold: 0.3,    // Aggressive default from tuner testing
+        negativeSpeechThreshold: 0.2,    // Aggressive default from tuner testing
+        redemptionFrames: 32,            // Aggressive default from tuner testing
         frameSamples: 1536,              // Default frame size
-        minSpeechFrames: 6,              // Reasonable minimum
-        preSpeechPadFrames: 4,           // Small padding
-        positiveSpeechPadFrames: 4       // Small padding
+        minSpeechFrames: 3,              // Aggressive default from tuner testing
+        preSpeechPadFrames: 4,           // Balanced context
+        positiveSpeechPadFrames: 4       // Balanced context
       };
       
       console.log('🔧 VAD CONFIG (simplified approach):', vadConfig);

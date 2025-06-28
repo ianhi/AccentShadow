@@ -36,7 +36,7 @@ export function useAudioProcessing() {
   const processAudio = async (audioBlob: Blob, options: ProcessingOptions = {}): Promise<ProcessingResult> => {
     const {
       trimSilence = true,
-      padding = 0.1, // 100ms padding (more aggressive trimming)
+      padding = 0.15, // 150ms padding (aggressive settings from tuner)
       threshold = 0.4, // Balanced threshold for better silence detection
       maxTrimStart = 3.0,
       maxTrimEnd = 2.0,

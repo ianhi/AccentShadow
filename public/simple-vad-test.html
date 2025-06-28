@@ -313,11 +313,11 @@ ${JSON.stringify(settings, null, 2)}`);
         }
         
         async function visualizeAudio() {
-            addResult('Loading and visualizing patth.wav...');
+            addResult('Loading and visualizing test_said_three_words.mp3...');
             
             try {
                 // Load audio
-                const response = await fetch('/patth.wav');
+                const response = await fetch('/test_said_three_words.mp3');
                 const blob = await response.blob();
                 const audioUrl = URL.createObjectURL(blob);
                 
