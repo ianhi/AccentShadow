@@ -100,12 +100,30 @@ global.URL = {
   revokeObjectURL: vi.fn()
 };
 
-// Mock fetch
-global.fetch = vi.fn(() => Promise.resolve({
-  ok: true,
-  arrayBuffer: () => Promise.resolve(new ArrayBuffer(1000)),
-  blob: () => Promise.resolve(new Blob(['test']))
-}));
+// Mock fetch with better error handling
+global.fetch = vi.fn((url) => {
+  // Mock successful response for specific test URLs
+  if (url && typeof url === 'string' && (
+    url.includes('example.com/audio.mp3') || 
+    url.includes('test-url') ||
+    url.includes('.mp3') ||
+    url.includes('.wav')
+  )) {
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(1000)),
+      blob: () => Promise.resolve(new Blob(['test audio data'], { type: 'audio/mpeg' }))
+    });
+  }
+  // Default mock response
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(1000)),
+    blob: () => Promise.resolve(new Blob(['test']))
+  });
+});
 
 // Mock MediaDevices
 global.navigator = {
@@ -155,6 +173,44 @@ const localStorageMock = {
   key: vi.fn()
 };
 global.localStorage = localStorageMock;
+
+// Mock window.alert and other dialog methods
+global.alert = vi.fn();
+global.confirm = vi.fn(() => true);
+global.prompt = vi.fn(() => '');
+
+// Mock URL constructor properly for jsdom
+if (typeof window !== 'undefined') {
+  window.alert = global.alert;
+  window.confirm = global.confirm;
+  window.prompt = global.prompt;
+  window.URL = global.URL;
+}
+
+// Mock URL constructor for jsdom environment
+if (typeof global.URL === 'undefined' || !global.URL.prototype) {
+  global.URL = class MockURL {
+    constructor(url, base) {
+      if (base) {
+        this.href = base + url;
+      } else {
+        this.href = url;
+      }
+      this.origin = 'https://example.com';
+      this.protocol = 'https:';
+      this.host = 'example.com';
+      this.hostname = 'example.com';
+      this.port = '';
+      this.pathname = '/path';
+      this.search = '';
+      this.hash = '';
+    }
+    
+    toString() {
+      return this.href;
+    }
+  };
+}
 
 // Mock window properties
 Object.defineProperty(window, 'isSecureContext', {

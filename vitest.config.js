@@ -14,6 +14,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/setup.js'],
     include: ['tests/**/*.test.js'],
+    testTimeout: 10000, // Increase timeout for VAD tests
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

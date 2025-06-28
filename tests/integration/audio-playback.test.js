@@ -330,8 +330,14 @@ describe('Audio Playback Integration Tests', () => {
 
   describe('Error Handling', () => {
     it('should handle recording errors gracefully', async () => {
-      // Mock getUserMedia to reject
+      // Mock getUserMedia and enumerateDevices to reject
+      const originalGetUserMedia = global.navigator.mediaDevices.getUserMedia;
+      const originalEnumerateDevices = global.navigator.mediaDevices.enumerateDevices;
+      
       global.navigator.mediaDevices.getUserMedia = vi.fn(() => 
+        Promise.reject(new Error('Permission denied'))
+      );
+      global.navigator.mediaDevices.enumerateDevices = vi.fn(() => 
         Promise.reject(new Error('Permission denied'))
       );
 
@@ -344,6 +350,10 @@ describe('Audio Playback Integration Tests', () => {
 
       // Recording should not start
       expect(recordButton.text()).toContain('Start Recording');
+      
+      // Restore original functions
+      global.navigator.mediaDevices.getUserMedia = originalGetUserMedia;
+      global.navigator.mediaDevices.enumerateDevices = originalEnumerateDevices;
     });
 
     it('should handle VAD processing failures', async () => {
