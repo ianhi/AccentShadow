@@ -167,10 +167,10 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { useWaveform } from '../composables/useWaveform.js'
-import { useTimeSync } from '../composables/useTimeSync.js'
-import { useVADProcessor } from '../composables/useVADProcessor.js'
-import { useAudioProcessing } from '../composables/useAudioProcessing.js'
+import { useWaveform } from '../composables/useWaveform'
+import { useTimeSync } from '../composables/useTimeSync'
+import { useVADProcessor } from '../composables/useVADProcessor'
+import { useAudioProcessing } from '../composables/useAudioProcessing'
 
 // Reactive state
 const currentAudioName = ref('patth.wav')

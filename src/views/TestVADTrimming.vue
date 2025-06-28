@@ -175,7 +175,7 @@
 import { ref, onMounted } from 'vue'
 import WaveSurfer from 'wavesurfer.js'
 import Spectrogram from 'wavesurfer.js/dist/plugins/spectrogram.esm.js'
-import { useVADProcessor } from '@/composables/useVADProcessor.js'
+import { useVADProcessor } from '@/composables/useVADProcessor'
 
 // Reactive state
 const originalBlob = ref(null)

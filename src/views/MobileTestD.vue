@@ -441,9 +441,9 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useWaveform } from '../composables/useWaveform.js'
-import { useAudioRecorder } from '../composables/useAudioRecorder.js'
-import { useVADProcessor } from '../composables/useVADProcessor.js'
+import { useWaveform } from '../composables/useWaveform'
+import { useAudioRecorder } from '../composables/useAudioRecorder'
+import { useVADProcessor } from '../composables/useVADProcessor'
 
 // Core state
 const currentMode = ref('practice') // Start in practice mode since audio is preloaded

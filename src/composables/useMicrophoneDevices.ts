@@ -1,46 +1,28 @@
-import { ref, onMounted, type Ref } from 'vue';
+import { ref, onMounted } from 'vue';
 
-// Type definitions
-interface MicrophoneDevice {
-  deviceId: string;
-  label: string;
-  groupId: string;
-}
-
-interface UseMicrophoneDevicesReturn {
-  availableDevices: Ref<MicrophoneDevice[]>;
-  selectedDeviceId: Ref<string | null>;
-  isLoading: Ref<boolean>;
-  error: Ref<string | null>;
-  getAvailableDevices: () => Promise<void>;
-  getMediaStream: (deviceId?: string | null) => Promise<MediaStream>;
-  setSelectedDevice: (deviceId: string) => void;
-  getSelectedDevice: () => MicrophoneDevice | undefined;
-}
-
-export function useMicrophoneDevices(): UseMicrophoneDevicesReturn {
-  const availableDevices: Ref<MicrophoneDevice[]> = ref([]);
-  const selectedDeviceId: Ref<string | null> = ref(null);
-  const isLoading: Ref<boolean> = ref(false);
-  const error: Ref<string | null> = ref(null);
+export function useMicrophoneDevices() {
+  const availableDevices = ref([]);
+  const selectedDeviceId = ref(null);
+  const isLoading = ref(false);
+  const error = ref(null);
 
   // Get list of available microphone devices
-  const getAvailableDevices = async (): Promise<void> => {
+  const getAvailableDevices = async () => {
     try {
       isLoading.value = true;
       error.value = null;
 
       // Request permission first to get device labels
       await navigator.mediaDevices.getUserMedia({ audio: true })
-        .then((stream: MediaStream) => {
+        .then(stream => {
           // Stop the stream immediately, we just needed permission
           stream.getTracks().forEach(track => track.stop());
         });
 
-      const devices: MediaDeviceInfo[] = await navigator.mediaDevices.enumerateDevices();
-      const audioInputs: MediaDeviceInfo[] = devices.filter(device => device.kind === 'audioinput');
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(device => device.kind === 'audioinput');
       
-      availableDevices.value = audioInputs.map((device: MediaDeviceInfo): MicrophoneDevice => ({
+      availableDevices.value = audioInputs.map(device => ({
         deviceId: device.deviceId,
         label: device.label || `Microphone ${device.deviceId.slice(0, 8)}...`,
         groupId: device.groupId
@@ -53,7 +35,7 @@ export function useMicrophoneDevices(): UseMicrophoneDevicesReturn {
 
       console.log('🎤 Available microphones:', availableDevices.value);
       
-    } catch (err: unknown) {
+    } catch (err) {
       console.error('Error getting microphone devices:', err);
       error.value = 'Could not access microphone devices. Please ensure microphone permissions are granted.';
     } finally {
@@ -62,32 +44,32 @@ export function useMicrophoneDevices(): UseMicrophoneDevicesReturn {
   };
 
   // Get media stream with selected device
-  const getMediaStream = async (deviceId: string | null = null): Promise<MediaStream> => {
+  const getMediaStream = async (deviceId = null) => {
     try {
-      const constraints: MediaStreamConstraints = {
+      const constraints = {
         audio: deviceId ? { deviceId: { exact: deviceId } } : true
       };
       
       return await navigator.mediaDevices.getUserMedia(constraints);
-    } catch (err: unknown) {
+    } catch (err) {
       console.error('Error getting media stream:', err);
       throw new Error('Could not access the selected microphone');
     }
   };
 
   // Set selected device
-  const setSelectedDevice = (deviceId: string): void => {
+  const setSelectedDevice = (deviceId) => {
     selectedDeviceId.value = deviceId;
     console.log('🎤 Selected microphone device:', deviceId);
   };
 
   // Get currently selected device info
-  const getSelectedDevice = (): MicrophoneDevice | undefined => {
+  const getSelectedDevice = () => {
     return availableDevices.value.find(device => device.deviceId === selectedDeviceId.value);
   };
 
   // Listen for device changes
-  const setupDeviceChangeListener = (): void => {
+  const setupDeviceChangeListener = () => {
     navigator.mediaDevices.addEventListener('devicechange', () => {
       console.log('🎤 Microphone devices changed, refreshing list...');
       getAvailableDevices();
@@ -95,7 +77,7 @@ export function useMicrophoneDevices(): UseMicrophoneDevicesReturn {
   };
 
   onMounted(() => {
-    if (navigator.mediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function') {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
       getAvailableDevices();
       setupDeviceChangeListener();
     } else {

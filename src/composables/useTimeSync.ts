@@ -1,35 +1,19 @@
-import { ref, computed, watch, type Ref, type ComputedRef } from 'vue';
-
-// Type definitions
-interface UseTimeSyncReturn {
-  targetDuration: Ref<number>;
-  userDuration: Ref<number>;
-  maxDuration: ComputedRef<number>;
-  syncEnabled: Ref<boolean>;
-  targetWidthRatio: ComputedRef<number>;
-  userWidthRatio: ComputedRef<number>;
-  targetWidthPercent: ComputedRef<string>;
-  userWidthPercent: ComputedRef<string>;
-  setTargetDuration: (duration: number) => void;
-  setUserDuration: (duration: number) => void;
-  toggleSync: () => void;
-  resetDurations: () => void;
-}
+import { ref, computed, watch } from 'vue';
 
 // Global time synchronization state
-const targetDuration: Ref<number> = ref(0);
-const userDuration: Ref<number> = ref(0);
-const syncEnabled: Ref<boolean> = ref(true);
+const targetDuration = ref(0);
+const userDuration = ref(0);
+const syncEnabled = ref(true);
 
-export function useTimeSync(): UseTimeSyncReturn {
+export function useTimeSync() {
   
-  const maxDuration: ComputedRef<number> = computed(() => {
+  const maxDuration = computed(() => {
     const max = Math.max(targetDuration.value, userDuration.value);
     return max > 0 ? max : 1; // Only use 1 second fallback if no audio loaded
   });
 
   // Watch for sync changes
-  watch(syncEnabled, (newValue: boolean) => {
+  watch(syncEnabled, (newValue) => {
     console.log('🕒 syncEnabled changed to:', newValue);
     console.log('🕒 Current state:');
     console.log('  - Target:', targetDuration.value + 's', '→', targetWidthPercent.value);
@@ -37,7 +21,7 @@ export function useTimeSync(): UseTimeSyncReturn {
   });
 
   // Calculate proportional widths (0-1 range)
-  const targetWidthRatio: ComputedRef<number> = computed(() => {
+  const targetWidthRatio = computed(() => {
     if (!syncEnabled.value) return 1;
     
     // If only target audio exists, use full width
@@ -53,7 +37,7 @@ export function useTimeSync(): UseTimeSyncReturn {
     return targetDuration.value / userDuration.value;
   });
 
-  const userWidthRatio: ComputedRef<number> = computed(() => {
+  const userWidthRatio = computed(() => {
     if (!syncEnabled.value) return 1;
     
     // If only user audio exists, use full width
@@ -70,21 +54,21 @@ export function useTimeSync(): UseTimeSyncReturn {
   });
 
   // Convert to percentage strings for CSS
-  const targetWidthPercent: ComputedRef<string> = computed(() => {
+  const targetWidthPercent = computed(() => {
     const ratio = targetWidthRatio.value;
     if (ratio === 0) return '0%';
     if (ratio === 1) return '100%';
     return `${Math.max(ratio * 100, 20)}%`; // Minimum 20% width for visibility
   });
 
-  const userWidthPercent: ComputedRef<string> = computed(() => {
+  const userWidthPercent = computed(() => {
     const ratio = userWidthRatio.value;
     if (ratio === 0) return '0%';
     if (ratio === 1) return '100%';
     return `${Math.max(ratio * 100, 20)}%`; // Minimum 20% width for visibility
   });
 
-  const setTargetDuration = (duration: number): void => {
+  const setTargetDuration = (duration) => {
     targetDuration.value = duration;
     console.log('🕒 Target duration set:', duration, 'seconds');
     console.log('🕒 Audio lengths - Target:', targetDuration.value + 's', 'User:', userDuration.value + 's', 'Max:', maxDuration.value + 's');
@@ -93,7 +77,7 @@ export function useTimeSync(): UseTimeSyncReturn {
     console.log('🕒 Sync enabled:', syncEnabled.value);
   };
 
-  const setUserDuration = (duration: number): void => {
+  const setUserDuration = (duration) => {
     userDuration.value = duration;
     console.log('🕒 User duration set:', duration, 'seconds');
     console.log('🕒 Audio lengths - Target:', targetDuration.value + 's', 'User:', userDuration.value + 's', 'Max:', maxDuration.value + 's');
@@ -102,7 +86,7 @@ export function useTimeSync(): UseTimeSyncReturn {
     console.log('🕒 Sync enabled:', syncEnabled.value);
   };
 
-  const toggleSync = (): void => {
+  const toggleSync = () => {
     syncEnabled.value = !syncEnabled.value;
     console.log('🕒 Time sync toggled:', syncEnabled.value);
     console.log('🕒 Current state after toggle:');
@@ -111,7 +95,7 @@ export function useTimeSync(): UseTimeSyncReturn {
     console.log('  - Max:', maxDuration.value + 's');
   };
 
-  const resetDurations = (): void => {
+  const resetDurations = () => {
     targetDuration.value = 0;
     userDuration.value = 0;
     console.log('🕒 Durations reset');

@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { useVADProcessor } from './useVADProcessor.js';
+import { useVADProcessor } from './useVADProcessor';
 
 export function useAudioProcessing() {
   const isProcessing = ref(false);
