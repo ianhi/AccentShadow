@@ -71,6 +71,8 @@
     <button onclick="testWithDifferentModel()">Test v5 Model</button>
     <button onclick="generateTestTone()">Generate & Test Tone</button>
     <button onclick="visualizeAudio()">Visualize Audio</button>
+    <button onclick="debugSampleRates()">Debug Sample Rates</button>
+    <button onclick="testVADWithoutResampling()">Test VAD on Original (No Resample)</button>
     
     <div class="audio-section">
         <h3>Audio Visualization</h3>
@@ -360,6 +362,9 @@ Audio level: ${maxAmp > 0.1 ? 'Good' : maxAmp > 0.01 ? 'Low' : 'Very Low'}`, 'su
                 
                 // Run VAD
                 addResult('\nRunning VAD detection...');
+                addResult(`Audio for VAD: ${audioData.length} samples at ${processBuffer.sampleRate}Hz`);
+                addResult(`Expected duration: ${(audioData.length / processBuffer.sampleRate).toFixed(3)}s`);
+                
                 let segmentCount = 0;
                 currentVADSegments = []; // Store for visualization
                 
@@ -369,9 +374,10 @@ Audio level: ${maxAmp > 0.1 ? 'Good' : maxAmp > 0.01 ? 'Low' : 'Very Low'}`, 'su
                     const endTime = segment.end / processBuffer.sampleRate;
                     const duration = endTime - startTime;
                     
-                    currentVADSegments.push({ startTime, endTime });
+                    addResult(`RAW Segment ${segmentCount}: start=${segment.start} end=${segment.end} samples`);
+                    addResult(`CONVERTED Segment ${segmentCount}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s (${(duration * 1000).toFixed(0)}ms)`);
                     
-                    addResult(`Segment ${segmentCount}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s (${(duration * 1000).toFixed(0)}ms)`, 'success');
+                    currentVADSegments.push({ startTime, endTime });
                 }
                 
                 if (segmentCount === 0) {
@@ -515,6 +521,157 @@ Audio level: ${maxAmp > 0.1 ? 'Good' : maxAmp > 0.01 ? 'Low' : 'Very Low'}`, 'su
                 
             } catch (error) {
                 addResult(`Test tone error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function debugSampleRates() {
+            addResult('=== SAMPLE RATE DEBUG ===');
+            
+            try {
+                // Load patth.wav
+                const response = await fetch('/patth.wav');
+                const blob = await response.blob();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await blob.arrayBuffer();
+                const originalBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                addResult(`Original Audio:
+Sample Rate: ${originalBuffer.sampleRate}Hz
+Duration: ${originalBuffer.duration.toFixed(3)}s
+Length: ${originalBuffer.length} samples`);
+                
+                // Test resampling to 16kHz
+                if (originalBuffer.sampleRate !== 16000) {
+                    addResult('\nResampling to 16kHz...');
+                    
+                    const offlineContext = new OfflineAudioContext(
+                        1, // mono
+                        Math.ceil(originalBuffer.duration * 16000),
+                        16000
+                    );
+                    
+                    const bufferSource = offlineContext.createBufferSource();
+                    bufferSource.buffer = originalBuffer;
+                    bufferSource.connect(offlineContext.destination);
+                    bufferSource.start();
+                    
+                    const resampledBuffer = await offlineContext.startRendering();
+                    
+                    addResult(`Resampled Audio:
+Sample Rate: ${resampledBuffer.sampleRate}Hz
+Duration: ${resampledBuffer.duration.toFixed(3)}s
+Length: ${resampledBuffer.length} samples
+Duration Match: ${Math.abs(originalBuffer.duration - resampledBuffer.duration) < 0.001 ? '✅ Good' : '❌ BAD'}`);
+                    
+                    // Check if content shifted during resampling
+                    const originalData = originalBuffer.getChannelData(0);
+                    const resampledData = resampledBuffer.getChannelData(0);
+                    
+                    // Find peak in original
+                    let originalPeakIndex = 0;
+                    let originalPeakValue = 0;
+                    for (let i = 0; i < originalData.length; i++) {
+                        if (Math.abs(originalData[i]) > originalPeakValue) {
+                            originalPeakValue = Math.abs(originalData[i]);
+                            originalPeakIndex = i;
+                        }
+                    }
+                    const originalPeakTime = originalPeakIndex / originalBuffer.sampleRate;
+                    
+                    // Find peak in resampled
+                    let resampledPeakIndex = 0;
+                    let resampledPeakValue = 0;
+                    for (let i = 0; i < resampledData.length; i++) {
+                        if (Math.abs(resampledData[i]) > resampledPeakValue) {
+                            resampledPeakValue = Math.abs(resampledData[i]);
+                            resampledPeakIndex = i;
+                        }
+                    }
+                    const resampledPeakTime = resampledPeakIndex / resampledBuffer.sampleRate;
+                    
+                    addResult(`Peak Analysis:
+Original peak at: ${originalPeakTime.toFixed(3)}s (sample ${originalPeakIndex})
+Resampled peak at: ${resampledPeakTime.toFixed(3)}s (sample ${resampledPeakIndex})
+Time shift: ${Math.abs(originalPeakTime - resampledPeakTime).toFixed(3)}s
+Shift acceptable: ${Math.abs(originalPeakTime - resampledPeakTime) < 0.01 ? '✅ Good' : '❌ BAD - Content shifted!'}`);
+                    
+                } else {
+                    addResult('Audio is already at 16kHz - no resampling needed');
+                }
+                
+            } catch (error) {
+                addResult(`Debug error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testVADWithoutResampling() {
+            addResult('=== TESTING VAD ON ORIGINAL AUDIO (NO RESAMPLING) ===');
+            
+            try {
+                if (!window.vad) {
+                    addResult('VAD not available!', 'error');
+                    return;
+                }
+                
+                // Load original audio
+                const response = await fetch('/patth.wav');
+                const blob = await response.blob();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await blob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                addResult(`Testing VAD on original audio:
+Sample Rate: ${audioBuffer.sampleRate}Hz
+Duration: ${audioBuffer.duration.toFixed(3)}s`);
+                
+                // Create VAD instance that works with the original sample rate
+                const vadInstance = await window.vad.NonRealTimeVAD.new({
+                    positiveSpeechThreshold: 0.001, // Even more sensitive
+                    negativeSpeechThreshold: 0.0001,
+                    redemptionFrames: 1024,
+                    frameSamples: 1536,
+                    minSpeechFrames: 1,
+                    preSpeechPadFrames: 128,
+                    positiveSpeechPadFrames: 128
+                });
+                
+                // Use original audio data without resampling
+                const audioData = audioBuffer.getChannelData(0);
+                addResult(`Using original audio: ${audioData.length} samples`);
+                
+                let segmentCount = 0;
+                const originalSegments = [];
+                
+                // Try VAD on original sample rate
+                try {
+                    for await (const segment of vadInstance.run(audioData, audioBuffer.sampleRate)) {
+                        segmentCount++;
+                        const startTime = segment.start / audioBuffer.sampleRate;
+                        const endTime = segment.end / audioBuffer.sampleRate;
+                        
+                        addResult(`ORIGINAL RATE Segment ${segmentCount}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s`);
+                        originalSegments.push({ startTime, endTime });
+                    }
+                } catch (vadError) {
+                    addResult(`VAD failed on original sample rate: ${vadError.message}`, 'error');
+                    addResult('This might explain why we need resampling to 16kHz', 'warning');
+                }
+                
+                if (segmentCount === 0) {
+                    addResult('No segments detected even on original audio', 'warning');
+                } else {
+                    addResult(`Found ${segmentCount} segments on original sample rate`, 'success');
+                    
+                    // Compare with what we expect from the spectrogram
+                    addResult('\nExpected from spectrogram: Large speech content in middle section');
+                    originalSegments.forEach((seg, i) => {
+                        const duration = seg.endTime - seg.startTime;
+                        addResult(`Segment ${i+1}: ${(duration*1000).toFixed(0)}ms - ${duration > 0.5 ? '✅ Reasonable' : '⚠️ Very short'}`);
+                    });
+                }
+                
+            } catch (error) {
+                addResult(`Error: ${error.message}`, 'error');
             }
         }
     </script>
