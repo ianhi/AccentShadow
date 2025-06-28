@@ -46,11 +46,11 @@ export function useAudioProcessing() {
     try {
       isProcessing.value = true;
       
-      // Get speech boundaries using VAD with enhanced options
+      // Get RAW speech boundaries using VAD (no padding applied here)
       const vadOptions = {
         ...options,
-        threshold,
-        padding
+        threshold
+        // padding removed - detectSpeechBoundariesVAD now only does detection
       };
       const boundaries = await detectSpeechBoundariesVAD(audioBlob, vadOptions);
       
@@ -67,9 +67,10 @@ export function useAudioProcessing() {
       // Apply VAD-based trimming if requested
       if (trimSilence && (boundaries.silenceStart > 0.1 || boundaries.silenceEnd > 0.1)) {
         const trimResult = await trimAudioWithVAD(audioBlob, {
-          padding,
+          padding, // Apply padding during trimming phase
           maxTrimStart,
-          maxTrimEnd
+          maxTrimEnd,
+          boundaries // Pass the RAW boundaries - padding will be applied in trimming
         });
         
         if (trimResult.blob && (trimResult.trimmedStart > 0.05 || trimResult.trimmedEnd > 0.05)) {

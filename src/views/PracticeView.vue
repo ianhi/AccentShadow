@@ -607,6 +607,15 @@ const handleRecordedAudio = async (blob) => {
             if (targetAudioProcessed.value) {
               console.log('🎯 Using cached target audio VAD processing for alignment');
               targetProcessed = targetAudioProcessed.value;
+              
+              // IMPORTANT: Mark that target audio is already normalized to prevent re-processing
+              // The target was already trimmed and normalized during upload
+              targetProcessed = {
+                ...targetProcessed,
+                audioBlob: targetAudioBlob.value, // Use the current (trimmed) target audio blob
+                alreadyNormalized: true // Flag to skip normalization in alignTwoAudios
+              };
+              console.log('🎯 Target audio already normalized, will skip re-normalization during alignment');
             } else {
               console.log('🎯 No cached target processing - processing target audio for alignment');
               targetProcessed = await processAudio(targetAudioBlob.value);
@@ -637,17 +646,10 @@ const handleRecordedAudio = async (blob) => {
               const oldUserUrl = userAudioUrl.value;
               const oldTargetUrl = targetAudioUrl.value;
               
-              // Only update target audio if it actually needs to change
-              const targetNeedsUpdate = alignmentResult.alignmentInfo.method !== 'already_aligned' && 
-                                       alignmentResult.alignmentInfo.paddingAdded > 0;
-              
-              if (targetNeedsUpdate) {
-                console.log('🎯 Target audio needs updating for alignment');
-                targetAudioBlob.value = alignmentResult.audio1Aligned;
-                targetAudioUrl.value = URL.createObjectURL(alignmentResult.audio1Aligned);
-              } else {
-                console.log('🎯 Target audio unchanged - no reload needed');
-              }
+              // Always update target audio with aligned result (consistent with manual alignment)
+              console.log('🎯 Updating target audio with aligned result');
+              targetAudioBlob.value = alignmentResult.audio1Aligned;
+              targetAudioUrl.value = URL.createObjectURL(alignmentResult.audio1Aligned);
               
               // Always update user audio with aligned result
               userAudioBlob.value = alignmentResult.audio2Aligned;
@@ -662,7 +664,7 @@ const handleRecordedAudio = async (blob) => {
               };
               
               console.log('🎵 SMART-ALIGN: Audio alignment complete', {
-                targetUpdated: targetNeedsUpdate,
+                targetUpdated: true,
                 userUpdated: true
               });
               
@@ -671,7 +673,7 @@ const handleRecordedAudio = async (blob) => {
                 if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
                   URL.revokeObjectURL(oldUserUrl);
                 }
-                if (targetNeedsUpdate && oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+                if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
                   URL.revokeObjectURL(oldTargetUrl);
                 }
               }, 3000); // 3 second delay to ensure audio players have loaded

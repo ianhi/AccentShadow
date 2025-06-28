@@ -18,6 +18,7 @@ interface ProcessAudioResult {
 interface AudioWithBoundaries {
   audioBlob: Blob;
   vadBoundaries: any;
+  alreadyNormalized?: boolean;
 }
 
 interface AlignmentResult {
@@ -203,8 +204,21 @@ export function useSmartAudioAlignment() {
       console.log('🔄 Aligning two audios...');
       
       // First normalize both audios to have consistent padding
-      const normalized1 = await normalizeAudioSilence(audio1.audioBlob, audio1.vadBoundaries, padding);
-      const normalized2 = await normalizeAudioSilence(audio2.audioBlob, audio2.vadBoundaries, padding);
+      // Skip normalization if audio is already normalized (e.g., target audio that was already processed)
+      const normalized1 = audio1.alreadyNormalized 
+        ? audio1.audioBlob 
+        : await normalizeAudioSilence(audio1.audioBlob, audio1.vadBoundaries, padding);
+      
+      const normalized2 = audio2.alreadyNormalized 
+        ? audio2.audioBlob 
+        : await normalizeAudioSilence(audio2.audioBlob, audio2.vadBoundaries, padding);
+      
+      if (audio1.alreadyNormalized) {
+        console.log('🎯 Skipped normalization for audio1 (already normalized)');
+      }
+      if (audio2.alreadyNormalized) {
+        console.log('🎯 Skipped normalization for audio2 (already normalized)');
+      }
       
       // Get durations of normalized audios
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();

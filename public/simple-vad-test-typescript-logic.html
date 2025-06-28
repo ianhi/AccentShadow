@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAD Test - TypeScript Logic</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .result { background: #f0f0f0; padding: 10px; margin: 10px 0; font-family: monospace; white-space: pre-wrap; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        .warning { background: #fff3cd; }
+        
+        .controls-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px solid #007bff;
+            border-radius: 12px;
+            background: #f8f9fa;
+        }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .control-group label {
+            font-weight: bold;
+            color: #495057;
+            font-size: 14px;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+        .control-group span {
+            font-family: monospace;
+            font-weight: bold;
+            color: #007bff;
+            text-align: center;
+            background: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .primary-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .primary-btn:hover { background: #218838; }
+        .secondary-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .secondary-btn:hover { background: #545b62; }
+        .preset-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .preset-btn:hover { background: #138496; }
+        
+        .audio-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        #waveform, #spectrogram {
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            position: relative;
+        }
+        .vad-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            border-left: 2px solid #ff0000;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .vad-marker.start {
+            border-left: 3px solid #00ff00;
+        }
+        .vad-marker.end {
+            border-left: 3px solid #ff0000;
+        }
+        .vad-region {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(255, 255, 0, 0.2);
+            pointer-events: none;
+            z-index: 5;
+            border: 1px solid rgba(255, 255, 0, 0.6);
+        }
+        .marker-label {
+            position: absolute;
+            top: -20px;
+            font-size: 10px;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 1px 3px;
+            border-radius: 2px;
+            white-space: nowrap;
+        }
+    </style>
+    <!-- Load ONNX runtime first, then VAD -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+    <script>
+        // Suppress ONNX runtime warnings by setting log level to error only
+        if (typeof ort !== 'undefined') {
+            ort.env.logLevel = 'error';
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.23/dist/bundle.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+</head>
+<body>
+    <h1>🔬 VAD Test - TypeScript Logic Port</h1>
+    <p>This implements the exact logic from useVADProcessor.ts for debugging comparison.</p>
+    
+    <div class="controls-section">
+        <h3>🎛️ VAD Settings</h3>
+        <div class="controls-grid">
+            <div class="control-group">
+                <label for="positiveSpeechThreshold">Positive Speech Threshold:</label>
+                <input type="range" id="positiveSpeechThreshold" min="0.1" max="0.9" step="0.05" value="0.3">
+                <span id="positiveSpeechThreshold-value">0.3</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="negativeSpeechThreshold">Negative Speech Threshold:</label>
+                <input type="range" id="negativeSpeechThreshold" min="0.05" max="0.6" step="0.05" value="0.2">
+                <span id="negativeSpeechThreshold-value">0.2</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="minSpeechFrames">Min Speech Frames:</label>
+                <input type="range" id="minSpeechFrames" min="1" max="20" step="1" value="3">
+                <span id="minSpeechFrames-value">3</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="redemptionFrames">Redemption Frames:</label>
+                <input type="range" id="redemptionFrames" min="8" max="64" step="4" value="32">
+                <span id="redemptionFrames-value">32</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="padding">Padding (seconds):</label>
+                <input type="range" id="padding" min="0.0" max="0.3" step="0.01" value="0.15">
+                <span id="padding-value">0.15</span>
+            </div>
+        </div>
+        
+        <div class="control-buttons">
+            <button onclick="runTypeScriptLogic()" class="primary-btn">🔄 Test TypeScript Logic</button>
+            <button onclick="resetToDefaults()" class="secondary-btn">↺ Reset to Defaults</button>
+            <button onclick="loadPreset('conservative')" class="preset-btn">🛡️ Conservative</button>
+            <button onclick="loadPreset('balanced')" class="preset-btn">⚖️ Balanced</button>
+            <button onclick="loadPreset('aggressive')" class="preset-btn">🎯 Aggressive</button>
+        </div>
+    </div>
+    
+    <div class="audio-section">
+        <h3>🎵 Audio Visualization & Results</h3>
+        <audio id="audio-player" controls style="width: 100%; margin-bottom: 10px;"></audio>
+        
+        <h4>Waveform:</h4>
+        <div id="waveform" style="height: 80px; background: #f0f0f0;"></div>
+        
+        <h4>Original Spectrogram with VAD Markers:</h4>
+        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+            🟢 Green lines = Speech start | 🔴 Red lines = Speech end | 🟡 Yellow regions = Detected speech
+        </div>
+        <div id="spectrogram" style="height: 200px; background: #f0f0f0;"></div>
+        
+        <h4>VAD Timeline:</h4>
+        <div id="vad-overlay" style="position: relative; height: 20px; background: rgba(0,0,0,0.1); margin-top: 5px;"></div>
+    </div>
+    
+    <div id="results"></div>
+
+    <script>
+        let wavesurfer = null;
+        let currentAudioBuffer = null;
+        let currentVADSegments = [];
+        let spectrogramErrorCount = 0;
+        let disableVisualizationUpdates = false;
+        let vadInstance = null;
+        let vadReady = false;
+        let isProcessing = false;
+        
+        function addResult(text, type = '') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.textContent = text;
+            document.getElementById('results').appendChild(div);
+            document.getElementById('results').scrollTop = document.getElementById('results').scrollHeight;
+        }
+
+        // Get current settings from UI controls
+        function getCurrentSettings() {
+            return {
+                positiveSpeechThreshold: parseFloat(document.getElementById('positiveSpeechThreshold').value),
+                negativeSpeechThreshold: parseFloat(document.getElementById('negativeSpeechThreshold').value),
+                minSpeechFrames: parseInt(document.getElementById('minSpeechFrames').value),
+                redemptionFrames: parseInt(document.getElementById('redemptionFrames').value),
+                padding: parseFloat(document.getElementById('padding').value)
+            };
+        }
+
+        // Update UI display values
+        function updateDisplayValues() {
+            ['positiveSpeechThreshold', 'negativeSpeechThreshold', 'minSpeechFrames', 'redemptionFrames', 'padding'].forEach(id => {
+                const input = document.getElementById(id);
+                const display = document.getElementById(id + '-value');
+                display.textContent = input.value;
+            });
+        }
+
+        // Reset to default settings (TypeScript defaults)
+        function resetToDefaults() {
+            document.getElementById('positiveSpeechThreshold').value = 0.3;
+            document.getElementById('negativeSpeechThreshold').value = 0.2;
+            document.getElementById('minSpeechFrames').value = 3;
+            document.getElementById('redemptionFrames').value = 32;
+            document.getElementById('padding').value = 0.15;
+            updateDisplayValues();
+            addResult('🔄 Reset to TypeScript defaults');
+        }
+
+        // Load preset configurations
+        function loadPreset(presetName) {
+            const presets = {
+                conservative: {
+                    positiveSpeechThreshold: 0.7,
+                    negativeSpeechThreshold: 0.5,
+                    minSpeechFrames: 10,
+                    redemptionFrames: 16,
+                    padding: 0.15
+                },
+                balanced: {
+                    positiveSpeechThreshold: 0.5,
+                    negativeSpeechThreshold: 0.35,
+                    minSpeechFrames: 6,
+                    redemptionFrames: 24,
+                    padding: 0.15
+                },
+                aggressive: {
+                    positiveSpeechThreshold: 0.3,
+                    negativeSpeechThreshold: 0.2,
+                    minSpeechFrames: 3,
+                    redemptionFrames: 32,
+                    padding: 0.15
+                }
+            };
+
+            const preset = presets[presetName];
+            if (preset) {
+                document.getElementById('positiveSpeechThreshold').value = preset.positiveSpeechThreshold;
+                document.getElementById('negativeSpeechThreshold').value = preset.negativeSpeechThreshold;
+                document.getElementById('minSpeechFrames').value = preset.minSpeechFrames;
+                document.getElementById('redemptionFrames').value = preset.redemptionFrames;
+                document.getElementById('padding').value = preset.padding;
+                updateDisplayValues();
+                addResult(`📋 Loaded ${presetName} preset`);
+            }
+        }
+
+        // Initialize VAD model (ported from TypeScript)
+        async function initVAD() {
+            try {
+                addResult('🎙 Initializing Silero VAD model...');
+
+                // Check if we're in a secure context (required for some VAD features)
+                if (!window.isSecureContext) {
+                    addResult('⚠️ VAD requires secure context (HTTPS), falling back to basic detection', 'warning');
+                    vadReady = false;
+                    return;
+                }
+
+                // Wait for global VAD library to be available
+                addResult('📦 Waiting for VAD library from CDN...');
+
+                // Poll for the global vad object
+                let retries = 0;
+                while (!window.vad && retries < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    retries++;
+                }
+
+                if (!window.vad) {
+                    throw new Error('VAD library not loaded from CDN');
+                }
+
+                addResult('🔍 VAD global object available: ' + Object.keys(window.vad));
+
+                addResult('📦 Creating default VAD instance...');
+
+                vadInstance = await window.vad.NonRealTimeVAD.new({
+                    // Aggressive settings based on tuner results - reliable speech detection
+                    positiveSpeechThreshold: 0.3,   // Aggressive default from tuner
+                    negativeSpeechThreshold: 0.2,   // Aggressive default from tuner
+                    redemptionFrames: 32,            // Standard gap allowance
+                    frameSamples: 1536,              // Default frame size for v4 model
+                    minSpeechFrames: 3,              // Aggressive default from tuner
+                    preSpeechPadFrames: 4,           // Balanced context
+                    positiveSpeechPadFrames: 4       // Balanced context
+                });
+
+                vadReady = true;
+                addResult('✅ Silero VAD model ready', 'success');
+
+            } catch (error) {
+                addResult('⚠️ VAD initialization failed, will use fallback detection: ' + error.message, 'error');
+                vadReady = false;
+                vadInstance = null;
+                return;
+            }
+        }
+
+        // Merge nearby segments to create more realistic speech boundaries (ported from TypeScript)
+        function mergeNearbySegments(segments, maxGapSeconds = 0.5) {
+            if (segments.length <= 1) return segments;
+
+            // Sort segments by start time
+            const sortedSegments = [...segments].sort((a, b) => a.startTime - b.startTime);
+            const mergedSegments = [];
+
+            let currentSegment = { ...sortedSegments[0] };
+
+            for (let i = 1; i < sortedSegments.length; i++) {
+                const nextSegment = sortedSegments[i];
+                const gap = nextSegment.startTime - currentSegment.endTime;
+
+                // If gap is small enough, merge the segments
+                if (gap <= maxGapSeconds) {
+                    currentSegment.endTime = Math.max(currentSegment.endTime, nextSegment.endTime);
+                    currentSegment.audioLength += nextSegment.audioLength;
+                    addResult(`🔗 Merged segment ${nextSegment.startTime.toFixed(3)}s-${nextSegment.endTime.toFixed(3)}s into ${currentSegment.startTime.toFixed(3)}s-${currentSegment.endTime.toFixed(3)}s (gap: ${(gap * 1000).toFixed(0)}ms)`);
+                } else {
+                    // Gap too large, finalize current segment and start new one
+                    mergedSegments.push(currentSegment);
+                    currentSegment = { ...nextSegment };
+                }
+            }
+
+            // Add the final segment
+            mergedSegments.push(currentSegment);
+
+            return mergedSegments;
+        }
+
+        // Professional speech boundary detection using Silero VAD (ported from TypeScript)
+        async function detectSpeechBoundariesVAD(audioBlob, options = {}) {
+            const {
+                positiveSpeechThreshold: providedPositiveThreshold,
+                negativeSpeechThreshold: providedNegativeThreshold,
+                minSpeechFrames = 3, // Aggressive default from tuner
+                padding = 0.15, // 150ms padding
+                threshold = 0.5, // VAD sensitivity - this maps to positiveSpeechThreshold
+                minSpeechDuration = 50, // Minimum speech segment in ms
+                maxSilenceDuration = 300 // Maximum silence gap in ms
+            } = options;
+
+            // Use explicit settings if provided, otherwise use aggressive defaults
+            const positiveSpeechThreshold = providedPositiveThreshold !== undefined ? providedPositiveThreshold : 0.3;
+            const negativeSpeechThreshold = providedNegativeThreshold !== undefined ? providedNegativeThreshold : 0.2;
+
+            try {
+                isProcessing = true;
+
+                if (!vadReady || !vadInstance) {
+                    await initVAD();
+
+                    // If VAD still not ready after init attempt, return original audio
+                    if (!vadReady || !vadInstance) {
+                        addResult('🔄 VAD not available - using original audio without trimming', 'warning');
+
+                        // Return original audio boundaries (no trimming)
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const arrayBuffer = await audioBlob.arrayBuffer();
+                        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                        return {
+                            startTime: 0,
+                            endTime: audioBuffer.duration,
+                            startSample: 0,
+                            endSample: audioBuffer.length,
+                            originalSpeechStart: 0,
+                            originalSpeechEnd: audioBuffer.duration,
+                            silenceStart: 0,
+                            silenceEnd: 0,
+                            speechSegments: 0,
+                            confidenceScore: 0,
+                            vadFailed: true
+                        };
+                    }
+                }
+
+                addResult('🔍 Analyzing audio with Silero VAD...');
+
+                // Convert audio blob to AudioBuffer
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await audioBlob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                // Get audio data as Float32Array (VAD expects mono)
+                const audioData = audioBuffer.getChannelData(0);
+                const nativeSampleRate = audioBuffer.sampleRate;
+
+                addResult(`📊 Processing ${audioData.length} samples at ${nativeSampleRate}Hz using simplified VAD approach`);
+
+                // Configure VAD parameters
+                addResult('🔧 VAD CONFIGURATION: ' + JSON.stringify({
+                    threshold,
+                    minSpeechDuration,
+                    maxSilenceDuration,
+                    padding,
+                    positiveSpeechThreshold,
+                    negativeSpeechThreshold,
+                    minSpeechFrames
+                }, null, 2));
+
+                // Use NonRealTimeVAD to get speech segments - create instance with runtime options
+                const speechSegments = [];
+
+                addResult('🔍 Audio data analysis: ' + JSON.stringify({
+                    length: audioData.length,
+                    sampleRate: nativeSampleRate,
+                    rmsLevel: Math.sqrt(audioData.reduce((sum, val) => sum + val * val, 0) / audioData.length),
+                    hasNonZeroSamples: audioData.some(val => Math.abs(val) > 0.001),
+                    averageAmplitude: Array.from(audioData).reduce((sum, val) => sum + Math.abs(val), 0) / audioData.length
+                }, null, 2));
+
+                // Create VAD instance using simplified approach from documentation
+                addResult('🎛️ Creating simplified VAD instance following documentation pattern');
+
+                // Use passed parameters or aggressive defaults from tuner
+                const vadConfig = {
+                    positiveSpeechThreshold: positiveSpeechThreshold,  // From parameters or 0.3 default
+                    negativeSpeechThreshold: negativeSpeechThreshold,  // From parameters or 0.2 default
+                    redemptionFrames: 32,  // From parameters or aggressive default
+                    frameSamples: 1536,                               // Default frame size
+                    minSpeechFrames: minSpeechFrames,                 // From parameters or aggressive default
+                    preSpeechPadFrames: 4,                            // Balanced context
+                    positiveSpeechPadFrames: 4                        // Balanced context
+                };
+
+                addResult('🔧 VAD CONFIG (simplified approach): ' + JSON.stringify(vadConfig, null, 2));
+
+                let runtimeVADInstance = null;
+                try {
+                    runtimeVADInstance = await window.vad.NonRealTimeVAD.new(vadConfig);
+                    addResult('✅ Simplified VAD instance created successfully');
+                } catch (error) {
+                    addResult('⚠️ Failed to create VAD instance, using default: ' + error.message, 'warning');
+                    runtimeVADInstance = vadInstance;
+                }
+
+                // Use simplified VAD processing following documentation pattern
+                addResult('🎯 Starting simplified VAD processing (start/end in milliseconds)...');
+                let iterationCount = 0;
+
+                try {
+                    // Following the documentation: myvad.run(audioFileData, nativeSampleRate)
+                    // Returns: {audio, start, end} where start/end are in MILLISECONDS
+                    addResult("NATIVE RATE: " + nativeSampleRate);
+                    const vadIterator = runtimeVADInstance.run(audioData, nativeSampleRate);
+
+                    for await (const { audio, start, end } of vadIterator) {
+                        iterationCount++;
+                        addResult(`🔍 VAD iteration ${iterationCount}, raw values: start=${start}, end=${end}`);
+
+                        if (typeof start === 'undefined' || typeof end === 'undefined') {
+                            addResult('⚠️ Invalid segment returned by VAD: start=' + start + ', end=' + end, 'warning');
+                            continue;
+                        }
+
+                        // According to documentation, start/end are already in MILLISECONDS
+                        const startTimeSeconds = start / 1000; // Convert milliseconds to seconds
+                        const endTimeSeconds = end / 1000;     // Convert milliseconds to seconds
+
+                        speechSegments.push({
+                            startTime: startTimeSeconds,
+                            endTime: endTimeSeconds,
+                            audioLength: audio ? audio.length : 0
+                        });
+
+                        addResult(`🎙 Speech segment detected: ${start}ms - ${end}ms (${startTimeSeconds.toFixed(3)}s - ${endTimeSeconds.toFixed(3)}s)`);
+                    }
+                } catch (iterError) {
+                    addResult('❌ Error during VAD iteration: ' + iterError.message, 'error');
+                }
+
+                addResult(`🎯 VAD iteration complete. Total iterations: ${iterationCount}, segments found: ${speechSegments.length}`);
+
+                // Determine overall speech boundaries
+                let overallStart = null;
+                let overallEnd = null;
+                let confidenceScore = 0;
+                let originalSpeechStart = null;
+                let originalSpeechEnd = null;
+
+                if (speechSegments.length > 0) {
+                    // Don't filter out early segments - we need all detected speech
+                    addResult(`🎯 KEEPING ALL ${speechSegments.length} detected segments (no filtering)`);
+                    let filteredSegments = speechSegments; // Keep everything
+
+                    // Merge nearby segments with a larger gap to connect speech parts
+                    const mergedSegments = mergeNearbySegments(filteredSegments, 0.5); // Merge segments within 500ms
+                    addResult(`🔗 MERGED ${filteredSegments.length} segments into ${mergedSegments.length} merged segments`);
+
+                    // Find earliest start and latest end from merged segments
+                    overallStart = Math.min(...mergedSegments.map(s => s.startTime));
+                    overallEnd = Math.max(...mergedSegments.map(s => s.endTime));
+
+                    addResult(`🔍 VAD SEGMENTS ANALYSIS:` + JSON.stringify({
+                        totalSegments: speechSegments.length,
+                        segments: speechSegments.map((s, i) => ({
+                            index: i,
+                            start: s.startTime.toFixed(3) + 's',
+                            end: s.endTime.toFixed(3) + 's',
+                            duration: (s.endTime - s.startTime).toFixed(3) + 's'
+                        })),
+                        overallEnvelope: {
+                            start: overallStart.toFixed(3) + 's',
+                            end: overallEnd.toFixed(3) + 's',
+                            span: (overallEnd - overallStart).toFixed(3) + 's'
+                        },
+                        audioFileInfo: {
+                            totalDuration: audioBuffer.duration.toFixed(3) + 's',
+                            expectedSilenceStart: '~0.150s',
+                            expectedSpeechStart: '~0.200s'
+                        }
+                    }, null, 2));
+
+                    // Calculate confidence based on speech coverage
+                    const totalSpeechDuration = speechSegments.reduce((sum, seg) => sum + (seg.endTime - seg.startTime), 0);
+                    const totalDuration = audioBuffer.duration; // Use original audio duration
+                    confidenceScore = Math.min(1, totalSpeechDuration / (totalDuration * 0.8)); // Expect ~80% to be speech
+
+                    // Store original speech boundaries before padding
+                    originalSpeechStart = overallStart;
+                    originalSpeechEnd = overallEnd;
+
+                    // Apply conservative padding to preserve natural speech endings - KEY DIFFERENCE FROM SIMPLE TEST
+                    const generousPadding = Math.max(padding, 0.1); // At least 100ms padding
+                    addResult(`🚨 APPLYING GENEROUS PADDING: ${generousPadding.toFixed(3)}s (minimum 0.1s)`);
+                    
+                    overallStart = Math.max(0, overallStart - generousPadding);
+                    overallEnd = Math.min(audioBuffer.duration, overallEnd + generousPadding); // Use original duration
+
+                    addResult(`📏 PADDING APPLIED: originalStart=${(overallStart + generousPadding).toFixed(3)}s, originalEnd=${(overallEnd - generousPadding).toFixed(3)}s, paddingAmount=${generousPadding.toFixed(3)}s, finalStart=${overallStart.toFixed(3)}s, finalEnd=${overallEnd.toFixed(3)}s`);
+                } else {
+                    addResult('⚠️ No speech segments detected by VAD - using original audio without trimming', 'warning');
+
+                    return {
+                        startTime: 0,
+                        endTime: audioBuffer.duration,
+                        startSample: 0,
+                        endSample: audioBuffer.length,
+                        originalSpeechStart: 0,
+                        originalSpeechEnd: audioBuffer.duration,
+                        silenceStart: 0,
+                        silenceEnd: 0,
+                        speechSegments: 0,
+                        confidenceScore: 0,
+                        vadFailed: true
+                    };
+                }
+
+                // VAD returns times in seconds relative to the original audio duration
+                // No scaling needed - use times directly
+                const result = {
+                    startTime: overallStart,
+                    endTime: overallEnd,
+                    startSample: Math.floor(overallStart * audioBuffer.sampleRate),
+                    endSample: Math.floor(overallEnd * audioBuffer.sampleRate),
+                    originalSpeechStart: originalSpeechStart,
+                    originalSpeechEnd: originalSpeechEnd,
+                    silenceStart: overallStart,
+                    silenceEnd: audioBuffer.duration - overallEnd,
+                    speechSegments: speechSegments.length,
+                    confidenceScore
+                };
+
+                addResult(`🎯 Silero VAD Analysis Complete: segments=${speechSegments.length}, startTime=${result.startTime.toFixed(3)}, endTime=${result.endTime.toFixed(3)}, silenceStart=${result.silenceStart.toFixed(3)}, silenceEnd=${result.silenceEnd.toFixed(3)}, confidence=${(result.confidenceScore * 100).toFixed(1)}%`);
+
+                isProcessing = false;
+                return result;
+
+            } catch (error) {
+                addResult('❌ Silero VAD analysis failed: ' + error.message, 'error');
+                isProcessing = false;
+
+                // Return original audio boundaries when VAD fails (no trimming)
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                    addResult('🔄 VAD failed - using original audio without processing');
+                    return {
+                        startTime: 0,
+                        endTime: audioBuffer.duration,
+                        startSample: 0,
+                        endSample: audioBuffer.length,
+                        originalSpeechStart: 0,
+                        originalSpeechEnd: audioBuffer.duration,
+                        silenceStart: 0,
+                        silenceEnd: 0,
+                        speechSegments: 0,
+                        confidenceScore: 0,
+                        vadFailed: true
+                    };
+                } catch (decodeError) {
+                    addResult('❌ Failed to decode audio for fallback: ' + decodeError.message, 'error');
+                    return {
+                        startTime: 0,
+                        endTime: 0,
+                        startSample: 0,
+                        endSample: 0,
+                        originalSpeechStart: 0,
+                        originalSpeechEnd: 0,
+                        silenceStart: 0,
+                        silenceEnd: 0,
+                        speechSegments: 0,
+                        confidenceScore: 0,
+                        vadFailed: true,
+                        error: error.message
+                    };
+                }
+            }
+        }
+        
+        async function visualizeAudio() {
+            addResult('Loading and visualizing patth.wav...');
+            
+            try {
+                // Load audio
+                const response = await fetch('/patth.wav');
+                const blob = await response.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                
+                // Set up audio player
+                document.getElementById('audio-player').src = audioUrl;
+                
+                // Decode audio for analysis
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await blob.arrayBuffer();
+                currentAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                // Initialize WaveSurfer
+                if (wavesurfer) {
+                    wavesurfer.destroy();
+                }
+                
+                // Import WaveSurfer plugins
+                const { default: WaveSurfer } = await import('https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js');
+                const { default: Spectrogram } = await import('https://unpkg.com/wavesurfer.js@7/dist/plugins/spectrogram.esm.js');
+                
+                wavesurfer = WaveSurfer.create({
+                    container: '#waveform',
+                    waveColor: '#4F4A85',
+                    progressColor: '#383351',
+                    height: 80,
+                    normalize: true,
+                    barWidth: 2,
+                    barRadius: 3
+                });
+                
+                // Add spectrogram with proper error handling
+                try {
+                    const spectrogramPlugin = Spectrogram.create({
+                        container: '#spectrogram',
+                        labels: true,
+                        height: 200,
+                        splitChannels: false,
+                        fftSamples: 512,
+                        windowFunc: 'hann'
+                    });
+                    
+                    wavesurfer.registerPlugin(spectrogramPlugin);
+                } catch (spectrogramError) {
+                    console.warn('Spectrogram plugin failed, continuing without spectrogram:', spectrogramError);
+                    addResult('Note: Spectrogram visualization unavailable, but VAD processing will continue', 'warning');
+                }
+                wavesurfer.load(audioUrl);
+                
+                wavesurfer.on('ready', () => {
+                    addResult(`Visualization ready: ${currentAudioBuffer.duration.toFixed(3)}s`, 'success');
+                    drawVADOverlay();
+                    drawSpectrogramMarkers();
+                });
+                
+                // Add error handling for spectrogram
+                wavesurfer.on('error', (error) => {
+                    console.warn('WaveSurfer error (non-critical):', error);
+                    // Continue execution - spectrogram errors are not critical
+                });
+                
+            } catch (error) {
+                addResult(`Visualization error: ${error.message}`, 'error');
+            }
+        }
+        
+        function drawVADOverlay() {
+            const overlay = document.getElementById('vad-overlay');
+            overlay.innerHTML = '';
+            
+            if (!currentAudioBuffer || currentVADSegments.length === 0) {
+                overlay.innerHTML = '<div style="text-align: center; line-height: 20px; color: #999;">No VAD segments detected with current settings</div>';
+                return;
+            }
+            
+            const duration = currentAudioBuffer.duration;
+            
+            currentVADSegments.forEach((segment, index) => {
+                const startPercent = (segment.startTime / duration) * 100;
+                const widthPercent = ((segment.endTime - segment.startTime) / duration) * 100;
+                
+                const segmentDiv = document.createElement('div');
+                segmentDiv.style.cssText = `
+                    position: absolute;
+                    left: ${startPercent}%;
+                    width: ${widthPercent}%;
+                    height: 100%;
+                    background: rgba(255, 0, 0, 0.6);
+                    border: 1px solid red;
+                    box-sizing: border-box;
+                `;
+                segmentDiv.title = `Segment ${index + 1}: ${segment.startTime.toFixed(3)}s - ${segment.endTime.toFixed(3)}s`;
+                overlay.appendChild(segmentDiv);
+            });
+        }
+        
+        function drawSpectrogramMarkers() {
+            if (disableVisualizationUpdates) {
+                addResult('Visualization updates disabled due to persistent errors', 'warning');
+                return;
+            }
+            
+            let spectrogramContainer;
+            let duration;
+            
+            try {
+                spectrogramContainer = document.getElementById('spectrogram');
+                duration = currentAudioBuffer ? currentAudioBuffer.duration : 1;
+                
+                // Always clear existing markers first
+                spectrogramContainer.querySelectorAll('.vad-marker, .vad-region, .marker-label').forEach(el => el.remove());
+                
+                // If no segments, just return after clearing
+                if (!currentAudioBuffer || currentVADSegments.length === 0) {
+                    addResult('🧹 Cleared previous VAD markers (no segments detected)', 'warning');
+                    return;
+                }
+            } catch (error) {
+                spectrogramErrorCount++;
+                console.warn('Error clearing spectrogram markers (non-critical):', error);
+                addResult('Note: Visualization update skipped due to spectrogram error', 'warning');
+                
+                if (spectrogramErrorCount >= 3) {
+                    disableVisualizationUpdates = true;
+                    addResult('Disabling visualization updates due to persistent errors - VAD analysis will continue', 'error');
+                }
+                return;
+            }
+            
+            try {
+                currentVADSegments.forEach((segment, index) => {
+                    const startPercent = (segment.startTime / duration) * 100;
+                    const endPercent = (segment.endTime / duration) * 100;
+                    const widthPercent = endPercent - startPercent;
+                    
+                    // Create background region
+                    const region = document.createElement('div');
+                    region.className = 'vad-region';
+                    region.style.left = startPercent + '%';
+                    region.style.width = widthPercent + '%';
+                    region.title = `VAD Segment ${index + 1}: ${segment.startTime.toFixed(3)}s - ${segment.endTime.toFixed(3)}s`;
+                    spectrogramContainer.appendChild(region);
+                    
+                    // Create start marker
+                    const startMarker = document.createElement('div');
+                    startMarker.className = 'vad-marker start';
+                    startMarker.style.left = startPercent + '%';
+                    spectrogramContainer.appendChild(startMarker);
+                    
+                    // Create start label
+                    const startLabel = document.createElement('div');
+                    startLabel.className = 'marker-label';
+                    startLabel.style.left = startPercent + '%';
+                    startLabel.textContent = `${segment.startTime.toFixed(3)}s`;
+                    spectrogramContainer.appendChild(startLabel);
+                    
+                    // Create end marker
+                    const endMarker = document.createElement('div');
+                    endMarker.className = 'vad-marker end';
+                    endMarker.style.left = endPercent + '%';
+                    spectrogramContainer.appendChild(endMarker);
+                    
+                    // Create end label
+                    const endLabel = document.createElement('div');
+                    endLabel.className = 'marker-label';
+                    endLabel.style.left = endPercent + '%';
+                    endLabel.style.top = '-35px'; // Offset to avoid overlap with start label
+                    endLabel.textContent = `${segment.endTime.toFixed(3)}s`;
+                    spectrogramContainer.appendChild(endLabel);
+                });
+                
+                addResult(`Added ${currentVADSegments.length} VAD markers to spectrogram`, 'success');
+            } catch (error) {
+                console.warn('Error drawing VAD markers (non-critical):', error);
+                addResult('Note: VAD markers could not be updated due to visualization error', 'warning');
+            }
+        }
+
+        // Run VAD with TypeScript logic
+        async function runTypeScriptLogic() {
+            const settings = getCurrentSettings();
+            addResult(`\n🔬 Testing with TypeScript logic:
+${JSON.stringify(settings, null, 2)}`);
+            
+            try {
+                if (!currentAudioBuffer) {
+                    addResult('No audio loaded. Please run initial test first.', 'error');
+                    return;
+                }
+
+                // Load original audio if not already loaded
+                const response = await fetch('/patth.wav');
+                const blob = await response.blob();
+
+                // Run the TypeScript detection logic
+                const boundaries = await detectSpeechBoundariesVAD(blob, settings);
+
+                // Update visualization markers if available
+                currentVADSegments = boundaries.speechSegments ? 
+                    Array(boundaries.speechSegments).fill(0).map((_, i) => ({
+                        startTime: boundaries.originalSpeechStart,
+                        endTime: boundaries.originalSpeechEnd
+                    })) : [];
+
+                if (wavesurfer && currentAudioBuffer) {
+                    drawSpectrogramMarkers();
+                    drawVADOverlay();
+                }
+
+                addResult(`\n=== TYPESCRIPT LOGIC RESULTS ===`);
+                addResult(`✅ Boundaries detected:`, 'success');
+                addResult(`  Start time: ${boundaries.startTime?.toFixed(3)}s`);
+                addResult(`  End time: ${boundaries.endTime?.toFixed(3)}s`);
+                addResult(`  Original speech start: ${boundaries.originalSpeechStart?.toFixed(3)}s`);
+                addResult(`  Original speech end: ${boundaries.originalSpeechEnd?.toFixed(3)}s`);
+                addResult(`  Speech segments: ${boundaries.speechSegments}`);
+                addResult(`  Confidence: ${(boundaries.confidenceScore * 100).toFixed(1)}%`);
+                addResult(`  VAD failed: ${boundaries.vadFailed || false}`);
+                
+                if (boundaries.error) {
+                    addResult(`  Error: ${boundaries.error}`, 'error');
+                }
+
+            } catch (error) {
+                addResult(`TypeScript logic error: ${error.message}`, 'error');
+                console.error('TypeScript logic error details:', error);
+            }
+        }
+
+        // Make functions available globally
+        window.runTypeScriptLogic = runTypeScriptLogic;
+        window.resetToDefaults = resetToDefaults;
+        window.loadPreset = loadPreset;
+
+        // Initialize sliders and auto-run
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Suppress ONNX runtime warnings
+            try {
+                if (typeof ort !== 'undefined' && ort.env) {
+                    ort.env.logLevel = 'error';
+                    console.log('ONNX log level set to error-only');
+                }
+            } catch (e) {
+                console.log('Could not set ONNX log level:', e.message);
+            }
+            
+            addResult('🔬 VAD Test - TypeScript Logic Port Ready', 'success');
+            addResult('Auto-loading audio and initializing VAD...', 'info');
+            
+            // Set up slider event listeners
+            ['positiveSpeechThreshold', 'negativeSpeechThreshold', 'minSpeechFrames', 'redemptionFrames', 'padding'].forEach(id => {
+                const input = document.getElementById(id);
+                input.addEventListener('input', updateDisplayValues);
+            });
+            
+            // Initialize display values
+            updateDisplayValues();
+            
+            // Wait for libraries to load, then auto-run
+            setTimeout(async () => {
+                try {
+                    // Load visualization first
+                    await visualizeAudio();
+                    
+                    // Wait for waveform to be ready, then run TypeScript logic
+                    setTimeout(async () => {
+                        await runTypeScriptLogic();
+                    }, 2000);
+                } catch (error) {
+                    addResult(`Auto-run error: ${error.message}`, 'error');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

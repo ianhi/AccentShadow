@@ -191,16 +191,6 @@
         </div>
     </div>
     
-    <div class="controls-section">
-        <h3>🎤 Audio Source</h3>
-        <div class="control-buttons">
-            <button onclick="useTestFile()" class="secondary-btn">📁 Use Test File</button>
-            <button id="recordBtn" onclick="toggleRecording()" class="primary-btn">🎤 Start Recording</button>
-            <button onclick="clearRecording()" class="secondary-btn">🗑️ Clear Recording</button>
-        </div>
-        <div id="recording-status" style="margin-top: 10px; font-weight: bold; color: #666;"></div>
-    </div>
-
     <div class="audio-section">
         <h3>🎵 Audio Visualization & Results</h3>
         <audio id="audio-player" controls style="width: 100%; margin-bottom: 10px;"></audio>
@@ -234,13 +224,6 @@
         let disableVisualizationUpdates = false;
         let trimmedWavesurfer = null; // Track trimmed audio wavesurfer instance
         let currentTrimmedUrl = null; // Track current trimmed audio blob URL for cleanup
-        
-        // Recording functionality
-        let mediaRecorder = null;
-        let recordedChunks = [];
-        let isRecording = false;
-        let recordedAudioBlob = null;
-        let currentAudioSource = 'test-file'; // 'test-file' or 'recording'
         
         function addResult(text, type = '') {
             const div = document.createElement('div');
@@ -326,165 +309,6 @@ ${JSON.stringify(settings, null, 2)}`);
                 document.getElementById('padding').value = preset.padding;
                 updateDisplayValues();
                 addResult(`📋 Loaded ${presetName} preset`);
-            }
-        }
-        
-        // Recording functionality
-        async function toggleRecording() {
-            if (isRecording) {
-                stopRecording();
-            } else {
-                startRecording();
-            }
-        }
-        
-        async function startRecording() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: false,
-                        noiseSuppression: false,
-                        autoGainControl: false,
-                        sampleRate: 48000
-                    } 
-                });
-                
-                recordedChunks = [];
-                mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'audio/webm;codecs=opus'
-                });
-                
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        recordedChunks.push(event.data);
-                    }
-                };
-                
-                mediaRecorder.onstop = async () => {
-                    const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-                    recordedAudioBlob = blob;
-                    currentAudioSource = 'recording';
-                    
-                    // Stop all tracks to release microphone
-                    stream.getTracks().forEach(track => track.stop());
-                    
-                    addResult('🎤 Recording complete! Processing audio...', 'success');
-                    updateRecordingStatus('Processing recorded audio...');
-                    
-                    // Automatically visualize the recorded audio
-                    await visualizeRecordedAudio();
-                    
-                    updateRecordingStatus('Recorded audio ready for VAD testing');
-                };
-                
-                mediaRecorder.start();
-                isRecording = true;
-                
-                document.getElementById('recordBtn').textContent = '⏹️ Stop Recording';
-                document.getElementById('recordBtn').className = 'secondary-btn';
-                updateRecordingStatus('🔴 Recording... Click Stop when finished');
-                addResult('🎤 Recording started...', 'success');
-                
-            } catch (error) {
-                addResult(`Recording error: ${error.message}`, 'error');
-                updateRecordingStatus('Recording failed');
-            }
-        }
-        
-        function stopRecording() {
-            if (mediaRecorder && isRecording) {
-                mediaRecorder.stop();
-                isRecording = false;
-                
-                document.getElementById('recordBtn').textContent = '🎤 Start Recording';
-                document.getElementById('recordBtn').className = 'primary-btn';
-            }
-        }
-        
-        function clearRecording() {
-            recordedAudioBlob = null;
-            currentAudioSource = 'test-file';
-            updateRecordingStatus('');
-            addResult('🗑️ Recording cleared, switched back to test file');
-        }
-        
-        function useTestFile() {
-            currentAudioSource = 'test-file';
-            updateRecordingStatus('');
-            addResult('📁 Switched to test file');
-            visualizeAudio();
-        }
-        
-        function updateRecordingStatus(message) {
-            document.getElementById('recording-status').textContent = message;
-        }
-        
-        async function visualizeRecordedAudio() {
-            if (!recordedAudioBlob) {
-                addResult('No recorded audio available', 'error');
-                return;
-            }
-            
-            try {
-                addResult('Loading and visualizing recorded audio...');
-                
-                // Convert webm to audio buffer
-                const arrayBuffer = await recordedAudioBlob.arrayBuffer();
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                currentAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                
-                // Create object URL for audio player
-                const audioUrl = URL.createObjectURL(recordedAudioBlob);
-                document.getElementById('audio-player').src = audioUrl;
-                
-                // Initialize WaveSurfer with recorded audio
-                if (wavesurfer) {
-                    wavesurfer.destroy();
-                }
-                
-                const { default: WaveSurfer } = await import('https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js');
-                const { default: Spectrogram } = await import('https://unpkg.com/wavesurfer.js@7/dist/plugins/spectrogram.esm.js');
-                
-                wavesurfer = WaveSurfer.create({
-                    container: '#waveform',
-                    waveColor: '#28a745',
-                    progressColor: '#155724',
-                    height: 80,
-                    normalize: true,
-                    barWidth: 2,
-                    barRadius: 3
-                });
-                
-                try {
-                    const spectrogramPlugin = Spectrogram.create({
-                        container: '#spectrogram',
-                        labels: true,
-                        height: 200,
-                        splitChannels: false,
-                        fftSamples: 512,
-                        windowFunc: 'hann'
-                    });
-                    
-                    wavesurfer.registerPlugin(spectrogramPlugin);
-                } catch (spectrogramError) {
-                    console.warn('Spectrogram plugin failed for recorded audio:', spectrogramError);
-                    addResult('Note: Spectrogram visualization unavailable for recorded audio', 'warning');
-                }
-                
-                wavesurfer.load(audioUrl);
-                
-                wavesurfer.on('ready', () => {
-                    addResult(`Recorded audio visualization ready: ${currentAudioBuffer.duration.toFixed(3)}s`, 'success');
-                    drawVADOverlay();
-                    drawSpectrogramMarkers();
-                });
-                
-                wavesurfer.on('error', (error) => {
-                    console.warn('WaveSurfer error with recorded audio:', error);
-                });
-                
-            } catch (error) {
-                addResult(`Recorded audio visualization error: ${error.message}`, 'error');
             }
         }
         
@@ -731,7 +555,6 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
                 
                 // Use the exact pattern from documentation
                 for await (const {audio, start, end} of myvad.run(audioFileData, nativeSampleRate)) {
-                    console.log(`🔍 VAD iteration raw values:`, { start, end });
                     segmentCount++;
                     
                     // start and end are in MILLISECONDS according to docs
@@ -841,26 +664,15 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
                 const audioFileData = currentAudioBuffer.getChannelData(0);
                 const nativeSampleRate = currentAudioBuffer.sampleRate;
                 
-              audioData = audioFileData;
-              console.log('🔍 Audio data analysis:', {
-                length: audioData.length,
-                sampleRate: nativeSampleRate,
-                // maxAmplitude: Math.max(...Array.from(audioData.slice(0, 1000))), // Sample first 1000 points to avoid memory issues
-                // minAmplitude: Math.min(...Array.from(audioData.slice(0, 1000))), // Sample first 1000 points to avoid memory issues
-                rmsLevel: Math.sqrt(audioData.reduce((sum, val) => sum + val * val, 0) / audioData.length),
-                hasNonZeroSamples: audioData.some(val => Math.abs(val) > 0.001),
-                averageAmplitude: Array.from(audioData).reduce((sum, val) => sum + Math.abs(val), 0) / audioData.length
-                });
-                  console.log(nativeSampleRate)
-                  addResult(`Processing ${audioFileData.length} samples at native ${nativeSampleRate}Hz...`);
-                  
-                  let segmentCount = 0;
-                  const segments = [];
-                  
-                  // Use the exact pattern from documentation
-                  for await (const {audio, start, end} of myvad.run(audioFileData, nativeSampleRate)) {
-                    console.log(`🔍 VAD iteration raw values:`, { start, end });
+                addResult(`Processing ${audioFileData.length} samples at native ${nativeSampleRate}Hz...`);
                 
+                let segmentCount = 0;
+                const segments = [];
+                
+                // Use the exact pattern from documentation
+                for await (const {audio, start, end} of myvad.run(audioFileData, nativeSampleRate)) {
+                
+                  console.log(`🔍 VAD iteration raw values:`, { start, end });
                     segmentCount++;
                     
                     // start and end are in MILLISECONDS according to docs
@@ -1237,9 +1049,6 @@ Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
         window.runCustomVAD = runCustomVAD;
         window.resetToDefaults = resetToDefaults;
         window.loadPreset = loadPreset;
-        window.toggleRecording = toggleRecording;
-        window.clearRecording = clearRecording;
-        window.useTestFile = useTestFile;
 
         // // Add global error handlers for spectrogram errors
         // window.addEventListener('unhandledrejection', function(event) {

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAD Bug Report - Version Comparison</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            max-width: 800px; 
+            margin: 0 auto; 
+        }
+        .version-section { 
+            margin: 20px 0; 
+            padding: 15px; 
+            border: 2px solid #ddd; 
+            border-radius: 8px; 
+        }
+        .version-022 { border-color: #28a745; }
+        .version-023 { border-color: #dc3545; }
+        .result { 
+            background: #f8f9fa; 
+            padding: 8px; 
+            margin: 5px 0; 
+            font-family: monospace; 
+            font-size: 12px;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        #spectrogram022, #spectrogram023 { 
+            height: 150px; 
+            border: 1px solid #ccc; 
+            margin: 10px 0;
+            position: relative;
+        }
+        .vad-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            border-left: 3px solid #ff0000;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .vad-marker.start { border-left: 3px solid #00ff00; }
+        .vad-region {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(255, 255, 0, 0.3);
+            pointer-events: none;
+            z-index: 5;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🐛 VAD Bug Report: Version 0.0.22 vs 0.0.23</h1>
+    
+    <p><strong>Issue:</strong> VAD detection behavior changed between versions 0.0.22 (works) and 0.0.23 (broken).</p>
+    
+    <div style="text-align: center; margin: 20px 0;">
+        <button onclick="runTest()">🔄 Run VAD Test</button>
+        <button onclick="switchAudio()">🎵 Switch Audio File</button>
+    </div>
+    
+    <audio id="audio-player" controls style="width: 100%; margin: 10px 0;"></audio>
+    
+    <div class="version-section version-022">
+        <h3>✅ Version 0.0.22 (Working)</h3>
+        <div id="spectrogram022"></div>
+        <div id="results022"></div>
+    </div>
+    
+    <div class="version-section version-023">
+        <h3>❌ Version 0.0.23 (Broken)</h3>
+        <div id="spectrogram023"></div>
+        <div id="results023"></div>
+    </div>
+
+    <!-- Load ONNX runtime first -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+    <script>
+        if (typeof ort !== 'undefined') ort.env.logLevel = 'error';
+    </script>
+    
+    <!-- WaveSurfer for visualization -->
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+
+    <script>
+        let currentAudioBuffer = null;
+        let currentAudioUrl = '/patth.wav';
+        let wavesurfer022 = null;
+        let wavesurfer023 = null;
+        
+        const audioFiles = ['/patth.wav', '/path.mp3'];
+        let currentFileIndex = 0;
+
+        function addResult(containerId, text, type = '') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.textContent = text;
+            document.getElementById(containerId).appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('results022').innerHTML = '';
+            document.getElementById('results023').innerHTML = '';
+        }
+
+        function switchAudio() {
+            currentFileIndex = (currentFileIndex + 1) % audioFiles.length;
+            currentAudioUrl = audioFiles[currentFileIndex];
+            addResult('results022', `Switched to: ${currentAudioUrl}`);
+            addResult('results023', `Switched to: ${currentAudioUrl}`);
+        }
+
+        async function loadAudio() {
+            try {
+                const response = await fetch(currentAudioUrl);
+                const blob = await response.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                
+                document.getElementById('audio-player').src = audioUrl;
+                
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await blob.arrayBuffer();
+                currentAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                addResult('results022', `✅ Audio loaded: ${currentAudioBuffer.duration.toFixed(3)}s`, 'success');
+                addResult('results023', `✅ Audio loaded: ${currentAudioBuffer.duration.toFixed(3)}s`, 'success');
+                
+                return { blob, audioUrl };
+            } catch (error) {
+                addResult('results022', `❌ Audio load failed: ${error.message}`, 'error');
+                addResult('results023', `❌ Audio load failed: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        async function createSpectrogram(containerId, audioUrl) {
+            try {
+                // Destroy existing instance
+                if (containerId === 'spectrogram022' && wavesurfer022) {
+                    wavesurfer022.destroy();
+                }
+                if (containerId === 'spectrogram023' && wavesurfer023) {
+                    wavesurfer023.destroy();
+                }
+
+                const { default: WaveSurfer } = await import('https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js');
+                const { default: Spectrogram } = await import('https://unpkg.com/wavesurfer.js@7/dist/plugins/spectrogram.esm.js');
+                
+                const wavesurfer = WaveSurfer.create({
+                    container: `#${containerId}`,
+                    waveColor: '#4F4A85',
+                    progressColor: '#383351',
+                    height: 150,
+                    normalize: true
+                });
+                
+                const spectrogramPlugin = Spectrogram.create({
+                    container: `#${containerId}`,
+                    labels: true,
+                    height: 150
+                });
+                
+                wavesurfer.registerPlugin(spectrogramPlugin);
+                wavesurfer.load(audioUrl);
+                
+                // Store reference
+                if (containerId === 'spectrogram022') wavesurfer022 = wavesurfer;
+                if (containerId === 'spectrogram023') wavesurfer023 = wavesurfer;
+                
+                return wavesurfer;
+            } catch (error) {
+                console.warn(`Spectrogram creation failed for ${containerId}:`, error);
+                return null;
+            }
+        }
+
+        async function runVAD(version, blob, resultsId, spectrogramId) {
+            try {
+                addResult(resultsId, `🔄 Testing VAD ${version}...`);
+                
+                // Load the specific version
+                const script = document.createElement('script');
+                script.src = `https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@${version}/dist/bundle.min.js`;
+                
+                await new Promise((resolve, reject) => {
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+                
+                // Wait for VAD to be available
+                let retries = 0;
+                while (!window.vad && retries < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    retries++;
+                }
+                
+                if (!window.vad) {
+                    throw new Error('VAD library not loaded');
+                }
+                
+                // Create VAD instance
+                const vadInstance = await window.vad.NonRealTimeVAD.new({
+                    positiveSpeechThreshold: 0.3,
+                    negativeSpeechThreshold: 0.2,
+                    redemptionFrames: 32,
+                    frameSamples: 1536,
+                    minSpeechFrames: 3,
+                    preSpeechPadFrames: 4,
+                    positiveSpeechPadFrames: 4
+                });
+                
+                // Process audio
+                const audioData = currentAudioBuffer.getChannelData(0);
+                const sampleRate = currentAudioBuffer.sampleRate;
+                
+                const segments = [];
+                for await (const { audio, start, end } of vadInstance.run(audioData, sampleRate)) {
+                    segments.push({
+                        startTime: start / 1000,
+                        endTime: end / 1000
+                    });
+                }
+                
+                addResult(resultsId, `✅ VAD ${version}: Found ${segments.length} segments`, segments.length > 0 ? 'success' : 'error');
+                
+                // Log segment details
+                segments.forEach((seg, i) => {
+                    addResult(resultsId, `  Segment ${i + 1}: ${seg.startTime.toFixed(3)}s - ${seg.endTime.toFixed(3)}s`);
+                });
+                
+                // Draw markers on spectrogram
+                drawVADMarkers(spectrogramId, segments);
+                
+                // Clean up script
+                document.head.removeChild(script);
+                delete window.vad;
+                
+                return segments;
+                
+            } catch (error) {
+                addResult(resultsId, `❌ VAD ${version} failed: ${error.message}`, 'error');
+                return [];
+            }
+        }
+
+        function drawVADMarkers(containerId, segments) {
+            if (!currentAudioBuffer || segments.length === 0) return;
+            
+            const container = document.getElementById(containerId);
+            const duration = currentAudioBuffer.duration;
+            
+            // Clear existing markers
+            container.querySelectorAll('.vad-marker, .vad-region').forEach(el => el.remove());
+            
+            segments.forEach((segment, index) => {
+                const startPercent = (segment.startTime / duration) * 100;
+                const endPercent = (segment.endTime / duration) * 100;
+                const widthPercent = endPercent - startPercent;
+                
+                // Create region
+                const region = document.createElement('div');
+                region.className = 'vad-region';
+                region.style.left = startPercent + '%';
+                region.style.width = widthPercent + '%';
+                region.title = `Segment ${index + 1}: ${segment.startTime.toFixed(3)}s - ${segment.endTime.toFixed(3)}s`;
+                container.appendChild(region);
+                
+                // Create start marker
+                const startMarker = document.createElement('div');
+                startMarker.className = 'vad-marker start';
+                startMarker.style.left = startPercent + '%';
+                container.appendChild(startMarker);
+                
+                // Create end marker
+                const endMarker = document.createElement('div');
+                endMarker.className = 'vad-marker';
+                endMarker.style.left = endPercent + '%';
+                container.appendChild(endMarker);
+            });
+        }
+
+        async function runTest() {
+            clearResults();
+            
+            try {
+                const { blob, audioUrl } = await loadAudio();
+                
+                // Create spectrograms
+                await createSpectrogram('spectrogram022', audioUrl);
+                await createSpectrogram('spectrogram023', audioUrl);
+                
+                // Test both versions
+                const segments022 = await runVAD('0.0.22', blob, 'results022', 'spectrogram022');
+                const segments023 = await runVAD('0.0.23', blob, 'results023', 'spectrogram023');
+                
+                // Summary
+                addResult('results022', `\n📊 SUMMARY: ${segments022.length} segments detected`, segments022.length > 0 ? 'success' : 'error');
+                addResult('results023', `\n📊 SUMMARY: ${segments023.length} segments detected`, segments023.length > 0 ? 'success' : 'error');
+                
+                if (segments022.length !== segments023.length) {
+                    addResult('results022', `🚨 BUG CONFIRMED: Version difference detected!`, 'error');
+                    addResult('results023', `🚨 BUG CONFIRMED: Version difference detected!`, 'error');
+                }
+                
+            } catch (error) {
+                addResult('results022', `❌ Test failed: ${error.message}`, 'error');
+                addResult('results023', `❌ Test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(runTest, 1000);
+        });
+    </script>
+</body>
+</html>
