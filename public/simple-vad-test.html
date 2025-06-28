@@ -73,6 +73,8 @@
     <button onclick="visualizeAudio()">Visualize Audio</button>
     <button onclick="debugSampleRates()">Debug Sample Rates</button>
     <button onclick="testVADWithoutResampling()">Test VAD on Original (No Resample)</button>
+    <button onclick="testMinimalProcessing()">Test Minimal Processing</button>
+    <button onclick="testSimplifiedVAD()">Test Simplified VAD (Documentation Pattern)</button>
     
     <div class="audio-section">
         <h3>Audio Visualization</h3>
@@ -674,6 +676,486 @@ Duration: ${audioBuffer.duration.toFixed(3)}s`);
                 addResult(`Error: ${error.message}`, 'error');
             }
         }
+        
+        async function testMinimalProcessing() {
+            addResult('=== TESTING MINIMAL PROCESSING - LET VAD HANDLE EVERYTHING ===');
+            
+            try {
+                if (!window.vad) {
+                    addResult('VAD not available!', 'error');
+                    return;
+                }
+                
+                // Load original audio
+                const response = await fetch('/patth.wav');
+                const blob = await response.blob();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await blob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                addResult(`Original Audio Properties:
+Sample Rate: ${audioBuffer.sampleRate}Hz
+Duration: ${audioBuffer.duration.toFixed(3)}s
+Channels: ${audioBuffer.numberOfChannels}
+Expected main speech: ~0.5s to ~1.2s (from spectrogram visualization)`);
+                
+                const originalData = audioBuffer.getChannelData(0);
+                
+                // Test 1: Let VAD handle sample rate internally (most important test)
+                addResult('\n--- Test 1: Pass original sample rate to VAD (Let VAD handle internally) ---');
+                
+                try {
+                    const vadInstance1 = await window.vad.NonRealTimeVAD.new({
+                        positiveSpeechThreshold: 0.3,  // Moderate sensitivity
+                        negativeSpeechThreshold: 0.15,
+                        redemptionFrames: 24,
+                        frameSamples: 1536,            // Keep standard frame size
+                        minSpeechFrames: 4,
+                        preSpeechPadFrames: 8,
+                        positiveSpeechPadFrames: 8
+                    });
+                    
+                    let segmentCount1 = 0;
+                    const segments1 = [];
+                    
+                    // Pass original sample rate - let VAD handle it internally
+                    for await (const segment of vadInstance1.run(originalData, audioBuffer.sampleRate)) {
+                        segmentCount1++;
+                        const startTime = segment.start / audioBuffer.sampleRate;
+                        const endTime = segment.end / audioBuffer.sampleRate;
+                        segments1.push({ startTime, endTime });
+                        addResult(`Original SR Segment ${segmentCount1}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s (${((endTime - startTime) * 1000).toFixed(0)}ms)`);
+                    }
+                    
+                    if (segmentCount1 === 0) {
+                        addResult(`❌ VAD accepted original sample rate but found NO segments`);
+                    } else {
+                        addResult(`✅ VAD accepted original sample rate! Found ${segmentCount1} segments`);
+                        
+                        // Check if any segment overlaps with expected speech region (0.5s - 1.2s)
+                        const expectedStart = 0.5;
+                        const expectedEnd = 1.2;
+                        let foundExpectedSpeech = false;
+                        
+                        for (const seg of segments1) {
+                            if (seg.startTime < expectedEnd && seg.endTime > expectedStart) {
+                                foundExpectedSpeech = true;
+                                addResult(`✅ Found segment overlapping expected speech region: ${seg.startTime.toFixed(3)}s - ${seg.endTime.toFixed(3)}s`);
+                            }
+                        }
+                        
+                        if (!foundExpectedSpeech) {
+                            addResult(`⚠️ WARNING: No segments found in expected speech region (0.5s - 1.2s)`);
+                        }
+                    }
+                    
+                } catch (vadError1) {
+                    addResult(`❌ VAD rejected original sample rate: ${vadError1.message}`);
+                    addResult('This means VAD REQUIRES 16kHz resampling internally');
+                }
+                
+                // Test 2: Compare with our manual resampling approach
+                addResult('\n--- Test 2: Manual resampling to 16kHz (current approach) ---');
+                
+                try {
+                    const vadInstance2 = await window.vad.NonRealTimeVAD.new({
+                        positiveSpeechThreshold: 0.3,
+                        negativeSpeechThreshold: 0.15,
+                        redemptionFrames: 24,
+                        frameSamples: 1536,
+                        minSpeechFrames: 4,
+                        preSpeechPadFrames: 8,
+                        positiveSpeechPadFrames: 8
+                    });
+                    
+                    // Manual resampling (current approach)
+                    let resampledBuffer = audioBuffer;
+                    if (audioBuffer.sampleRate !== 16000) {
+                        addResult(`Manually resampling from ${audioBuffer.sampleRate}Hz to 16kHz...`);
+                        const offlineContext = new OfflineAudioContext(1, Math.ceil(audioBuffer.duration * 16000), 16000);
+                        const bufferSource = offlineContext.createBufferSource();
+                        bufferSource.buffer = audioBuffer;
+                        bufferSource.connect(offlineContext.destination);
+                        bufferSource.start();
+                        resampledBuffer = await offlineContext.startRendering();
+                    }
+                    
+                    const resampledData = resampledBuffer.getChannelData(0);
+                    let segmentCount2 = 0;
+                    const segments2 = [];
+                    
+                    for await (const segment of vadInstance2.run(resampledData, 16000)) {
+                        segmentCount2++;
+                        const startTime = segment.start / 16000;  // Use 16kHz for time calculation
+                        const endTime = segment.end / 16000;
+                        segments2.push({ startTime, endTime });
+                        addResult(`Manual Resample Segment ${segmentCount2}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s (${((endTime - startTime) * 1000).toFixed(0)}ms)`);
+                    }
+                    
+                    addResult(`Manual resampling found ${segmentCount2} segments`);
+                    
+                } catch (vadError2) {
+                    addResult(`❌ Manual resampling approach failed: ${vadError2.message}`);
+                }
+                
+                // Test 3: Force 16kHz with original data (lie about sample rate)
+                addResult('\n--- Test 3: Lie about sample rate (tell VAD original data is 16kHz) ---');
+                
+                try {
+                    const vadInstance3 = await window.vad.NonRealTimeVAD.new({
+                        positiveSpeechThreshold: 0.3,
+                        negativeSpeechThreshold: 0.15,
+                        redemptionFrames: 24,
+                        frameSamples: 1536,
+                        minSpeechFrames: 4,
+                        preSpeechPadFrames: 8,
+                        positiveSpeechPadFrames: 8
+                    });
+                    
+                    let segmentCount3 = 0;
+                    // Lie about sample rate - tell VAD original data is 16kHz when it's not
+                    for await (const segment of vadInstance3.run(originalData, 16000)) {
+                        segmentCount3++;
+                        // Calculate times using the LIE (16kHz) - this will show timing distortion
+                        const fakeStartTime = segment.start / 16000;
+                        const fakeEndTime = segment.end / 16000;
+                        
+                        // Calculate ACTUAL times using true sample rate
+                        const actualStartTime = segment.start / audioBuffer.sampleRate;
+                        const actualEndTime = segment.end / audioBuffer.sampleRate;
+                        
+                        addResult(`Fake 16kHz Segment ${segmentCount3}:`);
+                        addResult(`  Fake times: ${fakeStartTime.toFixed(3)}s - ${fakeEndTime.toFixed(3)}s`);
+                        addResult(`  Real times: ${actualStartTime.toFixed(3)}s - ${actualEndTime.toFixed(3)}s`);
+                        addResult(`  Time distortion: ${((actualStartTime - fakeStartTime) * 1000).toFixed(0)}ms`);
+                    }
+                    
+                    if (segmentCount3 > 0) {
+                        addResult(`⚠️ VAD processed with fake 16kHz! Found ${segmentCount3} segments`);
+                        addResult('This proves that lying about sample rate causes timing errors!');
+                    } else {
+                        addResult(`❌ No segments even with fake 16kHz`);
+                    }
+                    
+                } catch (vadError3) {
+                    addResult(`❌ Fake 16kHz approach failed: ${vadError3.message}`);
+                }
+                
+                // Test 4: Ultra-sensitive with original sample rate
+                addResult('\n--- Test 4: Ultra-sensitive with original sample rate ---');
+                
+                try {
+                    const vadInstance4 = await window.vad.NonRealTimeVAD.new({
+                        positiveSpeechThreshold: 0.05,  // Ultra-sensitive
+                        negativeSpeechThreshold: 0.01,
+                        redemptionFrames: 128,
+                        frameSamples: 1536,
+                        minSpeechFrames: 1,
+                        preSpeechPadFrames: 32,
+                        positiveSpeechPadFrames: 32
+                    });
+                    
+                    let segmentCount4 = 0;
+                    for await (const segment of vadInstance4.run(originalData, audioBuffer.sampleRate)) {
+                        segmentCount4++;
+                        const startTime = segment.start / audioBuffer.sampleRate;
+                        const endTime = segment.end / audioBuffer.sampleRate;
+                        addResult(`Ultra-Sensitive Segment ${segmentCount4}: ${startTime.toFixed(3)}s - ${endTime.toFixed(3)}s`);
+                    }
+                    
+                    addResult(`Ultra-sensitive found ${segmentCount4} segments`);
+                    
+                } catch (vadError4) {
+                    addResult(`❌ Ultra-sensitive failed: ${vadError4.message}`);
+                }
+                
+                // Conclusion
+                addResult('\n=== MINIMAL PROCESSING CONCLUSION ===');
+                addResult('Key findings:');
+                addResult('1. Can VAD handle original sample rates? (Test 1 result above)');
+                addResult('2. Does manual resampling work? (Test 2 result above)');
+                addResult('3. Does lying about sample rate cause timing errors? (Test 3 result above)');
+                addResult('4. Does sensitivity help with original sample rates? (Test 4 result above)');
+                
+            } catch (error) {
+                addResult(`Minimal processing error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testSimplifiedVAD() {
+            addResult('=== TESTING SIMPLIFIED VAD (FOLLOWING DOCUMENTATION PATTERN) ===');
+            
+            try {
+                if (!window.vad) {
+                    addResult('VAD not available!', 'error');
+                    return;
+                }
+                
+                // Load original audio
+                const response = await fetch('/patth.wav');
+                const blob = await response.blob();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await blob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                addResult(`Audio Properties:
+Sample Rate: ${audioBuffer.sampleRate}Hz (native)
+Duration: ${audioBuffer.duration.toFixed(3)}s
+Expected speech region: 0.5s - 1.2s (from visual analysis)`);
+                
+                // Follow the exact documentation pattern
+                addResult('\n--- Following Official Documentation Pattern ---');
+                addResult('const myvad = await vad.NonRealTimeVAD.new()');
+                addResult('for await (const {audio, start, end} of myvad.run(audioFileData, nativeSampleRate))');
+                addResult('// start and end are in MILLISECONDS');
+                
+                // Create VAD instance with minimal config (like documentation)
+                const myvad = await window.vad.NonRealTimeVAD.new();
+                addResult('✅ VAD instance created with default settings');
+                
+                // Get audio data and native sample rate (exactly as in docs)
+                const audioFileData = audioBuffer.getChannelData(0);
+                const nativeSampleRate = audioBuffer.sampleRate;
+                
+                addResult(`\nProcessing ${audioFileData.length} samples at native ${nativeSampleRate}Hz...`);
+                
+                let segmentCount = 0;
+                const segments = [];
+                
+                // Use the exact pattern from documentation
+                for await (const {audio, start, end} of myvad.run(audioFileData, nativeSampleRate)) {
+                    segmentCount++;
+                    
+                    // start and end are in MILLISECONDS according to docs
+                    const startSeconds = start / 1000;
+                    const endSeconds = end / 1000;
+                    const durationMs = end - start;
+                    
+                    segments.push({ startSeconds, endSeconds, startMs: start, endMs: end });
+                    
+                    addResult(`Segment ${segmentCount}:`);
+                    addResult(`  Raw values: start=${start}ms, end=${end}ms`);
+                    addResult(`  Time: ${startSeconds.toFixed(3)}s - ${endSeconds.toFixed(3)}s`);
+                    addResult(`  Duration: ${durationMs}ms`);
+                    addResult(`  Audio samples: ${audio ? audio.length : 'N/A'}`);
+                    
+                    // Check if this overlaps with expected speech region (0.5s - 1.2s)
+                    if (startSeconds < 1.2 && endSeconds > 0.5) {
+                        addResult(`  ✅ OVERLAPS with expected speech region!`);
+                    } else {
+                        addResult(`  ⚠️ Outside expected speech region (0.5s - 1.2s)`);
+                    }
+                }
+                
+                addResult(`\n=== SIMPLIFIED VAD RESULTS ===`);
+                if (segmentCount === 0) {
+                    addResult(`❌ NO SPEECH SEGMENTS DETECTED`, 'error');
+                    addResult('Even the simplified approach found no speech', 'error');
+                } else {
+                    addResult(`✅ Found ${segmentCount} speech segments using simplified approach`, 'success');
+                    
+                    // Check if any segment is in the expected region
+                    const foundExpectedSpeech = segments.some(seg => 
+                        seg.startSeconds < 1.2 && seg.endSeconds > 0.5
+                    );
+                    
+                    if (foundExpectedSpeech) {
+                        addResult(`✅ SUCCESS: Found speech in expected region (0.5s - 1.2s)`, 'success');
+                        
+                        // Update visualization if available
+                        currentVADSegments = segments.map(seg => ({
+                            startTime: seg.startSeconds,
+                            endTime: seg.endSeconds
+                        }));
+                        
+                        if (wavesurfer && currentAudioBuffer) {
+                            drawSpectrogramMarkers();
+                        }
+                        
+                        // Create trimmed audio preview
+                        await createTrimmedAudioPreview(segments);
+                        
+                    } else {
+                        addResult(`⚠️ WARNING: No segments in expected speech region`, 'warning');
+                    }
+                    
+                    // Show timing comparison
+                    addResult('\nTiming Analysis:');
+                    const earliestStart = Math.min(...segments.map(s => s.startSeconds));
+                    const latestEnd = Math.max(...segments.map(s => s.endSeconds));
+                    addResult(`Overall speech span: ${earliestStart.toFixed(3)}s - ${latestEnd.toFixed(3)}s`);
+                    addResult(`Expected span: 0.500s - 1.200s`);
+                    addResult(`Timing accuracy: ${Math.abs(earliestStart - 0.5) < 0.1 && Math.abs(latestEnd - 1.2) < 0.3 ? 'GOOD' : 'NEEDS REVIEW'}`);
+                }
+                
+            } catch (error) {
+                addResult(`Simplified VAD error: ${error.message}`, 'error');
+                console.error('Simplified VAD error details:', error);
+            }
+        }
+
+        // Add audio trimming preview functionality
+        async function createTrimmedAudioPreview(segments) {
+            if (!currentAudioBuffer || segments.length === 0) return;
+            
+            try {
+                addResult('\n--- Creating Trimmed Audio Preview ---');
+                
+                // Calculate overall boundaries with padding
+                const earliestStart = Math.min(...segments.map(s => s.startSeconds));
+                const latestEnd = Math.max(...segments.map(s => s.endSeconds));
+                const padding = 0.1; // 100ms padding
+                
+                const trimStart = Math.max(0, earliestStart - padding);
+                const trimEnd = Math.min(currentAudioBuffer.duration, latestEnd + padding);
+                
+                addResult(`Original duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
+                addResult(`Speech detected: ${earliestStart.toFixed(3)}s - ${latestEnd.toFixed(3)}s`);
+                addResult(`With padding: ${trimStart.toFixed(3)}s - ${trimEnd.toFixed(3)}s`);
+                addResult(`Trimmed duration: ${(trimEnd - trimStart).toFixed(3)}s`);
+                
+                // Create trimmed audio buffer
+                const sampleRate = currentAudioBuffer.sampleRate;
+                const startSample = Math.floor(trimStart * sampleRate);
+                const endSample = Math.floor(trimEnd * sampleRate);
+                const trimmedLength = endSample - startSample;
+                
+                const trimmedBuffer = new AudioContext().createBuffer(
+                    currentAudioBuffer.numberOfChannels,
+                    trimmedLength,
+                    sampleRate
+                );
+                
+                // Copy trimmed audio data
+                for (let channel = 0; channel < currentAudioBuffer.numberOfChannels; channel++) {
+                    const originalData = currentAudioBuffer.getChannelData(channel);
+                    const trimmedData = trimmedBuffer.getChannelData(channel);
+                    
+                    for (let i = 0; i < trimmedLength; i++) {
+                        const sourceIndex = startSample + i;
+                        trimmedData[i] = sourceIndex < originalData.length ? originalData[sourceIndex] : 0;
+                    }
+                }
+                
+                // Convert to blob and create preview
+                const trimmedBlob = await audioBufferToBlob(trimmedBuffer);
+                const trimmedUrl = URL.createObjectURL(trimmedBlob);
+                
+                // Create audio preview element
+                const previewContainer = document.createElement('div');
+                previewContainer.innerHTML = `
+                    <h4>🎵 Trimmed Audio Preview</h4>
+                    <p>This is what the audio would sound like after VAD trimming:</p>
+                    <audio controls style="width: 100%; margin: 10px 0;">
+                        <source src="${trimmedUrl}" type="audio/wav">
+                    </audio>
+                    <p><strong>Reduction:</strong> ${((currentAudioBuffer.duration - (trimEnd - trimStart)) / currentAudioBuffer.duration * 100).toFixed(1)}% shorter</p>
+                `;
+                
+                // Add to audio section
+                const audioSection = document.querySelector('.audio-section');
+                
+                // Remove existing preview if any
+                const existingPreview = audioSection.querySelector('.trimmed-preview');
+                if (existingPreview) {
+                    existingPreview.remove();
+                }
+                
+                previewContainer.className = 'trimmed-preview';
+                previewContainer.style.cssText = `
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #e8f5e8;
+                    border: 2px solid #28a745;
+                    border-radius: 8px;
+                `;
+                audioSection.appendChild(previewContainer);
+                
+                addResult('✅ Trimmed audio preview created!', 'success');
+                
+            } catch (error) {
+                addResult(`Error creating audio preview: ${error.message}`, 'error');
+            }
+        }
+
+        // Convert AudioBuffer to WAV Blob
+        async function audioBufferToBlob(audioBuffer) {
+            const numberOfChannels = audioBuffer.numberOfChannels;
+            const sampleRate = audioBuffer.sampleRate;
+            const length = audioBuffer.length;
+            const bytesPerSample = 2; // 16-bit PCM
+            const blockAlign = numberOfChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign;
+            const dataSize = length * blockAlign;
+            const bufferSize = 44 + dataSize;
+            
+            const arrayBuffer = new ArrayBuffer(bufferSize);
+            const view = new DataView(arrayBuffer);
+            
+            // Write WAV header
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            
+            writeString(0, 'RIFF');
+            view.setUint32(4, bufferSize - 8, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numberOfChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, byteRate, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, dataSize, true);
+            
+            // Convert and write audio samples
+            let offset = 44;
+            for (let i = 0; i < length; i++) {
+                for (let channel = 0; channel < numberOfChannels; channel++) {
+                    const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(channel)[i]));
+                    view.setInt16(offset, sample * 0x7FFF, true);
+                    offset += 2;
+                }
+            }
+            
+            return new Blob([arrayBuffer], { type: 'audio/wav' });
+        }
+
+        // Make functions available globally
+        window.testMinimalVAD = testMinimalVAD;
+        window.testWithDifferentModel = testWithDifferentModel;
+        window.generateTestTone = generateTestTone;
+        window.visualizeAudio = visualizeAudio;
+        window.debugSampleRates = debugSampleRates;
+        window.testVADWithoutResampling = testVADWithoutResampling;
+        window.testMinimalProcessing = testMinimalProcessing;
+        window.testSimplifiedVAD = testSimplifiedVAD;
+
+        // Auto-run simplified VAD test on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            addResult('🎙️ Simple VAD Test Page Ready', 'success');
+            addResult('Auto-loading audio and running simplified VAD documentation pattern...', 'info');
+            
+            // Wait for libraries to load, then auto-run
+            setTimeout(async () => {
+                try {
+                    // Load visualization first
+                    await visualizeAudio();
+                    
+                    // Wait for waveform to be ready, then run simplified VAD
+                    setTimeout(async () => {
+                        await testSimplifiedVAD();
+                    }, 2000);
+                } catch (error) {
+                    addResult(`Auto-run error: ${error.message}`, 'error');
+                }
+            }, 1000);
+        });
     </script>
 </body>
 </html>

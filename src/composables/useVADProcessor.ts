@@ -150,8 +150,7 @@ export function useVADProcessor() {
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       
-      // Resample to 16kHz for VAD (Silero VAD expects 16kHz)
-      const targetSampleRate = 16000;
+      // Simplify VAD usage following the official documentation pattern
       console.log('🔄 Original audio properties:', {
         sampleRate: audioBuffer.sampleRate,
         duration: audioBuffer.duration.toFixed(3) + 's',
@@ -159,24 +158,11 @@ export function useVADProcessor() {
         length: audioBuffer.length
       });
       
-      let resampledBuffer = audioBuffer;
-      
-      if (audioBuffer.sampleRate !== targetSampleRate) {
-        console.log(`🔄 Resampling from ${audioBuffer.sampleRate}Hz to ${targetSampleRate}Hz...`);
-        resampledBuffer = await resampleAudioBuffer(audioBuffer, targetSampleRate);
-        console.log('🔄 Resampled audio properties:', {
-          sampleRate: resampledBuffer.sampleRate,
-          duration: resampledBuffer.duration.toFixed(3) + 's',
-          length: resampledBuffer.length
-        });
-      } else {
-        console.log('🔄 No resampling needed - already at 16kHz');
-      }
-      
       // Get audio data as Float32Array (VAD expects mono)
-      const audioData = resampledBuffer.getChannelData(0);
+      const audioData = audioBuffer.getChannelData(0);
+      const nativeSampleRate = audioBuffer.sampleRate;
       
-      console.log(`📊 Processing ${audioData.length} samples at ${targetSampleRate}Hz`);
+      console.log(`📊 Processing ${audioData.length} samples at ${nativeSampleRate}Hz using simplified VAD approach`);
       
       // Debug audio data to ensure it's valid
       let maxAmplitude = 0;
@@ -227,57 +213,60 @@ export function useVADProcessor() {
         averageAmplitude: Array.from(audioData).reduce((sum, val) => sum + Math.abs(val), 0) / audioData.length
       });
       
-      // Create a VAD instance with the provided runtime options
-      console.log('🎛️ Creating VAD instance with runtime options');
+      // Create VAD instance using simplified approach from documentation
+      console.log('🎛️ Creating simplified VAD instance following documentation pattern');
       
-      // Ultra-sensitive settings to catch obvious speech content
+      // Use reasonable settings for balanced detection
       const vadConfig = {
-        positiveSpeechThreshold: Math.min(positiveSpeechThreshold, 0.01), // Force ultra-sensitive detection
-        negativeSpeechThreshold: Math.min(negativeSpeechThreshold, 0.005), // Almost zero threshold
-        redemptionFrames: 256,           // Huge gap allowance to connect speech segments
-        frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: 1,              // Minimum possible
-        preSpeechPadFrames: 32,          // Lots of context
-        positiveSpeechPadFrames: 32      // Lots of context
+        positiveSpeechThreshold: Math.min(positiveSpeechThreshold, 0.5), // Balanced detection
+        negativeSpeechThreshold: Math.min(negativeSpeechThreshold, 0.35), // Good continuation
+        redemptionFrames: 24,            // Standard gap allowance
+        frameSamples: 1536,              // Default frame size
+        minSpeechFrames: 6,              // Reasonable minimum
+        preSpeechPadFrames: 4,           // Small padding
+        positiveSpeechPadFrames: 4       // Small padding
       };
       
-      console.log('🔧 ACTUAL VAD INSTANCE CONFIG:', vadConfig);
+      console.log('🔧 VAD CONFIG (simplified approach):', vadConfig);
       
       let runtimeVADInstance = null;
       try {
         runtimeVADInstance = await (window as any).vad.NonRealTimeVAD.new(vadConfig);
-        console.log('✅ Runtime VAD instance created with custom settings');
+        console.log('✅ Simplified VAD instance created successfully');
       } catch (error) {
-        console.warn('⚠️ Failed to create runtime VAD instance, using default:', error);
+        console.warn('⚠️ Failed to create VAD instance, using default:', error);
         runtimeVADInstance = vadInstance;
       }
       
-      // Use runtime VAD instance with provided settings
-      console.log('🎯 Starting VAD iteration...');
+      // Use simplified VAD processing following documentation pattern
+      console.log('🎯 Starting simplified VAD processing (start/end in milliseconds)...');
       let iterationCount = 0;
       
       try {
-        const vadIterator = runtimeVADInstance.run(audioData, resampledBuffer.sampleRate);
+        // Following the documentation: myvad.run(audioFileData, nativeSampleRate)
+        // Returns: {audio, start, end} where start/end are in MILLISECONDS
+        const vadIterator = runtimeVADInstance.run(audioData, nativeSampleRate);
         
-        for await (const segment of vadIterator) {
+        for await (const {audio, start, end} of vadIterator) {
           iterationCount++;
-          console.log(`🔍 VAD iteration ${iterationCount}, segment:`, segment);
+          console.log(`🔍 VAD iteration ${iterationCount}, raw values:`, {start, end});
           
-          if (!segment || typeof segment.start === 'undefined' || typeof segment.end === 'undefined') {
-            console.warn('⚠️ Invalid segment returned by VAD:', segment);
+          if (typeof start === 'undefined' || typeof end === 'undefined') {
+            console.warn('⚠️ Invalid segment returned by VAD:', {start, end});
             continue;
           }
           
-          // Convert frame indices to seconds
-          const startTimeSeconds = segment.start / resampledBuffer.sampleRate;
-          const endTimeSeconds = segment.end / resampledBuffer.sampleRate;
+          // According to documentation, start/end are already in MILLISECONDS
+          const startTimeSeconds = start / 1000; // Convert milliseconds to seconds
+          const endTimeSeconds = end / 1000;     // Convert milliseconds to seconds
           
           speechSegments.push({
             startTime: startTimeSeconds,
             endTime: endTimeSeconds,
-            audioLength: segment.audio ? segment.audio.length : 0
+            audioLength: audio ? audio.length : 0
           });
-          console.log(`🎙 Speech segment detected: ${startTimeSeconds.toFixed(3)}s - ${endTimeSeconds.toFixed(3)}s`);
+          
+          console.log(`🎙 Speech segment detected: ${start}ms - ${end}ms (${startTimeSeconds.toFixed(3)}s - ${endTimeSeconds.toFixed(3)}s)`);
         }
       } catch (iterError) {
         console.error('❌ Error during VAD iteration:', iterError);
@@ -319,7 +308,7 @@ export function useVADProcessor() {
             span: (overallEnd - overallStart).toFixed(3) + 's'
           },
           audioFileInfo: {
-            totalDuration: resampledBuffer.duration.toFixed(3) + 's',
+            totalDuration: audioBuffer.duration.toFixed(3) + 's',
             expectedSilenceStart: '~0.150s',
             expectedSpeechStart: '~0.200s'
           }
@@ -327,7 +316,7 @@ export function useVADProcessor() {
         
         // Calculate confidence based on speech coverage
         const totalSpeechDuration = speechSegments.reduce((sum, seg) => sum + (seg.endTime - seg.startTime), 0);
-        const totalDuration = resampledBuffer.duration;
+        const totalDuration = audioBuffer.duration; // Use original audio duration
         confidenceScore = Math.min(1, totalSpeechDuration / (totalDuration * 0.8)); // Expect ~80% to be speech
         
         // Store original speech boundaries before padding
@@ -337,7 +326,7 @@ export function useVADProcessor() {
         // Apply conservative padding to preserve natural speech endings
         const generousPadding = Math.max(padding, 0.1); // At least 100ms padding
         overallStart = Math.max(0, overallStart - generousPadding);
-        overallEnd = Math.min(resampledBuffer.duration, overallEnd + generousPadding);
+        overallEnd = Math.min(audioBuffer.duration, overallEnd + generousPadding); // Use original duration
         
         console.log(`📏 PADDING APPLIED:`, {
           originalStart: (overallStart + generousPadding).toFixed(3) + 's',
