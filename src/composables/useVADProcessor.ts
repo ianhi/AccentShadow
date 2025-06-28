@@ -205,7 +205,7 @@ export function useVADProcessor() {
       
       console.log('🔍 Audio data analysis:', {
         length: audioData.length,
-        sampleRate: resampledBuffer.sampleRate,
+        sampleRate: nativeSampleRate,
         maxAmplitude: Math.max(...Array.from(audioData.slice(0, 1000))), // Sample first 1000 points to avoid memory issues
         minAmplitude: Math.min(...Array.from(audioData.slice(0, 1000))), // Sample first 1000 points to avoid memory issues
         rmsLevel: Math.sqrt(audioData.reduce((sum, val) => sum + val * val, 0) / audioData.length),

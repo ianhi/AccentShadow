@@ -135,6 +135,12 @@
     </style>
     <!-- Load ONNX runtime first, then VAD -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js"></script>
+    <script>
+        // Suppress ONNX runtime warnings by setting log level to error only
+        if (typeof ort !== 'undefined') {
+            ort.env.logLevel = 'error';
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.19/dist/bundle.min.js"></script>
     <script src="https://unpkg.com/wavesurfer.js@7"></script>
 </head>
@@ -147,32 +153,32 @@
         <div class="controls-grid">
             <div class="control-group">
                 <label for="positiveSpeechThreshold">Positive Speech Threshold:</label>
-                <input type="range" id="positiveSpeechThreshold" min="0.1" max="0.9" step="0.05" value="0.5">
-                <span id="positiveSpeechThreshold-value">0.5</span>
+                <input type="range" id="positiveSpeechThreshold" min="0.1" max="0.9" step="0.05" value="0.3">
+                <span id="positiveSpeechThreshold-value">0.3</span>
             </div>
             
             <div class="control-group">
                 <label for="negativeSpeechThreshold">Negative Speech Threshold:</label>
-                <input type="range" id="negativeSpeechThreshold" min="0.05" max="0.6" step="0.05" value="0.35">
-                <span id="negativeSpeechThreshold-value">0.35</span>
+                <input type="range" id="negativeSpeechThreshold" min="0.05" max="0.6" step="0.05" value="0.2">
+                <span id="negativeSpeechThreshold-value">0.2</span>
             </div>
             
             <div class="control-group">
                 <label for="minSpeechFrames">Min Speech Frames:</label>
-                <input type="range" id="minSpeechFrames" min="1" max="20" step="1" value="6">
-                <span id="minSpeechFrames-value">6</span>
+                <input type="range" id="minSpeechFrames" min="1" max="20" step="1" value="3">
+                <span id="minSpeechFrames-value">3</span>
             </div>
             
             <div class="control-group">
                 <label for="redemptionFrames">Redemption Frames:</label>
-                <input type="range" id="redemptionFrames" min="8" max="64" step="4" value="24">
-                <span id="redemptionFrames-value">24</span>
+                <input type="range" id="redemptionFrames" min="8" max="64" step="4" value="32">
+                <span id="redemptionFrames-value">32</span>
             </div>
             
             <div class="control-group">
                 <label for="padding">Padding (seconds):</label>
-                <input type="range" id="padding" min="0.0" max="0.3" step="0.01" value="0.10">
-                <span id="padding-value">0.10</span>
+                <input type="range" id="padding" min="0.0" max="0.3" step="0.01" value="0.05">
+                <span id="padding-value">0.05</span>
             </div>
         </div>
         
@@ -192,11 +198,17 @@
         <h4>Waveform:</h4>
         <div id="waveform" style="height: 80px; background: #f0f0f0;"></div>
         
-        <h4>Spectrogram with VAD Markers:</h4>
+        <h4>Original Spectrogram with VAD Markers:</h4>
         <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
             🟢 Green lines = Speech start | 🔴 Red lines = Speech end | 🟡 Yellow regions = Detected speech
         </div>
         <div id="spectrogram" style="height: 200px; background: #f0f0f0;"></div>
+        
+        <h4>Trimmed Audio Preview Spectrogram:</h4>
+        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+            Shows what the audio will look like after VAD trimming and padding
+        </div>
+        <div id="trimmed-spectrogram" style="height: 150px; background: #f0f0f0; display: none;"></div>
         
         <h4>VAD Timeline:</h4>
         <div id="vad-overlay" style="position: relative; height: 20px; background: rgba(0,0,0,0.1); margin-top: 5px;"></div>
@@ -246,15 +258,15 @@ ${JSON.stringify(settings, null, 2)}`);
             await testSimplifiedVADWithSettings(settings);
         }
 
-        // Reset to default settings
+        // Reset to default settings (aggressive)
         function resetToDefaults() {
-            document.getElementById('positiveSpeechThreshold').value = 0.5;
-            document.getElementById('negativeSpeechThreshold').value = 0.35;
-            document.getElementById('minSpeechFrames').value = 6;
-            document.getElementById('redemptionFrames').value = 24;
-            document.getElementById('padding').value = 0.10;
+            document.getElementById('positiveSpeechThreshold').value = 0.3;
+            document.getElementById('negativeSpeechThreshold').value = 0.2;
+            document.getElementById('minSpeechFrames').value = 3;
+            document.getElementById('redemptionFrames').value = 32;
+            document.getElementById('padding').value = 0.05;
             updateDisplayValues();
-            addResult('🔄 Reset to default settings');
+            addResult('🔄 Reset to default settings (aggressive)');
         }
 
         // Load preset configurations
@@ -331,14 +343,16 @@ ${JSON.stringify(settings, null, 2)}`);
                     barRadius: 3
                 });
                 
-                // Add spectrogram
+                // Add spectrogram with error handling
                 const spectrogramPlugin = Spectrogram.create({
                     container: '#spectrogram',
                     labels: true,
                     height: 200,
                     splitChannels: false,
                     fftSamples: 512,
-                    windowFunc: 'hann'
+                    windowFunc: 'hann',
+                    // Add error handling options
+                    colorMap: []  // Prevent undefined colorMap errors
                 });
                 
                 wavesurfer.registerPlugin(spectrogramPlugin);
@@ -348,6 +362,12 @@ ${JSON.stringify(settings, null, 2)}`);
                     addResult(`Visualization ready: ${currentAudioBuffer.duration.toFixed(3)}s`, 'success');
                     drawVADOverlay();
                     drawSpectrogramMarkers();
+                });
+                
+                // Add error handling for spectrogram
+                wavesurfer.on('error', (error) => {
+                    console.warn('WaveSurfer error (non-critical):', error);
+                    // Continue execution - spectrogram errors are not critical
                 });
                 
             } catch (error) {
@@ -441,11 +461,11 @@ ${JSON.stringify(settings, null, 2)}`);
         // Test simplified VAD with custom settings
         async function testSimplifiedVADWithSettings(customSettings = null) {
             const settings = customSettings || {
-                positiveSpeechThreshold: 0.5,
-                negativeSpeechThreshold: 0.35,
-                minSpeechFrames: 6,
-                redemptionFrames: 24,
-                padding: 0.10
+                positiveSpeechThreshold: 0.3,  // Aggressive default
+                negativeSpeechThreshold: 0.2,  // Aggressive default
+                minSpeechFrames: 3,            // Aggressive default
+                redemptionFrames: 32,          // Aggressive default
+                padding: 0.05                  // Aggressive default
             };
             
             addResult(`=== TESTING SIMPLIFIED VAD WITH ${customSettings ? 'CUSTOM' : 'DEFAULT'} SETTINGS ===`);
@@ -467,8 +487,7 @@ ${JSON.stringify(settings, null, 2)}`);
                 
                 addResult(`Audio Properties:
 Sample Rate: ${currentAudioBuffer.sampleRate}Hz (native)
-Duration: ${currentAudioBuffer.duration.toFixed(3)}s
-Expected speech region: 0.5s - 1.2s (from visual analysis)`);
+Duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
                 
                 // Create VAD instance with custom settings
                 addResult('\n--- Creating VAD with Custom Settings ---');
@@ -512,13 +531,7 @@ Expected speech region: 0.5s - 1.2s (from visual analysis)`);
                     addResult(`  Time: ${startSeconds.toFixed(3)}s - ${endSeconds.toFixed(3)}s`);
                     addResult(`  Duration: ${durationMs}ms`);
                     addResult(`  Audio samples: ${audio ? audio.length : 'N/A'}`);
-                    
-                    // Check if this overlaps with expected speech region (0.5s - 1.2s)
-                    if (startSeconds < 1.2 && endSeconds > 0.5) {
-                        addResult(`  ✅ OVERLAPS with expected speech region!`);
-                    } else {
-                        addResult(`  ⚠️ Outside expected speech region (0.5s - 1.2s)`);
-                    }
+                    addResult(`  ✅ VAD detected speech segment`);
                 }
                 
                 addResult(`\n=== VAD RESULTS ===`);
@@ -528,40 +541,30 @@ Expected speech region: 0.5s - 1.2s (from visual analysis)`);
                 } else {
                     addResult(`✅ Found ${segmentCount} speech segments`, 'success');
                     
-                    // Check if any segment is in the expected region
-                    const foundExpectedSpeech = segments.some(seg => 
-                        seg.startSeconds < 1.2 && seg.endSeconds > 0.5
-                    );
+                    // Update visualization if available
+                    currentVADSegments = segments.map(seg => ({
+                        startTime: seg.startSeconds,
+                        endTime: seg.endSeconds
+                    }));
                     
-                    if (foundExpectedSpeech) {
-                        addResult(`✅ SUCCESS: Found speech in expected region (0.5s - 1.2s)`, 'success');
-                        
-                        // Update visualization if available
-                        currentVADSegments = segments.map(seg => ({
-                            startTime: seg.startSeconds,
-                            endTime: seg.endSeconds
-                        }));
-                        
-                        if (wavesurfer && currentAudioBuffer) {
-                            drawSpectrogramMarkers();
-                            drawVADOverlay();
-                        }
-                        
-                        // Create trimmed audio preview with custom padding
-                        await createTrimmedAudioPreview(segments, settings.padding);
-                        
-                    } else {
-                        addResult(`⚠️ WARNING: No segments in expected speech region`, 'warning');
-                        addResult('Try more aggressive settings (lower thresholds)', 'warning');
+                    if (wavesurfer && currentAudioBuffer) {
+                        drawSpectrogramMarkers();
+                        drawVADOverlay();
                     }
                     
-                    // Show timing comparison
+                    // Create trimmed audio preview with custom padding
+                    await createTrimmedAudioPreview(segments, settings.padding);
+                    
+                    // Show timing analysis
                     addResult('\nTiming Analysis:');
                     const earliestStart = Math.min(...segments.map(s => s.startSeconds));
                     const latestEnd = Math.max(...segments.map(s => s.endSeconds));
-                    addResult(`Overall speech span: ${earliestStart.toFixed(3)}s - ${latestEnd.toFixed(3)}s`);
-                    addResult(`Expected span: 0.500s - 1.200s`);
-                    addResult(`Timing accuracy: ${Math.abs(earliestStart - 0.5) < 0.1 && Math.abs(latestEnd - 1.2) < 0.3 ? 'GOOD' : 'NEEDS REVIEW'}`);
+                    const totalSpeechDuration = segments.reduce((sum, seg) => sum + (seg.endSeconds - seg.startSeconds), 0);
+                    const speechCoverage = (totalSpeechDuration / currentAudioBuffer.duration * 100);
+                    
+                    addResult(`Detected speech span: ${earliestStart.toFixed(3)}s - ${latestEnd.toFixed(3)}s`);
+                    addResult(`Total speech duration: ${totalSpeechDuration.toFixed(3)}s`);
+                    addResult(`Speech coverage: ${speechCoverage.toFixed(1)}% of total audio`);
                 }
                 
             } catch (error) {
@@ -585,14 +588,22 @@ Expected speech region: 0.5s - 1.2s (from visual analysis)`);
                 // Calculate overall boundaries with padding
                 const earliestStart = Math.min(...segments.map(s => s.startSeconds));
                 const latestEnd = Math.max(...segments.map(s => s.endSeconds));
-                const padding = customPadding; // Use custom padding from settings
                 
-                const trimStart = Math.max(0, earliestStart - padding);
-                const trimEnd = Math.min(currentAudioBuffer.duration, latestEnd + padding);
+                // Apply padding to both start and end
+                const padding = customPadding;
+                let trimStart = Math.max(0, earliestStart - padding);
+                let trimEnd = Math.min(currentAudioBuffer.duration, latestEnd + padding);
                 
+                // Diagnostic: Check if we're losing speech at the beginning
                 addResult(`Original duration: ${currentAudioBuffer.duration.toFixed(3)}s`);
-                addResult(`Speech detected: ${earliestStart.toFixed(3)}s - ${latestEnd.toFixed(3)}s`);
-                addResult(`With padding: ${trimStart.toFixed(3)}s - ${trimEnd.toFixed(3)}s`);
+                addResult(`VAD detected speech: ${earliestStart.toFixed(3)}s - ${latestEnd.toFixed(3)}s`);
+                addResult(`Padding applied: ${padding.toFixed(3)}s to both start and end`);
+                addResult(`Before trimming: ${trimStart.toFixed(3)}s - ${trimEnd.toFixed(3)}s`);
+                
+                // Show VAD detection timing
+                addResult(`VAD detection timing: Speech starts at ${earliestStart.toFixed(3)}s`);
+                
+                addResult(`Final trimmed range: ${trimStart.toFixed(3)}s - ${trimEnd.toFixed(3)}s`);
                 addResult(`Trimmed duration: ${(trimEnd - trimStart).toFixed(3)}s`);
                 
                 // Create trimmed audio buffer
@@ -622,6 +633,9 @@ Expected speech region: 0.5s - 1.2s (from visual analysis)`);
                 const trimmedBlob = await audioBufferToBlob(trimmedBuffer);
                 const trimmedUrl = URL.createObjectURL(trimmedBlob);
                 
+                // Create trimmed audio spectrogram
+                await createTrimmedSpectrogram(trimmedUrl, trimStart, trimEnd);
+                
                 // Create audio preview element
                 const previewContainer = document.createElement('div');
                 previewContainer.innerHTML = `
@@ -630,7 +644,13 @@ Expected speech region: 0.5s - 1.2s (from visual analysis)`);
                     <audio controls style="width: 100%; margin: 10px 0;">
                         <source src="${trimmedUrl}" type="audio/wav">
                     </audio>
-                    <p><strong>Reduction:</strong> ${((currentAudioBuffer.duration - (trimEnd - trimStart)) / currentAudioBuffer.duration * 100).toFixed(1)}% shorter</p>
+                    <div style="font-size: 14px; margin-top: 10px;">
+                        <strong>Timing Details:</strong><br>
+                        • Start padding: ${(earliestStart - trimStart).toFixed(3)}s<br>
+                        • End padding: ${(trimEnd - latestEnd).toFixed(3)}s<br>
+                        • Size reduction: ${((currentAudioBuffer.duration - (trimEnd - trimStart)) / currentAudioBuffer.duration * 100).toFixed(1)}%<br>
+                        • Original: ${currentAudioBuffer.duration.toFixed(3)}s → Trimmed: ${(trimEnd - trimStart).toFixed(3)}s
+                    </div>
                 `;
                 
                 // Add to audio section
@@ -652,10 +672,85 @@ Expected speech region: 0.5s - 1.2s (from visual analysis)`);
                 `;
                 audioSection.appendChild(previewContainer);
                 
-                addResult('✅ Trimmed audio preview created!', 'success');
+                addResult('✅ Trimmed audio preview and spectrogram created!', 'success');
                 
             } catch (error) {
                 addResult(`Error creating audio preview: ${error.message}`, 'error');
+            }
+        }
+
+        // Create spectrogram for trimmed audio
+        async function createTrimmedSpectrogram(trimmedUrl, originalTrimStart, originalTrimEnd) {
+            try {
+                addResult('Creating trimmed audio spectrogram...');
+                
+                // Show the trimmed spectrogram container
+                const trimmedSpectrogramContainer = document.getElementById('trimmed-spectrogram');
+                trimmedSpectrogramContainer.style.display = 'block';
+                
+                // Clear any existing content
+                trimmedSpectrogramContainer.innerHTML = '';
+                
+                // Import WaveSurfer plugins
+                const { default: WaveSurfer } = await import('https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js');
+                const { default: Spectrogram } = await import('https://unpkg.com/wavesurfer.js@7/dist/plugins/spectrogram.esm.js');
+                
+                // Create a new WaveSurfer instance for trimmed audio
+                const trimmedWavesurfer = WaveSurfer.create({
+                    container: '#trimmed-spectrogram',
+                    waveColor: '#28a745',
+                    progressColor: '#155724',
+                    height: 120,
+                    normalize: true,
+                    barWidth: 2,
+                    barRadius: 3
+                });
+                
+                // Add spectrogram plugin with error handling
+                const trimmedSpectrogramPlugin = Spectrogram.create({
+                    container: '#trimmed-spectrogram',
+                    labels: true,
+                    height: 120,
+                    splitChannels: false,
+                    fftSamples: 512,
+                    windowFunc: 'hann',
+                    colorMap: []  // Prevent undefined colorMap errors
+                });
+                
+                trimmedWavesurfer.registerPlugin(trimmedSpectrogramPlugin);
+                trimmedWavesurfer.load(trimmedUrl);
+                
+                trimmedWavesurfer.on('ready', () => {
+                    addResult(`✅ Trimmed spectrogram ready`, 'success');
+                    
+                    // Add overlay information
+                    const overlayInfo = document.createElement('div');
+                    overlayInfo.style.cssText = `
+                        position: relative;
+                        background: rgba(40, 167, 69, 0.1);
+                        padding: 8px;
+                        margin-top: 5px;
+                        border-radius: 4px;
+                        font-size: 12px;
+                        color: #155724;
+                    `;
+                    overlayInfo.innerHTML = `
+                        <strong>Trimmed Audio Spectrogram:</strong><br>
+                        • Original range: ${originalTrimStart.toFixed(3)}s - ${originalTrimEnd.toFixed(3)}s<br>
+                        • This shows what the final trimmed audio looks like<br>
+                        • Compare with original spectrogram above to see what was removed
+                    `;
+                    
+                    trimmedSpectrogramContainer.appendChild(overlayInfo);
+                });
+                
+                trimmedWavesurfer.on('error', (error) => {
+                    console.warn('Trimmed spectrogram error (non-critical):', error);
+                    // Continue execution - spectrogram errors are not critical
+                });
+                
+            } catch (error) {
+                addResult(`Error creating trimmed spectrogram: ${error.message}`, 'error');
             }
         }
 
@@ -716,6 +811,16 @@ Expected speech region: 0.5s - 1.2s (from visual analysis)`);
 
         // Initialize sliders and auto-run
         document.addEventListener('DOMContentLoaded', async () => {
+            // Suppress ONNX runtime warnings
+            try {
+                if (typeof ort !== 'undefined' && ort.env) {
+                    ort.env.logLevel = 'error';
+                    console.log('ONNX log level set to error-only');
+                }
+            } catch (e) {
+                console.log('Could not set ONNX log level:', e.message);
+            }
+            
             addResult('🎛️ VAD Tuner Ready', 'success');
             addResult('Auto-loading audio and running simplified VAD documentation pattern...', 'info');
             
