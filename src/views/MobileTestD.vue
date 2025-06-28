@@ -550,11 +550,11 @@ const clarityScore = ref(91)
 // Computed properties
 const sessionTitle = computed(() => {
   switch (currentMode.value) {
-    case 'setup': return 'EchoLingo'
+    case 'setup': return 'AccentShadow'
     case 'practice': return 'Japanese Basics'
     case 'analysis': return 'Analysis'
     case 'results': return 'Session Complete'
-    default: return 'EchoLingo'
+    default: return 'AccentShadow'
   }
 })
 

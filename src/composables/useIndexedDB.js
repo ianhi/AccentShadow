@@ -1,7 +1,7 @@
 
 import { ref } from 'vue';
 
-const DB_NAME = 'EchoLingoDB';
+const DB_NAME = 'AccentShadowDB';
 const DB_VERSION = 1;
 const RECORDINGS_STORE_NAME = 'recordings';
 

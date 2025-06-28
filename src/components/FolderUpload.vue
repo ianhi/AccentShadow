@@ -6,6 +6,7 @@
     </div>
 
     <div v-if="!uploadedFiles.length" class="upload-area">
+      <!-- Folder Upload -->
       <div 
         class="drop-zone"
         :class="{ 'drag-over': isDragOver }"
@@ -19,8 +20,30 @@
           <div class="drop-text">
             <p><strong>Drop a folder here</strong> or click to browse</p>
             <p class="drop-subtext">All audio files (MP3, WAV, OGG, M4A) will be imported</p>
+            <p class="drop-subtext">Include a CSV file for transcriptions and metadata</p>
           </div>
         </div>
+      </div>
+      
+      <div class="upload-divider">
+        <span>OR</span>
+      </div>
+      
+      <!-- URL Import -->
+      <div class="url-import">
+        <h4>🌐 Import from URL</h4>
+        <div class="url-input-group">
+          <input 
+            type="url" 
+            v-model="importUrl" 
+            placeholder="Enter Google Drive, Dropbox, or direct folder URL"
+            class="url-input"
+          />
+          <button @click="importFromUrl" :disabled="!importUrl.trim() || isLoadingUrl" class="url-import-btn">
+            {{ isLoadingUrl ? '⏳' : '📥' }} Import
+          </button>
+        </div>
+        <p class="url-help">Supports: Public Google Drive folders, Dropbox shared folders, direct file URLs</p>
       </div>
       
       <input 
@@ -48,6 +71,10 @@
           <input type="checkbox" v-model="includeSubfolders" />
           Include files from subfolders
         </label>
+        <div v-if="hasCSVFile" class="csv-info">
+          📄 CSV file detected: {{ csvFiles[0]?.name }}
+          <span v-if="csvData">({{ csvData.rows.length }} entries)</span>
+        </div>
       </div>
 
       <div class="file-preview">
@@ -143,6 +170,14 @@ const selectedLanguage = ref('en');
 const isImporting = ref(false);
 const importProgress = ref({ current: 0, total: 0 });
 
+// Additional state for CSV support
+const csvData = ref(null);
+const hasCSVFile = ref(false);
+
+// URL import state
+const importUrl = ref('');
+const isLoadingUrl = ref(false);
+
 // Computed properties
 const audioFiles = computed(() => {
   return uploadedFiles.value.filter(file => {
@@ -157,6 +192,12 @@ const audioFiles = computed(() => {
     
     return isAudio;
   });
+});
+
+const csvFiles = computed(() => {
+  return uploadedFiles.value.filter(file => 
+    file.type === 'text/csv' || /\.csv$/i.test(file.name)
+  );
 });
 
 const categorizedFiles = computed(() => {
@@ -185,8 +226,26 @@ const categorizedFiles = computed(() => {
   return categories;
 });
 
-// Watch for folder name changes
-watch(uploadedFiles, (files) => {
+// CSV parsing function
+const parseCSV = (text) => {
+  const lines = text.split('\n').filter(line => line.trim());
+  if (lines.length < 2) return null;
+  
+  const headers = lines[0].split(',').map(h => h.trim().replace(/["/]/g, ''));
+  const rows = lines.slice(1).map(line => {
+    const values = line.split(',').map(v => v.trim().replace(/["/]/g, ''));
+    const row = {};
+    headers.forEach((header, index) => {
+      row[header] = values[index] || '';
+    });
+    return row;
+  });
+  
+  return { headers, rows };
+};
+
+// Watch for folder name changes and process CSV files
+watch(uploadedFiles, async (files) => {
   if (files.length > 0 && files[0].webkitRelativePath) {
     const pathParts = files[0].webkitRelativePath.split('/');
     folderName.value = pathParts[0];
@@ -195,6 +254,23 @@ watch(uploadedFiles, (files) => {
     if (!setName.value) {
       setName.value = folderName.value.replace(/[-_]/g, ' ');
     }
+  }
+  
+  // Process CSV files if found
+  const csvFile = csvFiles.value[0];
+  if (csvFile) {
+    hasCSVFile.value = true;
+    try {
+      const text = await csvFile.text();
+      csvData.value = parseCSV(text);
+      console.log('📄 CSV data loaded:', csvData.value);
+    } catch (error) {
+      console.error('❌ Error parsing CSV:', error);
+      csvData.value = null;
+    }
+  } else {
+    hasCSVFile.value = false;
+    csvData.value = null;
   }
 });
 
@@ -258,6 +334,38 @@ const closeModal = () => {
   emit('close');
 };
 
+// URL import functionality
+const importFromUrl = async () => {
+  if (!importUrl.value.trim()) return;
+  
+  isLoadingUrl.value = true;
+  try {
+    // Convert Google Drive share URLs to direct access format
+    let processedUrl = importUrl.value;
+    
+    // Handle Google Drive folder URLs
+    const driveMatch = processedUrl.match(/drive\.google\.com\/drive\/folders\/([a-zA-Z0-9-_]+)/);
+    if (driveMatch) {
+      // Note: This would require API integration for full functionality
+      // For now, show a helpful message
+      alert('🚧 Google Drive integration requires additional setup. Please download the folder and upload manually for now.');
+      isLoadingUrl.value = false;
+      return;
+    }
+    
+    // For direct URLs, try to fetch the content
+    // This is a basic implementation - real implementation would need CORS proxy
+    console.log('🌐 Attempting to import from URL:', processedUrl);
+    alert('🚧 URL import is not yet implemented. Please download files manually and upload.');
+    
+  } catch (error) {
+    console.error('❌ URL import failed:', error);
+    alert('❌ Failed to import from URL. Please check the URL and try again.');
+  } finally {
+    isLoadingUrl.value = false;
+  }
+};
+
 const importRecordings = async () => {
   if (!setName.value.trim() || !audioFiles.value.length) return;
   
@@ -285,15 +393,32 @@ const importRecordings = async () => {
       // Extract name
       const name = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
       
+      // Check for CSV data match
+      let csvMatch = null;
+      if (csvData.value) {
+        // Try to match by filename, name, or path
+        csvMatch = csvData.value.rows.find(row => {
+          const rowFilename = row.filename || row.file || row.name || '';
+          return rowFilename.toLowerCase().includes(file.name.toLowerCase().replace(/\.[^/.]+$/, '')) ||
+                 file.name.toLowerCase().includes(rowFilename.toLowerCase());
+        });
+      }
+      
       recordings.push({
-        name,
+        name: csvMatch?.transcription || csvMatch?.text || csvMatch?.sentence || name,
+        translation: csvMatch?.translation || csvMatch?.meaning || '',
         audioUrl: URL.createObjectURL(file),
         audioBlob: file,
         metadata: {
-          category,
+          category: csvMatch?.category || category,
           fileName: file.name,
           fileSize: file.size,
-          filePath: file.webkitRelativePath || file.name
+          filePath: file.webkitRelativePath || file.name,
+          speaker: csvMatch?.speaker || csvMatch?.voice || '',
+          difficulty: csvMatch?.difficulty || csvMatch?.level || '',
+          notes: csvMatch?.notes || csvMatch?.comment || '',
+          // Include any additional CSV fields
+          ...csvMatch
         }
       });
       
@@ -631,6 +756,106 @@ const importRecordings = async () => {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* URL Import Styles */
+.upload-divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0;
+  text-align: center;
+}
+
+.upload-divider::before,
+.upload-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #d1d5db;
+}
+
+.upload-divider span {
+  padding: 0 16px;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.url-import {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.url-import h4 {
+  margin: 0 0 12px 0;
+  color: #374151;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.url-input-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.url-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.url-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.url-import-btn {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.url-import-btn:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.url-import-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.url-help {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* CSV Info Styles */
+.csv-info {
+  background: #f0f9ff;
+  border: 1px solid #0ea5e9;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: #0369a1;
 }
 
 @media (max-width: 768px) {

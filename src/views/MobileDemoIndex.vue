@@ -1,7 +1,7 @@
 <template>
   <div class="mobile-demo-index">
     <header class="demo-header">
-      <h1>📱 EchoLingo Mobile UI Concepts</h1>
+      <h1>📱 AccentShadow Mobile UI Concepts</h1>
       <p>Explore different approaches to mobile pronunciation practice</p>
     </header>
 

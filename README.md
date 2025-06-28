@@ -1,6 +1,6 @@
-# echolingo
+# AccentShadow
 
-This template should help get you started developing with Vue 3 in Vite.
+AccentShadow is a pronunciation practice app that helps language learners improve their accent by comparing their recordings with native speaker audio.
 
 ## Recommended IDE Setup
 
