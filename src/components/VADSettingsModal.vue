@@ -151,15 +151,15 @@ const applyPreset = (presetName) => {
     },
     lenient: {
       padding: 0.1,
-      threshold: 0.3,
+      threshold: 0.4,  // Better balance for detecting silence
       minSpeechDuration: 30,
       maxSilenceDuration: 500,
       maxTrimStart: 3.0,
       maxTrimEnd: 2.0
     },
     'very-sensitive': {
-      padding: 0.15,
-      threshold: 0.2,
+      padding: 0.1,
+      threshold: 0.3,  // More sensitive for better trimming
       minSpeechDuration: 20,
       maxSilenceDuration: 800,
       maxTrimStart: 3.0,

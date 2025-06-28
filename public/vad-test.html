@@ -76,11 +76,11 @@
     <div class="test-section">
         <h2>🔧 VAD Configuration Test</h2>
         <div class="test-result" id="config-test">
-            Working Configuration (commit 3f94da2):
-            - positiveSpeechThreshold: 0.5
-            - negativeSpeechThreshold: 0.35 
+            Balanced Configuration (improved from 3f94da2):
+            - positiveSpeechThreshold: 0.4 (more sensitive)
+            - negativeSpeechThreshold: 0.25 (better continuation)
             - redemptionFrames: 24
-            - minSpeechFrames: 8
+            - minSpeechFrames: 6 (reduced for better detection)
             - padding: 100ms
         </div>
     </div>
@@ -93,11 +93,11 @@
         let vadReady = false;
 
         const VAD_CONFIG = {
-            positiveSpeechThreshold: 0.5,
-            negativeSpeechThreshold: 0.35,
+            positiveSpeechThreshold: 0.4,  // More balanced for better silence detection
+            negativeSpeechThreshold: 0.25, // Lower threshold for better speech continuation
             redemptionFrames: 24,
             frameSamples: 1536,
-            minSpeechFrames: 8,
+            minSpeechFrames: 6,             // Reduced for better detection
             preSpeechPadFrames: 4,
             positiveSpeechPadFrames: 4
         };

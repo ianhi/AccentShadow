@@ -70,12 +70,12 @@ export function useVADProcessor() {
       console.log('📦 Creating VAD instance...');
       
       vadInstance = await (window as any).vad.NonRealTimeVAD.new({
-        // Use conservative settings from working configuration (commit 3f94da2)
-        positiveSpeechThreshold: 0.5,   // More conservative - less sensitive to noise
-        negativeSpeechThreshold: 0.35,  // Higher threshold for better hysteresis
-        redemptionFrames: 24,            // Smaller gaps for more accurate detection (~768ms)
+        // Balanced settings - sensitive enough to detect silence but not over-trim
+        positiveSpeechThreshold: 0.4,   // Moderately sensitive for better silence detection
+        negativeSpeechThreshold: 0.25,  // Lower threshold for better speech continuation
+        redemptionFrames: 24,            // Balanced gap allowance (~768ms)
         frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: 8,              // Minimum 8 frames (~256ms) for valid speech
+        minSpeechFrames: 6,              // Reduced minimum frames for better detection
         preSpeechPadFrames: 4,           // Reasonable context before speech starts
         positiveSpeechPadFrames: 4       // Reasonable context after speech ends
       });
@@ -205,13 +205,13 @@ export function useVADProcessor() {
       // Create a VAD instance with the provided runtime options
       console.log('🎛️ Creating VAD instance with runtime options');
       
-      // Use conservative settings from working configuration (commit 3f94da2)
+      // Balanced settings - allow for more sensitive detection when requested
       const vadConfig = {
-        positiveSpeechThreshold: Math.max(positiveSpeechThreshold, 0.5), // Use at least 0.5
-        negativeSpeechThreshold: Math.max(negativeSpeechThreshold, 0.35), // Use at least 0.35
-        redemptionFrames: 24,            // Balanced gap allowance from working config
+        positiveSpeechThreshold: Math.max(positiveSpeechThreshold, 0.3), // Allow more sensitive detection
+        negativeSpeechThreshold: Math.max(negativeSpeechThreshold, 0.2), // Allow lower continuation threshold
+        redemptionFrames: 24,            // Balanced gap allowance
         frameSamples: 1536,              // Default frame size for v4 model
-        minSpeechFrames: Math.max(minSpeechFrames, 8), // Use at least 8 frames
+        minSpeechFrames: Math.max(minSpeechFrames, 4), // Allow shorter speech segments
         preSpeechPadFrames: 4,           // Conservative context before speech
         positiveSpeechPadFrames: 4       // Conservative context after speech
       };

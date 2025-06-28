@@ -73,17 +73,17 @@ async function testAudioFiles() {
 
   // Test VAD configuration values
   const expectedConfig = {
-    positiveSpeechThreshold: 0.5,
-    negativeSpeechThreshold: 0.35,
+    positiveSpeechThreshold: 0.4,  // More balanced for better silence detection
+    negativeSpeechThreshold: 0.25, // Lower threshold for better speech continuation
     redemptionFrames: 24,
-    minSpeechFrames: 8,
+    minSpeechFrames: 6,             // Reduced for better detection
     padding: 0.1
   };
 
   addResult(
     'VAD Configuration',
     'PASS',
-    'Using working configuration from commit 3f94da2',
+    'Using balanced configuration (improved from 3f94da2)',
     expectedConfig
   );
 

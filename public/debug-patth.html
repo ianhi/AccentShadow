@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug patth.wav VAD Processing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .debug-result {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+        .audio-viz {
+            width: 100%;
+            height: 60px;
+            background: #e9ecef;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 3px;
+        }
+        button:hover { background: #0056b3; }
+        .waveform-container {
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            min-height: 100px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.19/dist/bundle.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+</head>
+<body>
+    <h1>🔍 Debug patth.wav VAD Processing</h1>
+    
+    <div class="debug-section">
+        <h2>📊 Audio Analysis</h2>
+        <button onclick="loadAndAnalyze()">Load & Analyze patth.wav</button>
+        <button onclick="testDifferentThresholds()">Test Different VAD Thresholds</button>
+        
+        <div id="waveform" class="waveform-container"></div>
+        <audio id="audio-player" controls style="width: 100%; margin: 10px 0;"></audio>
+        
+        <div id="audio-info" class="debug-result">Click "Load & Analyze" to start...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>🎛️ VAD Threshold Testing</h2>
+        <div id="threshold-results"></div>
+    </div>
+
+    <div class="debug-section">
+        <h2>📈 Amplitude Analysis</h2>
+        <canvas id="amplitude-chart" width="800" height="200" style="border: 1px solid #ccc;"></canvas>
+        <div id="amplitude-info" class="debug-result"></div>
+    </div>
+
+    <script>
+        let audioBuffer = null;
+        let vadInstance = null;
+        let wavesurfer = null;
+
+        async function initVAD() {
+            if (vadInstance) return vadInstance;
+            
+            try {
+                console.log('Initializing VAD...');
+                
+                // Wait for VAD library
+                let retries = 0;
+                while (!window.vad && retries < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    retries++;
+                }
+                
+                if (!window.vad) {
+                    throw new Error('VAD library not loaded');
+                }
+                
+                // Create with balanced settings for better trimming
+                vadInstance = await window.vad.NonRealTimeVAD.new({
+                    positiveSpeechThreshold: 0.4,
+                    negativeSpeechThreshold: 0.25,
+                    redemptionFrames: 24,
+                    frameSamples: 1536,
+                    minSpeechFrames: 6,
+                    preSpeechPadFrames: 4,
+                    positiveSpeechPadFrames: 4
+                });
+                
+                console.log('VAD initialized successfully');
+                return vadInstance;
+            } catch (error) {
+                console.error('VAD initialization failed:', error);
+                return null;
+            }
+        }
+
+        async function loadAndAnalyze() {
+            try {
+                updateInfo('Loading patth.wav...');
+                
+                // Load audio file
+                const response = await fetch('/patth.wav');
+                if (!response.ok) {
+                    throw new Error(`Failed to load patth.wav: ${response.status}`);
+                }
+                
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Set up audio player
+                const audioPlayer = document.getElementById('audio-player');
+                audioPlayer.src = audioUrl;
+                
+                // Initialize WaveSurfer for visualization
+                if (wavesurfer) {
+                    wavesurfer.destroy();
+                }
+                
+                wavesurfer = WaveSurfer.create({
+                    container: '#waveform',
+                    waveColor: '#4F4A85',
+                    progressColor: '#383351',
+                    height: 80,
+                    normalize: true
+                });
+                
+                wavesurfer.load(audioUrl);
+                
+                // Decode audio for analysis
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await audioBlob.arrayBuffer();
+                audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                updateInfo(`Loaded patth.wav:
+Duration: ${audioBuffer.duration.toFixed(3)}s
+Sample Rate: ${audioBuffer.sampleRate}Hz
+Channels: ${audioBuffer.numberOfChannels}
+Samples: ${audioBuffer.length}
+File Size: ${audioBlob.size} bytes`);
+
+                // Analyze amplitude levels
+                analyzeAmplitude();
+                
+                // Test current VAD settings
+                await testCurrentVAD(audioBlob);
+                
+            } catch (error) {
+                updateInfo(`Error: ${error.message}`);
+            }
+        }
+
+        function analyzeAmplitude() {
+            if (!audioBuffer) return;
+            
+            const channelData = audioBuffer.getChannelData(0);
+            const sampleRate = audioBuffer.sampleRate;
+            const windowSize = Math.floor(sampleRate * 0.01); // 10ms windows
+            
+            const amplitudes = [];
+            const times = [];
+            
+            for (let i = 0; i < channelData.length; i += windowSize) {
+                const windowEnd = Math.min(i + windowSize, channelData.length);
+                let sum = 0;
+                
+                for (let j = i; j < windowEnd; j++) {
+                    sum += Math.abs(channelData[j]);
+                }
+                
+                const avgAmplitude = sum / (windowEnd - i);
+                amplitudes.push(avgAmplitude);
+                times.push(i / sampleRate);
+            }
+            
+            // Draw amplitude chart
+            drawAmplitudeChart(times, amplitudes);
+            
+            // Find silence periods
+            const silenceThreshold = 0.001; // Very low threshold
+            const silencePeriods = [];
+            let silenceStart = null;
+            
+            for (let i = 0; i < amplitudes.length; i++) {
+                if (amplitudes[i] < silenceThreshold) {
+                    if (silenceStart === null) {
+                        silenceStart = times[i];
+                    }
+                } else {
+                    if (silenceStart !== null) {
+                        silencePeriods.push({
+                            start: silenceStart,
+                            end: times[i],
+                            duration: times[i] - silenceStart
+                        });
+                        silenceStart = null;
+                    }
+                }
+            }
+            
+            // Handle silence at the end
+            if (silenceStart !== null) {
+                silencePeriods.push({
+                    start: silenceStart,
+                    end: audioBuffer.duration,
+                    duration: audioBuffer.duration - silenceStart
+                });
+            }
+            
+            updateAmplitudeInfo(`Amplitude Analysis:
+Max amplitude: ${Math.max(...amplitudes).toFixed(6)}
+Avg amplitude: ${(amplitudes.reduce((a, b) => a + b) / amplitudes.length).toFixed(6)}
+Min amplitude: ${Math.min(...amplitudes).toFixed(6)}
+
+Silence periods (< ${silenceThreshold}):
+${silencePeriods.map(p => `  ${p.start.toFixed(3)}s - ${p.end.toFixed(3)}s (${(p.duration * 1000).toFixed(0)}ms)`).join('\n')}
+
+Silence at start: ${silencePeriods.find(p => p.start < 0.1) ? 'YES' : 'NO'}
+Silence at end: ${silencePeriods.find(p => p.end > audioBuffer.duration - 0.1) ? 'YES' : 'NO'}
+
+Expected trimming opportunity: ${silencePeriods.filter(p => p.duration > 0.05).length > 0 ? 'YES' : 'NO'}`);
+        }
+
+        function drawAmplitudeChart(times, amplitudes) {
+            const canvas = document.getElementById('amplitude-chart');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const maxAmplitude = Math.max(...amplitudes);
+            const padding = 20;
+            const chartWidth = canvas.width - 2 * padding;
+            const chartHeight = canvas.height - 2 * padding;
+            
+            // Draw axes
+            ctx.strokeStyle = '#ccc';
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, padding + chartHeight);
+            ctx.lineTo(padding + chartWidth, padding + chartHeight);
+            ctx.stroke();
+            
+            // Draw amplitude line
+            ctx.strokeStyle = '#007bff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            
+            for (let i = 0; i < amplitudes.length; i++) {
+                const x = padding + (i / amplitudes.length) * chartWidth;
+                const y = padding + chartHeight - (amplitudes[i] / maxAmplitude) * chartHeight;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            
+            ctx.stroke();
+            
+            // Draw silence threshold line
+            ctx.strokeStyle = '#dc3545';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            const thresholdY = padding + chartHeight - (0.001 / maxAmplitude) * chartHeight;
+            ctx.moveTo(padding, thresholdY);
+            ctx.lineTo(padding + chartWidth, thresholdY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Add labels
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.fillText('0s', padding - 5, padding + chartHeight + 15);
+            ctx.fillText(`${audioBuffer.duration.toFixed(1)}s`, padding + chartWidth - 10, padding + chartHeight + 15);
+            ctx.fillText('Amplitude', padding - 15, padding - 5);
+            ctx.fillText('Silence threshold', padding + chartWidth - 100, thresholdY - 5);
+        }
+
+        async function testCurrentVAD(audioBlob) {
+            const vad = await initVAD();
+            if (!vad) {
+                updateThresholdResults('VAD not available for testing');
+                return;
+            }
+            
+            try {
+                updateThresholdResults('Testing current VAD settings...');
+                
+                const result = await runVADTest(audioBlob, {
+                    positiveSpeechThreshold: 0.4,
+                    negativeSpeechThreshold: 0.25,
+                    minSpeechFrames: 6
+                });
+                
+                updateThresholdResults(`Current VAD Settings (from working config):
+${JSON.stringify(result, null, 2)}`);
+                
+            } catch (error) {
+                updateThresholdResults(`Error testing VAD: ${error.message}`);
+            }
+        }
+
+        async function testDifferentThresholds() {
+            const vad = await initVAD();
+            if (!vad) {
+                updateThresholdResults('VAD not available for testing');
+                return;
+            }
+            
+            const response = await fetch('/patth.wav');
+            const audioBlob = await response.blob();
+            
+            updateThresholdResults('Testing different VAD thresholds...\n');
+            
+            const testConfigs = [
+                // New balanced config (current)
+                { name: 'Current (Balanced)', positiveSpeechThreshold: 0.4, negativeSpeechThreshold: 0.25, minSpeechFrames: 6 },
+                
+                // Previous working config
+                { name: 'Previous (Conservative)', positiveSpeechThreshold: 0.5, negativeSpeechThreshold: 0.35, minSpeechFrames: 8 },
+                
+                // More sensitive for better trimming
+                { name: 'More Sensitive', positiveSpeechThreshold: 0.3, negativeSpeechThreshold: 0.2, minSpeechFrames: 4 },
+                
+                // Very sensitive for maximum trimming
+                { name: 'Very Sensitive', positiveSpeechThreshold: 0.2, negativeSpeechThreshold: 0.1, minSpeechFrames: 2 }
+            ];
+            
+            for (const config of testConfigs) {
+                try {
+                    const result = await runVADTest(audioBlob, config);
+                    appendThresholdResults(`\n--- ${config.name} ---
+Config: ${JSON.stringify(config, null, 2)}
+Result: ${JSON.stringify(result, null, 2)}`);
+                } catch (error) {
+                    appendThresholdResults(`\n--- ${config.name} FAILED ---
+Error: ${error.message}`);
+                }
+            }
+        }
+
+        async function runVADTest(audioBlob, config) {
+            // Create VAD instance with test config
+            const testVAD = await window.vad.NonRealTimeVAD.new({
+                positiveSpeechThreshold: config.positiveSpeechThreshold,
+                negativeSpeechThreshold: config.negativeSpeechThreshold,
+                redemptionFrames: 24,
+                frameSamples: 1536,
+                minSpeechFrames: config.minSpeechFrames,
+                preSpeechPadFrames: 4,
+                positiveSpeechPadFrames: 4
+            });
+            
+            // Resample to 16kHz for VAD
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            
+            let resampledBuffer = audioBuffer;
+            if (audioBuffer.sampleRate !== 16000) {
+                const offlineContext = new OfflineAudioContext(1, Math.ceil(audioBuffer.duration * 16000), 16000);
+                const bufferSource = offlineContext.createBufferSource();
+                bufferSource.buffer = audioBuffer;
+                bufferSource.connect(offlineContext.destination);
+                bufferSource.start();
+                resampledBuffer = await offlineContext.startRendering();
+            }
+            
+            // Run VAD
+            const audioData = resampledBuffer.getChannelData(0);
+            const speechSegments = [];
+            
+            for await (const { audio, start, end } of testVAD.run(audioData, resampledBuffer.sampleRate)) {
+                speechSegments.push({
+                    startTime: start / resampledBuffer.sampleRate,
+                    endTime: end / resampledBuffer.sampleRate,
+                    duration: (end - start) / resampledBuffer.sampleRate
+                });
+            }
+            
+            // Calculate boundaries
+            let overallStart = 0;
+            let overallEnd = audioBuffer.duration;
+            let trimmedDuration = audioBuffer.duration;
+            
+            if (speechSegments.length > 0) {
+                overallStart = Math.min(...speechSegments.map(s => s.startTime));
+                overallEnd = Math.max(...speechSegments.map(s => s.endTime));
+                
+                // Apply padding
+                const padding = 0.1;
+                overallStart = Math.max(0, overallStart - padding);
+                overallEnd = Math.min(audioBuffer.duration, overallEnd + padding);
+                
+                trimmedDuration = overallEnd - overallStart;
+            }
+            
+            const reductionPercent = ((audioBuffer.duration - trimmedDuration) / audioBuffer.duration) * 100;
+            
+            return {
+                segments: speechSegments.length,
+                originalDuration: audioBuffer.duration,
+                trimmedDuration: trimmedDuration,
+                startTrim: overallStart,
+                endTrim: audioBuffer.duration - overallEnd,
+                reductionPercent: reductionPercent.toFixed(1) + '%',
+                speechSegments: speechSegments.map(s => ({
+                    start: s.startTime.toFixed(3) + 's',
+                    end: s.endTime.toFixed(3) + 's',
+                    duration: (s.duration * 1000).toFixed(0) + 'ms'
+                }))
+            };
+        }
+
+        function updateInfo(text) {
+            document.getElementById('audio-info').textContent = text;
+        }
+        
+        function updateAmplitudeInfo(text) {
+            document.getElementById('amplitude-info').textContent = text;
+        }
+        
+        function updateThresholdResults(text) {
+            document.getElementById('threshold-results').textContent = text;
+        }
+        
+        function appendThresholdResults(text) {
+            const element = document.getElementById('threshold-results');
+            element.textContent += text;
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            updateInfo('Ready to analyze patth.wav');
+        });
+    </script>
+</body>
+</html>

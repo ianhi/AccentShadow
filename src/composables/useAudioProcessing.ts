@@ -36,7 +36,8 @@ export function useAudioProcessing() {
   const processAudio = async (audioBlob: Blob, options: ProcessingOptions = {}): Promise<ProcessingResult> => {
     const {
       trimSilence = true,
-      padding = 0.15, // 150ms padding
+      padding = 0.1, // 100ms padding (more aggressive trimming)
+      threshold = 0.4, // Balanced threshold for better silence detection
       maxTrimStart = 3.0,
       maxTrimEnd = 2.0,
       returnSilenceInfo = true
@@ -45,8 +46,13 @@ export function useAudioProcessing() {
     try {
       isProcessing.value = true;
       
-      // Get speech boundaries using VAD
-      const boundaries = await detectSpeechBoundariesVAD(audioBlob, options);
+      // Get speech boundaries using VAD with enhanced options
+      const vadOptions = {
+        ...options,
+        threshold,
+        padding
+      };
+      const boundaries = await detectSpeechBoundariesVAD(audioBlob, vadOptions);
       
       let processedBlob = audioBlob;
       let silenceInfo = {
