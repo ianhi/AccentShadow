@@ -19,15 +19,12 @@
 </template>
 
 <script setup>
+import { useAppStateInject } from '../composables/useAppState'
+
+// Get shared state from app state
+const { hasTargetAudio, hasUserAudio } = useAppStateInject()
+
 defineProps({
-  hasTargetAudio: {
-    type: Boolean,
-    default: false
-  },
-  hasUserAudio: {
-    type: Boolean,
-    default: false
-  },
   currentRecording: {
     type: Object,
     default: null

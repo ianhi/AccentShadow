@@ -27,7 +27,7 @@
     
     <!-- Speed Control Section -->
     <SpeedControl 
-      :speed="speed"
+      :speed="globalPlaybackSpeed"
       :enabled="hasTargetAudio || hasUserAudio"
       @speed-change="$emit('speed-change', $event)"
     />
@@ -38,22 +38,12 @@
 import AudioRecorder from './AudioRecorder.vue'
 import PlaybackControls from './PlaybackControls.vue'
 import SpeedControl from './SpeedControl.vue'
+import { useAppStateInject } from '../composables/useAppState'
 
-defineProps({
-  hasTargetAudio: {
-    type: Boolean,
-    default: false
-  },
-  hasUserAudio: {
-    type: Boolean,
-    default: false
-  },
-  speed: {
-    type: Number,
-    default: 1
-  }
-})
+// Use app state directly instead of props for shared state
+const { hasTargetAudio, hasUserAudio, globalPlaybackSpeed } = useAppStateInject()
 
+// Only emit events that still need to go to parent
 defineEmits([
   'recorded',
   'recording-started',

@@ -8,12 +8,12 @@
       
       <!-- Audio Visualization Panel -->
       <AudioVisualizationPanel
-        ref="audioVisualizationPanel"
+        :ref="setAudioVisualizationPanel"
         :currentRecording="currentRecording"
         :isRecording="isRecordingActive"
         :vadSettings="vadSettings"
         @browse-file="triggerFileInput"
-        @load-url="showUrlModal"
+        @load-url="showUrlModalHandler"
         @show-vad-settings="showVADSettings"
         @target-audio-ref="handleTargetAudioPlayerRef"
         @user-audio-ref="handleUserAudioPlayerRef"
@@ -23,18 +23,15 @@
 
       <!-- Central Playback Controls -->
       <CentralPlaybackControls
-        :hasTargetAudio="!!getTargetBlob()"
-        :hasUserAudio="!!getUserBlob()"
-        :speed="globalPlaybackSpeed"
         @recorded="handleRecordedAudio"
         @recording-started="handleRecordingStarted"
         @recording-stopped="handleRecordingStopped"
         @play-target="playTarget"
         @play-user="playUser"
         @play-overlapping="playOverlapping"
-        @play-sequential="playSequential"
+        @play-sequential="playSequentialWithDelay"
         @stop-all="stopAll"
-        @speed-change="updatePlaybackSpeed"
+        @speed-change="handleSpeedChange"
       />
 
       <!-- Audio Processing Controls -->
@@ -42,8 +39,6 @@
         :autoPlayBoth="audioVisualizationPanel?.autoPlayBoth || false"
         :autoAlignEnabled="audioVisualizationPanel?.autoAlignEnabled || false"
         :vadReady="audioVisualizationPanel?.vadReady || false"
-        :hasTargetAudio="!!getTargetBlob()"
-        :hasUserAudio="!!getUserBlob()"
         :isProcessing="audioVisualizationPanel?.isProcessing || false"
         :sequentialDelay="audioVisualizationPanel?.sequentialDelay || 0"
         @toggle-auto-play="toggleAutoPlay"
@@ -55,8 +50,6 @@
 
       <!-- Recording Actions -->
       <RecordingActions
-        :hasTargetAudio="!!getTargetBlob()"
-        :hasUserAudio="!!getUserBlob()"
         :currentRecording="currentRecording"
         @save-recording="handleSaveRecording"
         @mark-completed="handleMarkCompleted"
@@ -71,27 +64,63 @@
       <!-- Recording Sets Manager -->
       <RecordingSetsManager />
     </div>
-    
-    <!-- File Upload Manager -->
-    <FileUploadManager
-      ref="fileUploadManager"
-      @file-selected="handleFileSelected"
-    />
-    
-    <!-- Audio Loading Manager -->
-    <AudioLoadingManager
-      ref="audioLoadingManager"
-      @audio-loaded="handleAudioLoaded"
-      @loading-error="handleLoadingError"
-    />
-    
-    <!-- Modal Manager -->
-    <ModalManager
-      ref="modalManager"
-      :vadSettings="vadSettings"
-      @url-load-requested="handleUrlLoadRequested"
-      @vad-settings-saved="handleVADSettingsSave"
-    />
+
+    <!-- URL Input Modal -->
+    <div v-if="showUrlModal" class="modal-overlay" @click="closeUrlModal">
+      <div class="modal-content" @click.stop>
+        <h3>🌐 Load Audio from URL</h3>
+        <input 
+          v-model="urlToLoad"
+          type="url" 
+          placeholder="Enter audio URL..."
+          class="url-input"
+          @keyup.enter="handleUrlSubmit"
+        />
+        <div class="modal-actions">
+          <button @click="handleUrlSubmit" class="load-btn" :disabled="!urlToLoad.trim()">
+            Load Audio
+          </button>
+          <button @click="closeUrlModal" class="cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VAD Settings Modal -->
+    <div v-if="showVadModal" class="modal-overlay" @click="closeVadModal">
+      <div class="modal-content" @click.stop>
+        <h3>🎛️ VAD Settings</h3>
+        <div class="vad-settings">
+          <div class="setting-group">
+            <label>Padding (seconds): {{ vadSettings.padding }}</label>
+            <input 
+              type="range" 
+              min="0" 
+              max="1" 
+              step="0.1"
+              :value="vadSettings.padding"
+              @input="vadSettings.padding = parseFloat($event.target.value)"
+            />
+          </div>
+          <div class="setting-group">
+            <label>Threshold: {{ vadSettings.threshold }}</label>
+            <input 
+              type="range" 
+              min="0.1" 
+              max="1" 
+              step="0.05"
+              :value="vadSettings.threshold"
+              @input="vadSettings.threshold = parseFloat($event.target.value)"
+            />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button @click="handleVADSettingsSave(vadSettings)" class="save-btn">
+            Save Settings
+          </button>
+          <button @click="closeVadModal" class="cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
     
     <!-- Recording Manager -->
     <RecordingManager
@@ -110,16 +139,6 @@
       @recording-stopped="handleRecordingStopped"
       @recording-completed="handleRecordedAudio"
       @state-changed="handleRecordingStateChanged"
-    />
-    
-    <!-- Playback Controller -->
-    <PlaybackController
-      ref="playbackController"
-      :targetAudioPlayerRef="targetAudioPlayerRef"
-      :userAudioPlayerRef="userAudioPlayerRef"
-      :sequentialDelay="audioVisualizationPanel?.sequentialDelay || 0"
-      :globalPlaybackSpeed="globalPlaybackSpeed"
-      @playback-speed-updated="handlePlaybackSpeedUpdated"
     />
     
     <!-- Audio Processing Handler -->
@@ -145,146 +164,152 @@ import CentralPlaybackControls from '../components/CentralPlaybackControls.vue';
 import AudioProcessingControls from '../components/AudioProcessingControls.vue';
 import RecordingActions from '../components/RecordingActions.vue';
 import SavedRecordingsSection from '../components/SavedRecordingsSection.vue';
-import FileUploadManager from '../components/FileUploadManager.vue';
-import AudioLoadingManager from '../components/AudioLoadingManager.vue';
-import ModalManager from '../components/ModalManager.vue';
 import RecordingManager from '../components/RecordingManager.vue';
 import RecordingStateManager from '../components/RecordingStateManager.vue';
-import PlaybackController from '../components/PlaybackController.vue';
 import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
 import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useRecordingSets } from '../composables/useRecordingSets';
+import { useAppState } from '../composables/useAppState';
+import { useAppUtilities } from '../composables/useAppUtilities';
+import { usePlaybackControls } from '../composables/usePlaybackControls';
 
-// Core state and refs
-const globalPlaybackSpeed = ref(1)
-const isRecordingActive = ref(false)
-const vadSettings = ref({
-  padding: 0.2,
-  threshold: 0.25,
-  minSpeechDuration: 50,
-  maxSilenceDuration: 500,
-  maxTrimStart: 3.0,
-  maxTrimEnd: 2.0
-})
-
-// Component refs
-const audioVisualizationPanel = ref(null)
-const fileUploadManager = ref(null)
-const audioLoadingManager = ref(null)
-const modalManager = ref(null)
-const recordingManager = ref(null)
-const recordingStateManager = ref(null)
-const playbackController = ref(null)
-const audioProcessingHandler = ref(null)
-
-// Audio player refs (handled by AudioVisualizationPanel)
-const targetAudioPlayerRef = ref(null)
-const userAudioPlayerRef = ref(null)
+// IMPORTANT: Initialize global app state FIRST to provide it to all child components
+const {
+  globalPlaybackSpeed,
+  isRecordingActive,
+  vadSettings,
+  targetAudioPlayerRef,
+  userAudioPlayerRef,
+  audioVisualizationPanel,
+  hasTargetAudio,
+  hasUserAudio,
+  getTargetBlob,
+  getUserBlob,
+  updateVadSettings,
+  updatePlaybackSpeed,
+  setRecordingActive,
+  setTargetAudioPlayerRef,
+  setUserAudioPlayerRef,
+  setAudioVisualizationPanel
+} = useAppState()
 
 // Core composables
 const { initDB } = useIndexedDB()
 const { currentRecording, updateUserRecording } = useRecordingSets()
 
+// Since we're in the same component that provides the state, pass it directly
+// to avoid provide/inject within the same component (which doesn't work in Vue setup)
+const appStateForComposables = {
+  audioVisualizationPanel,
+  vadSettings,
+  updateVadSettings,
+  targetAudioPlayerRef,
+  userAudioPlayerRef,
+  globalPlaybackSpeed,
+  updatePlaybackSpeed
+}
+
+// Consolidated utilities - pass app state directly since we're in the provider component
+const {
+  showUrlModal,
+  showVadModal,
+  urlToLoad,
+  triggerFileInput,
+  loadAudioFromUrl,
+  openUrlModal,
+  closeUrlModal,
+  handleUrlSubmit,
+  openVadModal,
+  closeVadModal,
+  handleVadSettingsSave: handleVadSettingsSaveUtil,
+  saveRecording: saveRecordingUtil,
+  loadSavedRecording,
+  deleteSavedRecording,
+  cleanup
+} = useAppUtilities(appStateForComposables)
+
+// Consolidated playback controls - pass app state directly
+const {
+  playTarget,
+  playUser,
+  playOverlapping,
+  playSequential,
+  stopAll,
+  updatePlaybackSpeed: updatePlaybackSpeedDirect
+} = usePlaybackControls(appStateForComposables)
+
+// Remaining component refs (will be further consolidated)
+const recordingManager = ref(null)
+const recordingStateManager = ref(null)
+const audioProcessingHandler = ref(null)
+
 onMounted(async () => {
   await initDB()
 })
 
-// Helper functions that delegate to AudioVisualizationPanel
-const getTargetBlob = () => audioVisualizationPanel.value?.getTargetBlob() || null
-const getUserBlob = () => audioVisualizationPanel.value?.getUserBlob() || null
-
 // Audio Visualization Panel event handlers
 const handleTargetAudioPlayerRef = (ref) => {
-  targetAudioPlayerRef.value = ref
+  setTargetAudioPlayerRef(ref)
 }
 
 const handleUserAudioPlayerRef = (ref) => {
-  userAudioPlayerRef.value = ref
+  setUserAudioPlayerRef(ref)
 }
 
 const handleAudioProcessed = (data) => {
   console.log('Audio processed:', data)
 }
 
-// File Upload Manager event handlers
-const triggerFileInput = () => fileUploadManager.value?.triggerFileInput()
-
-const handleFileSelected = async ({ file, source }) => {
-  if (audioVisualizationPanel.value) {
-    await audioVisualizationPanel.value.setTargetAudio(file, source)
-  }
-}
-
-// Audio Loading Manager event handlers
-const handleUrlLoadRequested = (url) => {
-  audioLoadingManager.value?.loadAudioFromUrl(url)
-}
-
-const handleAudioLoaded = async ({ blob, source }) => {
-  if (audioVisualizationPanel.value) {
-    await audioVisualizationPanel.value.setTargetAudio(blob, source)
-  }
-}
-
-const handleLoadingError = ({ message }) => {
-  alert(message)
-}
-
-// Modal Manager event handlers
-const showUrlModal = () => modalManager.value?.showUrlModal()
-const showVADSettings = () => modalManager.value?.showVadModal()
+// Simplified event handlers using utilities
+const showUrlModalHandler = () => openUrlModal()
+const showVADSettings = () => openVadModal()
 
 const handleVADSettingsSave = (newSettings) => {
-  vadSettings.value = { ...newSettings }
+  handleVadSettingsSaveUtil(newSettings)
 }
 
-// Recording Manager event handlers
-const handleSaveRecording = () => {
+// Recording Manager event handlers - simplified using utilities
+const handleSaveRecording = async () => {
   const targetBlob = getTargetBlob()
   const userBlob = getUserBlob()
-  recordingManager.value?.saveRecording(targetBlob, userBlob)
+  
+  try {
+    await saveRecordingUtil(targetBlob, userBlob)
+    alert('Recording saved!')
+  } catch (error) {
+    alert('Failed to save recording: ' + error.message)
+  }
 }
 
 const handleMarkCompleted = () => {
   recordingManager.value?.markCurrentCompleted(currentRecording.value)
 }
 
-const handleLoadRecording = (recording) => {
-  recordingManager.value?.loadSavedRecording(recording)
+const handleLoadRecording = async (recording) => {
+  try {
+    await loadSavedRecording(recording)
+  } catch (error) {
+    console.error('Failed to load recording:', error)
+  }
 }
 
 const handleDeleteRecording = (id) => {
-  recordingManager.value?.deleteSavedRecording(id)
-}
-
-const handleRecordingSaved = () => {
-  alert('Recording saved!')
-}
-
-const handleRecordingDeleted = () => {
-  console.log('Recording deleted successfully')
-}
-
-const handleRecordingLoaded = (recording) => {
-  console.log('Recording loaded:', recording)
-}
-
-const handleRecordingCompleted = (recording) => {
-  console.log('Recording marked as completed:', recording)
-}
-
-const handleOperationError = ({ message }) => {
-  alert(message)
+  try {
+    deleteSavedRecording(id)
+    console.log('Recording deleted successfully')
+  } catch (error) {
+    console.error('Failed to delete recording:', error)
+  }
 }
 
 // Recording State Manager event handlers
 const handleRecordingStarted = () => {
-  isRecordingActive.value = true
+  setRecordingActive(true)
   console.log('Recording started in PracticeView')
 }
 
 const handleRecordingStopped = () => {
-  isRecordingActive.value = false
+  setRecordingActive(false)
   console.log('Recording stopped in PracticeView')
 }
 
@@ -303,20 +328,15 @@ const handleRecordedAudio = async (blob) => {
   }
 }
 
-const handleRecordingStateChanged = ({ isRecording }) => {
-  console.log('Recording state changed:', isRecording)
+
+// Playback event handlers - now direct calls to composable  
+const playSequentialWithDelay = () => {
+  const delay = audioVisualizationPanel.value?.sequentialDelay || 0
+  playSequential(delay)
 }
 
-// Playback Controller event handlers
-const playTarget = () => playbackController.value?.playTarget()
-const playUser = () => playbackController.value?.playUser()
-const playOverlapping = () => playbackController.value?.playOverlapping()
-const playSequential = () => playbackController.value?.playSequential()
-const stopAll = () => playbackController.value?.stopAll()
-const updatePlaybackSpeed = (newSpeed) => playbackController.value?.updatePlaybackSpeed(newSpeed)
-
-const handlePlaybackSpeedUpdated = (newSpeed) => {
-  globalPlaybackSpeed.value = newSpeed
+const handleSpeedChange = (newSpeed) => {
+  updatePlaybackSpeedDirect(newSpeed)
 }
 
 // Audio Processing Handler event handlers
@@ -325,21 +345,19 @@ const toggleAutoAlign = (event) => audioProcessingHandler.value?.toggleAutoAlign
 const manualAlign = () => audioProcessingHandler.value?.manualAlign()
 const updateSequentialDelay = (event) => audioProcessingHandler.value?.updateSequentialDelay(event)
 
-const handleAutoPlayToggled = (value) => {
-  console.log('Auto-play toggled:', value)
-}
+// Recording Manager event handlers that are still needed for components
+const handleRecordingSaved = () => console.log('Recording saved successfully')
+const handleRecordingDeleted = () => console.log('Recording deleted successfully')
+const handleRecordingLoaded = (recording) => console.log('Recording loaded:', recording)
+const handleRecordingCompleted = (recording) => console.log('Recording marked as completed:', recording)
+const handleOperationError = ({ message }) => alert(message)
+const handleRecordingStateChanged = ({ isRecording }) => console.log('Recording state changed:', isRecording)
 
-const handleAutoAlignToggled = (value) => {
-  console.log('Auto-align toggled:', value)
-}
-
-const handleManualAlignTriggered = () => {
-  console.log('Manual alignment triggered')
-}
-
-const handleSequentialDelayUpdated = (value) => {
-  console.log('Sequential delay updated:', value)
-}
+// Audio Processing Handler event handlers - simplified logging
+const handleAutoPlayToggled = (value) => console.log('Auto-play toggled:', value)
+const handleAutoAlignToggled = (value) => console.log('Auto-align toggled:', value)
+const handleManualAlignTriggered = () => console.log('Manual alignment triggered')
+const handleSequentialDelayUpdated = (value) => console.log('Sequential delay updated:', value)
 
 // Watch for recording changes to load target audio
 watch(currentRecording, async (newRecording, oldRecording) => {
@@ -396,10 +414,141 @@ watch(currentRecording, async (newRecording, oldRecording) => {
 
 /* Modal styles moved to UrlInputModal component */
 
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 24px;
+  border-radius: 12px;
+  text-align: center;
+  max-width: 400px;
+  margin: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h3 {
+  margin: 0 0 16px 0;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.url-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  backdrop-filter: blur(10px);
+  margin-bottom: 16px;
+}
+
+.url-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.url-input:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.vad-settings {
+  text-align: left;
+  margin-bottom: 16px;
+}
+
+.setting-group {
+  margin-bottom: 12px;
+}
+
+.setting-group label {
+  display: block;
+  color: white;
+  font-size: 14px;
+  margin-bottom: 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.setting-group input[type="range"] {
+  width: 100%;
+  margin: 4px 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.load-btn, .save-btn {
+  background: rgba(59, 130, 246, 0.9);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s;
+}
+
+.load-btn:hover, .save-btn:hover {
+  background: rgba(37, 99, 235, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.load-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .main-content {
     padding: 16px;
+  }
+  
+  .modal-content {
+    max-width: 90vw;
+    margin: 20px;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
   }
 }
 </style>

@@ -40,6 +40,12 @@
 </template>
 
 <script setup>
+import { useAppStateInject } from '../composables/useAppState'
+
+// Get shared state from app state
+const { hasTargetAudio, hasUserAudio } = useAppStateInject()
+
+// Keep other props that are specific to AudioVisualizationPanel state
 defineProps({
   autoPlayBoth: {
     type: Boolean,
@@ -50,14 +56,6 @@ defineProps({
     default: true
   },
   vadReady: {
-    type: Boolean,
-    default: false
-  },
-  hasTargetAudio: {
-    type: Boolean,
-    default: false
-  },
-  hasUserAudio: {
     type: Boolean,
     default: false
   },
