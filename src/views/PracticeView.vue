@@ -80,21 +80,11 @@
       </div>
       
       <!-- Speed Control Section -->
-      <div class="speed-control-section" v-if="targetAudioUrl || userAudioUrl">
-        <div class="speed-control">
-          <span class="speed-label">⚡ Playback Speed:</span>
-          <input 
-            type="range" 
-            min="0.25" 
-            max="2" 
-            step="0.25" 
-            v-model="globalPlaybackSpeed" 
-            @input="updatePlaybackSpeed"
-            class="speed-slider"
-          />
-          <span class="speed-display">{{ globalPlaybackSpeed }}x</span>
-        </div>
-      </div>
+      <SpeedControl 
+        :speed="globalPlaybackSpeed"
+        :enabled="!!(targetAudioUrl || userAudioUrl)"
+        @speed-change="updatePlaybackSpeed"
+      />
     </div>
 
     <div class="bottom-controls">
@@ -203,6 +193,7 @@ import RecordingSetsManager from '../components/RecordingSetsManager.vue';
 import VADSettingsModal from '../components/VADSettingsModal.vue';
 import PlaybackControls from '../components/PlaybackControls.vue';
 import TargetAudioControls from '../components/TargetAudioControls.vue';
+import SpeedControl from '../components/SpeedControl.vue';
 import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment';
 import { useRecordingSets } from '../composables/useRecordingSets';
@@ -1041,7 +1032,12 @@ const stopAll = () => {
 };
 
 // Update playback speed for both audio players
-const updatePlaybackSpeed = () => {
+const updatePlaybackSpeed = (newSpeed) => {
+  // If called with a parameter (from SpeedControl), update the global value
+  if (newSpeed !== undefined) {
+    globalPlaybackSpeed.value = newSpeed;
+  }
+  
   console.log('⚡ Updating global playback speed to:', globalPlaybackSpeed.value + 'x');
   
   // Update target audio player speed
@@ -1699,11 +1695,7 @@ h1 {
   backdrop-filter: blur(5px);
 }
 
-.speed-control-section {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
+/* Speed control section styles moved to SpeedControl component */
 
 .speed-control {
   display: flex;
