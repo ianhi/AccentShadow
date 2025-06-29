@@ -12,25 +12,12 @@
     </div>
     
     <!-- Microphone Selection -->
-    <div class="microphone-selection" v-if="availableDevices.length > 1 && !isRecording">
-      <div class="mic-dropdown-container">
-        <label class="mic-label">🎙️ Microphone:</label>
-        <select 
-          v-model="selectedDeviceId" 
-          @change="onDeviceChange"
-          class="mic-dropdown"
-          :disabled="isRecording"
-        >
-          <option 
-            v-for="device in availableDevices" 
-            :key="device.deviceId" 
-            :value="device.deviceId"
-          >
-            {{ device.label }}
-          </option>
-        </select>
-      </div>
-    </div>
+    <MicrophoneSelector 
+      :availableDevices="availableDevices"
+      :selectedDeviceId="selectedDeviceId"
+      :disabled="isRecording"
+      @device-change="onDeviceChange"
+    />
   </div>
 </template>
 
@@ -38,6 +25,7 @@
 import { ref, onUnmounted } from 'vue';
 import { useAudioRecorder } from '../composables/useAudioRecorder';
 import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts';
+import MicrophoneSelector from './MicrophoneSelector.vue';
 
 const emit = defineEmits(['recorded', 'recording-started', 'recording-stopped']);
 
@@ -74,9 +62,9 @@ const toggleRecording = async () => {
   }
 };
 
-const onDeviceChange = () => {
-  console.log('🎤 Microphone device changed to:', selectedDeviceId.value);
-  setSelectedDevice(selectedDeviceId.value);
+const onDeviceChange = (newDeviceId) => {
+  console.log('🎤 Microphone device changed to:', newDeviceId);
+  setSelectedDevice(newDeviceId);
 };
 
 onUnmounted(() => {
@@ -188,49 +176,6 @@ const formatTime = (seconds) => {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-.microphone-selection {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.mic-dropdown-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.mic-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  white-space: nowrap;
-}
-
-.mic-dropdown {
-  background-color: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  color: white;
-  padding: 4px 8px;
-  font-size: 12px;
-  min-width: 180px;
-  backdrop-filter: blur(5px);
-  cursor: pointer;
-}
-
-.mic-dropdown:focus {
-  outline: none;
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
-}
-
-.mic-dropdown option {
-  background-color: #374151;
-  color: white;
-  padding: 4px;
-}
+/* Microphone selector styles moved to MicrophoneSelector component */
 
 </style>
