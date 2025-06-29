@@ -9,8 +9,10 @@ interface PlayerInfo {
 
 // Global audio manager state
 const currentlyPlaying = ref<PlayerInfo | null>(null);
+const currentlyPlayingMultiple = ref<PlayerInfo[]>([]);
 const playQueue = ref<PlayerInfo[]>([]);
 const isSequentialPlaybackActive = ref(false);
+const isOverlappingPlaybackActive = ref(false);
 
 export function useAudioManager() {
   // Register an audio player with the manager
@@ -24,6 +26,7 @@ export function useAudioManager() {
 
   // Stop all currently playing audio
   const stopAll = () => {
+    // Stop single player
     if (currentlyPlaying.value) {
       try {
         if (currentlyPlaying.value.wavesurfer && currentlyPlaying.value.wavesurfer.isPlaying()) {
@@ -35,16 +38,34 @@ export function useAudioManager() {
       currentlyPlaying.value = null;
     }
     
-    // Clear any pending sequential playback
+    // Stop multiple players (overlapping mode)
+    if (currentlyPlayingMultiple.value.length > 0) {
+      currentlyPlayingMultiple.value.forEach(player => {
+        try {
+          if (player.wavesurfer && player.wavesurfer.isPlaying()) {
+            player.wavesurfer.pause();
+          }
+        } catch (error) {
+          console.warn('🎼 Error stopping overlapping audio:', error);
+        }
+      });
+      currentlyPlayingMultiple.value = [];
+    }
+    
+    // Clear any pending sequential/overlapping playback
     isSequentialPlaybackActive.value = false;
+    isOverlappingPlaybackActive.value = false;
     playQueue.value = [];
   };
 
   // Start playing a specific audio with exclusive control
   const play = (playerInfo: PlayerInfo, onFinish: (() => void) | null = null): boolean => {
-    // Stop any currently playing audio first
-    if (currentlyPlaying.value && currentlyPlaying.value.id !== playerInfo.id) {
-      stopAll();
+    // If we're in overlapping mode, don't stop other players
+    if (!isOverlappingPlaybackActive.value) {
+      // Stop any currently playing audio first (normal exclusive mode)
+      if (currentlyPlaying.value && currentlyPlaying.value.id !== playerInfo.id) {
+        stopAll();
+      }
     }
 
     if (!playerInfo.wavesurfer) {
@@ -53,12 +74,31 @@ export function useAudioManager() {
     }
 
     try {
-      currentlyPlaying.value = playerInfo;
+      // In overlapping mode, add to the multiple players array
+      if (isOverlappingPlaybackActive.value) {
+        if (!currentlyPlayingMultiple.value.find(p => p.id === playerInfo.id)) {
+          currentlyPlayingMultiple.value.push(playerInfo);
+        }
+      } else {
+        currentlyPlaying.value = playerInfo;
+      }
       
       // Set up finish handler
       const handleFinish = () => {
-        if (currentlyPlaying.value && currentlyPlaying.value.id === playerInfo.id) {
-          currentlyPlaying.value = null;
+        if (isOverlappingPlaybackActive.value) {
+          // Remove from multiple players array
+          const index = currentlyPlayingMultiple.value.findIndex(p => p.id === playerInfo.id);
+          if (index !== -1) {
+            currentlyPlayingMultiple.value.splice(index, 1);
+          }
+          // If this was the last player, exit overlapping mode
+          if (currentlyPlayingMultiple.value.length === 0) {
+            isOverlappingPlaybackActive.value = false;
+          }
+        } else {
+          if (currentlyPlaying.value && currentlyPlaying.value.id === playerInfo.id) {
+            currentlyPlaying.value = null;
+          }
         }
         if (onFinish) {
           onFinish();
@@ -72,8 +112,16 @@ export function useAudioManager() {
       // Remove any existing pause listeners that might interfere
       playerInfo.wavesurfer.un('pause');
       playerInfo.wavesurfer.on('pause', () => {
-        if (currentlyPlaying.value && currentlyPlaying.value.id === playerInfo.id) {
-          currentlyPlaying.value = null;
+        if (isOverlappingPlaybackActive.value) {
+          // Remove from multiple players array
+          const index = currentlyPlayingMultiple.value.findIndex(p => p.id === playerInfo.id);
+          if (index !== -1) {
+            currentlyPlayingMultiple.value.splice(index, 1);
+          }
+        } else {
+          if (currentlyPlaying.value && currentlyPlaying.value.id === playerInfo.id) {
+            currentlyPlaying.value = null;
+          }
         }
       });
 
@@ -81,7 +129,14 @@ export function useAudioManager() {
       return true;
     } catch (error) {
       console.error(`🎼 Error playing ${playerInfo.id}:`, error);
-      currentlyPlaying.value = null;
+      if (isOverlappingPlaybackActive.value) {
+        const index = currentlyPlayingMultiple.value.findIndex(p => p.id === playerInfo.id);
+        if (index !== -1) {
+          currentlyPlayingMultiple.value.splice(index, 1);
+        }
+      } else {
+        currentlyPlaying.value = null;
+      }
       return false;
     }
   };
@@ -132,6 +187,37 @@ export function useAudioManager() {
   const isPlaying = (): boolean => !!currentlyPlaying.value;
   const isSequentialActive = (): boolean => isSequentialPlaybackActive.value;
 
+  // Overlapping playback - play multiple players simultaneously
+  const playOverlapping = async (players: PlayerInfo[]): Promise<void> => {
+    // Stop any current playback first
+    stopAll();
+    
+    // Enter overlapping mode
+    isOverlappingPlaybackActive.value = true;
+    
+    // Start all players simultaneously
+    const playPromises = players.map(player => {
+      if (!player.wavesurfer) {
+        console.error(`🎼 No WaveSurfer instance for ${player.id}`);
+        return Promise.resolve(false);
+      }
+      
+      return new Promise<boolean>((resolve) => {
+        const success = play(player, () => resolve(true));
+        if (!success) {
+          resolve(false);
+        }
+      });
+    });
+    
+    try {
+      await Promise.all(playPromises);
+    } catch (error) {
+      console.error('🎼 Error in overlapping playback:', error);
+      stopAll();
+    }
+  };
+
   // Emergency stop for recordings or other interruptions
   const emergencyStop = (reason: string = 'Emergency stop'): void => {
     stopAll();
@@ -142,13 +228,16 @@ export function useAudioManager() {
     play,
     stopAll,
     playSequential,
+    playOverlapping,
     emergencyStop,
     getCurrentlyPlaying,
     isPlaying,
     isSequentialActive,
     // Reactive state for components to watch
     currentlyPlaying: readonly(currentlyPlaying),
-    isSequentialPlaybackActive: readonly(isSequentialPlaybackActive)
+    currentlyPlayingMultiple: readonly(currentlyPlayingMultiple),
+    isSequentialPlaybackActive: readonly(isSequentialPlaybackActive),
+    isOverlappingPlaybackActive: readonly(isOverlappingPlaybackActive)
   };
 }
 

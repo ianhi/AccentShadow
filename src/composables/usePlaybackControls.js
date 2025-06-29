@@ -35,31 +35,72 @@ export function usePlaybackControls(providedAppState = null) {
     updatePlaybackSpeed 
   } = appState
 
+  // Helper function to get audio player component ref
+  const getAudioPlayer = (playerRef) => {
+    if (!playerRef?.value) {
+      return null
+    }
+    
+    // Check if it's an AudioPlayer component (has play method)
+    if (typeof playerRef.value.play === 'function') {
+      return playerRef.value
+    }
+    
+    // If it's a mock/test audio element (for testing)
+    if (playerRef.value.audioElement || (playerRef.value.play && playerRef.value.pause)) {
+      return playerRef.value.audioElement || playerRef.value
+    }
+    
+    return null
+  }
+
   // Audio manager for handling concurrent playback
   const audioManager = {
     activePlayback: null,
     
-    emergencyStop(reason) {
-      if (this.activePlayback) {
-        console.log(`🛑 Emergency stop: ${reason}`)
-        this.stopAll()
+    emergencyStop(reason, newPlaybackType = null) {
+      // For overlapping and sequential playback, we want both players available
+      // so only stop if we're changing to a single-player mode or stopping entirely
+      if (this.activePlayback && this.activePlayback !== newPlaybackType) {
+        // Don't stop all for overlapping/sequential - let them manage their own timing
+        if (newPlaybackType !== 'overlapping' && newPlaybackType !== 'sequential') {
+          this.stopAll()
+        } else {
+          // For overlapping/sequential, just update the state but let the functions handle stopping
+          this.activePlayback = null
+        }
       }
     },
     
     stopAll() {
-      if (targetAudioPlayerRef.value) {
+      const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
+      const userPlayer = getAudioPlayer(userAudioPlayerRef)
+      
+      if (targetPlayer) {
         try {
-          targetAudioPlayerRef.value.pause()
-          targetAudioPlayerRef.value.currentTime = 0
+          // For AudioPlayer components, use stop method
+          if (typeof targetPlayer.stop === 'function') {
+            targetPlayer.stop()
+          } else {
+            // For raw audio elements (testing)
+            targetPlayer.pause()
+            targetPlayer.currentTime = 0
+          }
         } catch (error) {
           console.error('Error stopping target audio:', error)
         }
       }
       
-      if (userAudioPlayerRef.value) {
+      if (userPlayer) {
         try {
-          userAudioPlayerRef.value.pause()
-          userAudioPlayerRef.value.currentTime = 0
+          // For AudioPlayer components, use stop method
+          if (typeof userPlayer.stop === 'function') {
+            userPlayer.stop()
+          } else {
+            // For raw audio elements (testing)
+            userPlayer.pause()
+            userPlayer.currentTime = 0
+          }
         } catch (error) {
           console.error('Error stopping user audio:', error)
         }
@@ -74,65 +115,128 @@ export function usePlaybackControls(providedAppState = null) {
     updatePlaybackSpeed(newSpeed)
     
     // Apply speed to both audio players
-    if (targetAudioPlayerRef.value) {
-      targetAudioPlayerRef.value.playbackRate = newSpeed
+    const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
+    const userPlayer = getAudioPlayer(userAudioPlayerRef)
+    
+    if (targetPlayer) {
+      // For AudioPlayer components, use setPlaybackRate method
+      if (typeof targetPlayer.setPlaybackRate === 'function') {
+        targetPlayer.setPlaybackRate(newSpeed)
+      } else {
+        // For raw audio elements (testing)
+        targetPlayer.playbackRate = newSpeed
+      }
     }
-    if (userAudioPlayerRef.value) {
-      userAudioPlayerRef.value.playbackRate = newSpeed
+    if (userPlayer) {
+      // For AudioPlayer components, use setPlaybackRate method
+      if (typeof userPlayer.setPlaybackRate === 'function') {
+        userPlayer.setPlaybackRate(newSpeed)
+      } else {
+        // For raw audio elements (testing)
+        userPlayer.playbackRate = newSpeed
+      }
     }
   }
 
   // Individual playback controls
   const playTarget = async () => {
-    audioManager.emergencyStop('Playing target audio')
+    audioManager.emergencyStop('Playing target audio', 'target')
     
-    const player = targetAudioPlayerRef.value
-    if (player) {
+    const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
+    
+    if (targetPlayer) {
       try {
-        player.playbackRate = globalPlaybackSpeed.value
-        await player.play()
+        // Set playback rate first
+        if (typeof targetPlayer.setPlaybackRate === 'function') {
+          targetPlayer.setPlaybackRate(globalPlaybackSpeed.value)
+        } else {
+          targetPlayer.playbackRate = globalPlaybackSpeed.value
+        }
+        
+        await targetPlayer.play()
         audioManager.activePlayback = 'target'
       } catch (error) {
-        console.error('Error playing target audio:', error)
+        console.error('❌ Error playing target audio:', error)
       }
     }
   }
 
   const playUser = async () => {
-    audioManager.emergencyStop('Playing user audio')
+    audioManager.emergencyStop('Playing user audio', 'user')
     
-    const player = userAudioPlayerRef.value
-    if (player) {
+    const userPlayer = getAudioPlayer(userAudioPlayerRef)
+    
+    if (userPlayer) {
       try {
-        player.playbackRate = globalPlaybackSpeed.value
-        await player.play()
+        // Set playback rate first
+        if (typeof userPlayer.setPlaybackRate === 'function') {
+          userPlayer.setPlaybackRate(globalPlaybackSpeed.value)
+        } else {
+          userPlayer.playbackRate = globalPlaybackSpeed.value
+        }
+        
+        await userPlayer.play()
         audioManager.activePlayback = 'user'
       } catch (error) {
-        console.error('Error playing user audio:', error)
+        console.error('❌ Error playing user audio:', error)
       }
     }
   }
 
   const playOverlapping = async () => {
-    audioManager.emergencyStop('Playing overlapping audio')
-    
-    const targetPlayer = targetAudioPlayerRef.value
-    const userPlayer = userAudioPlayerRef.value
+    const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
+    const userPlayer = getAudioPlayer(userAudioPlayerRef)
     
     if (targetPlayer && userPlayer) {
       try {
         // Set playback rate for both
-        targetPlayer.playbackRate = globalPlaybackSpeed.value
-        userPlayer.playbackRate = globalPlaybackSpeed.value
+        if (typeof targetPlayer.setPlaybackRate === 'function') {
+          targetPlayer.setPlaybackRate(globalPlaybackSpeed.value)
+        } else {
+          targetPlayer.playbackRate = globalPlaybackSpeed.value
+        }
         
-        // Play both simultaneously
-        await Promise.all([
-          targetPlayer.play(),
-          userPlayer.play()
-        ])
+        if (typeof userPlayer.setPlaybackRate === 'function') {
+          userPlayer.setPlaybackRate(globalPlaybackSpeed.value)
+        } else {
+          userPlayer.playbackRate = globalPlaybackSpeed.value
+        }
+        
+        // Stop any existing playback in our local manager
+        if (audioManager.activePlayback) {
+          audioManager.stopAll()
+        }
+        
+        // Import the global audioManager for proper overlapping support
+        const { audioManager: globalAudioManager } = await import('./useAudioManager')
+        
+        // Use the global manager's playOverlapping method by getting playerInfo
+        const targetPlayerInfo = targetPlayer.playerInfo?.()
+        const userPlayerInfo = userPlayer.playerInfo?.()
+        
+        if (targetPlayerInfo && userPlayerInfo) {
+          await globalAudioManager.playOverlapping([targetPlayerInfo, userPlayerInfo])
+        } else {
+          // Fallback: manually coordinate by directly calling WaveSurfer instances
+          const targetWavesurfer = targetPlayer.wavesurfer
+          const userWavesurfer = userPlayer.wavesurfer
+          
+          if (targetWavesurfer && userWavesurfer) {
+            // Stop any existing playback on the wavesurfer instances
+            if (targetWavesurfer.isPlaying()) targetWavesurfer.pause()
+            if (userWavesurfer.isPlaying()) userWavesurfer.pause()
+            
+            // Play both simultaneously
+            await Promise.all([
+              targetWavesurfer.play(),
+              userWavesurfer.play()
+            ])
+          }
+        }
+        
         audioManager.activePlayback = 'overlapping'
       } catch (error) {
-        console.error('Error playing overlapping audio:', error)
+        console.error('❌ Error playing overlapping audio:', error)
       }
     } else if (targetPlayer) {
       await playTarget()
@@ -142,34 +246,54 @@ export function usePlaybackControls(providedAppState = null) {
   }
 
   const playSequential = async (sequentialDelay = 0) => {
-    audioManager.emergencyStop('Playing sequential audio')
+    // Stop any existing playback first
+    if (audioManager.activePlayback) {
+      audioManager.stopAll()
+    }
     
-    const targetPlayer = targetAudioPlayerRef.value
-    const userPlayer = userAudioPlayerRef.value
+    const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
+    const userPlayer = getAudioPlayer(userAudioPlayerRef)
     
     if (targetPlayer && userPlayer) {
       try {
         // Set playback rate for both
-        targetPlayer.playbackRate = globalPlaybackSpeed.value
-        userPlayer.playbackRate = globalPlaybackSpeed.value
+        if (typeof targetPlayer.setPlaybackRate === 'function') {
+          targetPlayer.setPlaybackRate(globalPlaybackSpeed.value)
+        } else {
+          targetPlayer.playbackRate = globalPlaybackSpeed.value
+        }
+        
+        if (typeof userPlayer.setPlaybackRate === 'function') {
+          userPlayer.setPlaybackRate(globalPlaybackSpeed.value)
+        } else {
+          userPlayer.playbackRate = globalPlaybackSpeed.value
+        }
         
         // Play target first
         await targetPlayer.play()
         
-        // Wait for target to finish, then add delay
-        await new Promise(resolve => {
-          const onTargetEnd = () => {
-            targetPlayer.removeEventListener('ended', onTargetEnd)
-            setTimeout(resolve, sequentialDelay)
-          }
-          targetPlayer.addEventListener('ended', onTargetEnd)
-        })
+        // Get the actual duration from the target player and wait for it to finish
+        const targetWavesurfer = targetPlayer.wavesurfer
+        if (targetWavesurfer) {
+          const baseDuration = targetWavesurfer.getDuration() * 1000 // Convert to ms
+          // Account for playback rate - if playing at 2x speed, it takes half the time
+          const adjustedDuration = baseDuration / globalPlaybackSpeed.value
+          const totalWaitTime = adjustedDuration + sequentialDelay
+          
+          setTimeout(async () => {
+            await userPlayer.play()
+          }, totalWaitTime)
+        } else {
+          // Fallback: use a reasonable default duration adjusted for playback rate
+          const fallbackDuration = 2000 / globalPlaybackSpeed.value
+          setTimeout(async () => {
+            await userPlayer.play()
+          }, fallbackDuration + sequentialDelay)
+        }
         
-        // Play user audio
-        await userPlayer.play()
         audioManager.activePlayback = 'sequential'
       } catch (error) {
-        console.error('Error playing sequential audio:', error)
+        console.error('❌ Error playing sequential audio:', error)
       }
     } else if (targetPlayer) {
       await playTarget()
