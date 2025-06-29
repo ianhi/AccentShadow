@@ -12,24 +12,11 @@
       <div class="audio-column">
         <div class="column-header">
           <h3>Target Audio</h3>
-          <div class="target-controls">
-            <div class="control-row">
-              <div class="audio-display">
-                <span v-if="!currentAudioSource" class="placeholder-text">
-                  No audio selected
-                </span>
-                <span v-else class="current-source">
-                  {{ currentAudioSource }}
-                </span>
-              </div>
-              <button @click="triggerFileInput" class="action-btn file-btn">
-                📁 Browse File
-              </button>
-              <button @click="showUrlModal = true" class="action-btn url-btn">
-                🌐 Load URL
-              </button>
-            </div>
-          </div>
+          <TargetAudioControls 
+            :currentAudioSource="currentAudioSource"
+            @browse-file="triggerFileInput"
+            @load-url="showUrlModal = true"
+          />
         </div>
         <AudioPlayer 
           v-if="getTargetAudioUrl()" 
@@ -215,6 +202,7 @@ import SessionStats from '../components/SessionStats.vue';
 import RecordingSetsManager from '../components/RecordingSetsManager.vue';
 import VADSettingsModal from '../components/VADSettingsModal.vue';
 import PlaybackControls from '../components/PlaybackControls.vue';
+import TargetAudioControls from '../components/TargetAudioControls.vue';
 import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment';
 import { useRecordingSets } from '../composables/useRecordingSets';
@@ -1270,13 +1258,7 @@ h1 {
   text-shadow: none; /* Ensure good contrast */
 }
 
-.target-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: stretch;
-  min-height: 48px; /* Ensure consistent height */
-}
+/* Target controls styles moved to TargetAudioControls component */
 
 .recording-controls {
   display: flex;
@@ -1286,35 +1268,7 @@ h1 {
   min-height: 48px; /* Ensure consistent height */
 }
 
-.control-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.audio-display {
-  flex: 1;
-  padding: 8px 12px;
-  border: 2px solid #d1d5db;
-  border-radius: 6px;
-  background-color: #f9fafb;
-  font-size: 14px;
-  color: #374151;
-  min-height: 20px;
-  display: flex;
-  align-items: center;
-}
-
-.placeholder-text {
-  color: #9ca3af;
-  font-style: italic;
-}
-
-.current-source {
-  color: #374151;
-  font-weight: 500;
-  word-break: break-all;
-}
+/* Control row and audio display styles moved to TargetAudioControls component */
 
 
 .modal-overlay {
@@ -1403,44 +1357,7 @@ h1 {
   cursor: not-allowed;
 }
 
-.action-btn {
-  padding: 8px 12px;
-  border: 2px solid #3b82f6;
-  border-radius: 6px;
-  background-color: white;
-  color: #3b82f6;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-  flex-shrink: 0;
-  font-weight: 500;
-}
-
-.action-btn:hover {
-  background-color: #3b82f6;
-  color: white;
-}
-
-.file-btn {
-  border-color: #059669;
-  color: #059669;
-}
-
-.file-btn:hover {
-  background-color: #059669;
-  color: white;
-}
-
-.url-btn {
-  border-color: #7c3aed;
-  color: #7c3aed;
-}
-
-.url-btn:hover {
-  background-color: #7c3aed;
-  color: white;
-}
+/* Action button styles moved to TargetAudioControls component */
 
 
 .bottom-controls {
