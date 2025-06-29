@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, nextTick } from 'vue'
 import AudioColumn from './AudioColumn.vue'
 import TargetAudioControls from './TargetAudioControls.vue'
 import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment'
@@ -521,20 +521,64 @@ const processUserAudio = async (blob) => {
   if (autoPlayBoth.value) {
     console.log('🎵 Auto-play both is enabled, preparing simultaneous playback...')
     
-    // Wait a bit for audio players to be ready, then trigger playback
-    setTimeout(() => {
+    // Check if both players are ready immediately, then trigger
+    const checkAndTriggerAutoPlay = () => {
       const targetReady = targetAudioPlayerRef.value?.isReady
       const userReady = userAudioPlayerRef.value?.isReady
       
       if (targetReady && userReady) {
         console.log('🎵 Both players ready, triggering overlapping playback')
-        // Emit event to parent to trigger playback
         emit('trigger-auto-play')
+        return true
       } else {
-        console.log('🎵 Players not ready yet, skipping auto-play', { targetReady, userReady })
+        console.log('🎵 Players not ready yet, waiting...', { targetReady, userReady })
+        return false
       }
-    }, 1500) // Give players time to load
+    }
+    
+    // Try immediately first
+    if (!checkAndTriggerAutoPlay()) {
+      // If not ready immediately, set up watchers for when they become ready
+      setupAutoPlayWatchers()
+    }
   }
+}
+
+// Set up watchers to trigger auto-play when both players become ready
+const setupAutoPlayWatchers = () => {
+  console.log('🎵 Setting up watchers for auto-play both')
+  
+  const checkReadiness = () => {
+    const targetReady = targetAudioPlayerRef.value?.isReady
+    const userReady = userAudioPlayerRef.value?.isReady
+    
+    if (targetReady && userReady) {
+      console.log('🎵 Both players now ready, triggering overlapping playback')
+      emit('trigger-auto-play')
+      return true
+    }
+    return false
+  }
+  
+  // Use nextTick to check again after Vue updates
+  nextTick(() => {
+    if (!checkReadiness()) {
+      // If still not ready, poll every 50ms for a maximum of 2 seconds
+      let attempts = 0
+      const maxAttempts = 40 // 2 seconds
+      
+      const pollInterval = setInterval(() => {
+        attempts++
+        
+        if (checkReadiness() || attempts >= maxAttempts) {
+          clearInterval(pollInterval)
+          if (attempts >= maxAttempts) {
+            console.warn('🎵 Auto-play both timeout - players took too long to become ready')
+          }
+        }
+      }, 50)
+    }
+  })
 }
 
 // Manual alignment function
