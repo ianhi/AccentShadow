@@ -81,28 +81,15 @@
         </div>
         
         <!-- Playback Controls -->
-        <div class="playback-buttons">
-          <button @click="playTarget" :disabled="!targetAudioUrl" class="playback-btn target-btn">
-            <span class="btn-icon">🎯</span>
-            <span>Play Target</span>
-          </button>
-          <button @click="playUser" :disabled="!userAudioUrl" class="playback-btn user-btn">
-            <span class="btn-icon">🎤</span>
-            <span>Play Recording</span>
-          </button>
-          <button @click="playOverlapping" :disabled="!targetAudioUrl || !userAudioUrl" class="playback-btn overlapping-btn">
-            <span class="btn-icon">🔄</span>
-            <span>Play Overlapping</span>
-          </button>
-          <button @click="playSequential" :disabled="!targetAudioUrl || !userAudioUrl" class="playback-btn sequential-btn">
-            <span class="btn-icon">📋</span>
-            <span>Play Sequential</span>
-          </button>
-          <button @click="stopAll" class="playback-btn stop-btn">
-            <span class="btn-icon">⏹</span>
-            <span>Stop All</span>
-          </button>
-        </div>
+        <PlaybackControls 
+          :hasTargetAudio="!!targetAudioUrl"
+          :hasUserAudio="!!userAudioUrl"
+          @play-target="playTarget"
+          @play-user="playUser"
+          @play-overlapping="playOverlapping"
+          @play-sequential="playSequential"
+          @stop-all="stopAll"
+        />
       </div>
       
       <!-- Speed Control Section -->
@@ -227,6 +214,7 @@ import RecordingNavigation from '../components/RecordingNavigation.vue';
 import SessionStats from '../components/SessionStats.vue';
 import RecordingSetsManager from '../components/RecordingSetsManager.vue';
 import VADSettingsModal from '../components/VADSettingsModal.vue';
+import PlaybackControls from '../components/PlaybackControls.vue';
 import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment';
 import { useRecordingSets } from '../composables/useRecordingSets';
