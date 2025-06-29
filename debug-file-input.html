@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug File Input</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 15px; margin: 10px; cursor: pointer; }
+        .log { background: #f5f5f5; padding: 10px; font-family: monospace; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug File Input Issue</h1>
+    
+    <div>
+        <h3>Test 1: Simple File Input</h3>
+        <button onclick="testSimpleFileInput()">📁 Test Simple File Input</button>
+        <input type="file" id="testFileInput" accept="audio/*" onchange="handleTestFile(event)" style="display: none;">
+    </div>
+    
+    <div>
+        <h3>Test 2: Folder Input</h3>
+        <button onclick="testFolderInput()">📁 Test Folder Input</button>
+        <input type="file" id="testFolderInput" webkitdirectory onchange="handleTestFolder(event)" style="display: none;">
+    </div>
+    
+    <div>
+        <h3>Test 3: Check JavaScript Errors</h3>
+        <button onclick="testJavaScript()">🔧 Test JavaScript</button>
+    </div>
+    
+    <div id="log" class="log">Click buttons above to test file input functionality...</div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML += new Date().toISOString().substr(11, 8) + ': ' + message + '<br>';
+        }
+
+        function testSimpleFileInput() {
+            log('Testing simple file input...');
+            try {
+                const fileInput = document.getElementById('testFileInput');
+                if (fileInput) {
+                    fileInput.click();
+                    log('✅ File input click triggered successfully');
+                } else {
+                    log('❌ File input not found');
+                }
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        }
+
+        function testFolderInput() {
+            log('Testing folder input...');
+            try {
+                const folderInput = document.getElementById('testFolderInput');
+                if (folderInput) {
+                    folderInput.click();
+                    log('✅ Folder input click triggered successfully');
+                } else {
+                    log('❌ Folder input not found');
+                }
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        }
+
+        function testJavaScript() {
+            log('Testing JavaScript functionality...');
+            try {
+                // Test basic JavaScript
+                const testObj = { test: 'working' };
+                log('✅ Object creation works');
+                
+                // Test DOM access
+                const testDiv = document.getElementById('log');
+                log('✅ DOM access works');
+                
+                // Test console
+                console.log('Testing console.log');
+                log('✅ Console.log works');
+                
+                // Test async/await syntax
+                const testAsync = async () => {
+                    return 'async works';
+                };
+                testAsync().then(result => log('✅ Async/await works: ' + result));
+                
+            } catch (error) {
+                log('❌ JavaScript error: ' + error.message);
+            }
+        }
+
+        function handleTestFile(event) {
+            const file = event.target.files[0];
+            if (file) {
+                log('✅ File selected: ' + file.name + ' (' + file.type + ', ' + file.size + ' bytes)');
+            } else {
+                log('❌ No file selected');
+            }
+        }
+
+        function handleTestFolder(event) {
+            const files = Array.from(event.target.files);
+            if (files.length > 0) {
+                log('✅ Folder selected with ' + files.length + ' files');
+                files.slice(0, 5).forEach(file => {
+                    log('  - ' + file.name + ' (' + file.type + ')');
+                });
+                if (files.length > 5) {
+                    log('  - ... and ' + (files.length - 5) + ' more files');
+                }
+            } else {
+                log('❌ No folder selected');
+            }
+        }
+    </script>
+</body>
+</html>

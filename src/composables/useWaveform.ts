@@ -41,7 +41,6 @@ export function useWaveform(
     if (containerRef.value && spectrogramContainerRef.value) {
       // Check if containers have proper dimensions
       if (containerRef.value.offsetWidth === 0 || containerRef.value.offsetHeight === 0) {
-        console.warn('🎵 Container has zero dimensions, waiting for layout...');
         setTimeout(() => {
           if (containerRef.value && containerRef.value.offsetWidth > 0) {
             initWaveform();
@@ -85,7 +84,6 @@ export function useWaveform(
         });
         
         wavesurfer.value.registerPlugin(spectrogramPlugin);
-        console.log(`🎵 Spectrogram plugin registered`);
       } catch (error) {
         console.error(`🎵 Error creating spectrogram:`, error);
       }
@@ -99,7 +97,6 @@ export function useWaveform(
         if (!wavesurfer.value) return;
         
         const audioDuration = wavesurfer.value.getDuration();
-        console.log(`🎵 WaveSurfer ready [${audioType}]: ${audioDuration.toFixed(3)}s`);
         
         // Register with audio manager
         playerInfo = audioManager.registerPlayer(playerId, audioType, wavesurfer.value);
@@ -126,7 +123,7 @@ export function useWaveform(
                 }
               }
             } catch (e) {
-              console.warn('🎵 Error during manual render:', e);
+              // Silent handling of render errors
             }
           }
         }, 200);
@@ -157,13 +154,11 @@ export function useWaveform(
         currentTime.value = 0;
       });
     } else {
-      console.warn('🎵 Containers not available for waveform initialization');
     }
   };
 
   const loadAudio = (url: string): void => {
     if (!url) {
-      console.warn(`🎵 Cannot load audio: no URL provided`);
       return;
     }
     
@@ -184,7 +179,6 @@ export function useWaveform(
   // Separate function for direct audio loading (no recreation)
   const loadAudioDirect = (url: string): void => {
     if (!wavesurfer.value || !url) {
-      console.warn(`🎵 Cannot load audio - missing wavesurfer or url`);
       return;
     }
     
@@ -256,7 +250,7 @@ export function useWaveform(
       try {
         wavesurfer.value.destroy();
       } catch (error) {
-        console.warn('🎵 Error during WaveSurfer destroy:', error);
+        // Silent handling of destroy errors
       }
       wavesurfer.value = null;
       isReady.value = false;

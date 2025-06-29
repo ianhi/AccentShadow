@@ -106,7 +106,7 @@ const createRecordingSet = (name: string, source: string = 'manual', language: s
       total: recordings.length,
       percentage: 0
     }
-  };
+};
 
   recordingSets.value.push(newSet);
   return newSet;
@@ -198,7 +198,7 @@ const updateProgress = (): void => {
     completed,
     total,
     percentage: total > 0 ? Math.round((completed / total) * 100) : 0
-  };
+};
 };
 
 const markRecordingCompleted = (recordingId: string | null = null): void => {
@@ -271,8 +271,16 @@ const extractNameFromFile = (fileName: string): string => {
   return fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
 };
 
-const processUploadedFiles = (files: File[]): InputRecording[] => {
+const processUploadedFiles = (files: File[], options: any = {}): InputRecording[] => {
   console.log('📁 Processing uploaded files:', files.length);
+  
+  // Extract options with defaults
+  const {
+    trimSilence = false,
+    // Other trimming options can be passed through but won't be used in this function
+    // This maintains separation of concerns - we just store the intent here
+    ...otherOptions
+  } = options;
   
   // Filter audio files
   const audioFiles = files.filter(file => {
@@ -294,7 +302,7 @@ const processUploadedFiles = (files: File[]): InputRecording[] => {
     const name = extractNameFromFile(file.name);
     const audioUrl = URL.createObjectURL(file);
     
-    return {
+    const recording: InputRecording = {
       name,
       audioUrl,
       audioBlob: file,
@@ -302,12 +310,17 @@ const processUploadedFiles = (files: File[]): InputRecording[] => {
         category,
         fileName: file.name,
         fileSize: file.size,
-        filePath: file.webkitRelativePath || file.name
+        filePath: file.webkitRelativePath || file.name,
+        // Store trimming options for later processing
+        ...(trimSilence && { trimmingOptions: { trimSilence, ...otherOptions } })
       }
-    };
+  };
+    
+    return recording;
   });
   
   console.log('✅ Processed audio files:', recordings.length);
+  console.log(trimSilence ? '🔧 Trimming will be applied during audio processing' : '📋 No trimming requested');
   return recordings;
 };
 
@@ -329,7 +342,7 @@ const startSession = (): void => {
     totalAttempts: 0,
     averageAttempts: 0,
     isActive: true
-  };
+};
   console.log('📊 Practice session started');
 };
 
@@ -394,7 +407,7 @@ const getSetStatistics = (setId: string): { totalRecordings: number; completed: 
     totalAttempts: set.recordings.reduce((sum, r) => sum + r.userRecording.attempts, 0),
     categories: [...new Set(set.recordings.map(r => r.metadata.category).filter((cat): cat is string => typeof cat === 'string'))],
     averageAttempts: 0
-  };
+};
   
   if (stats.attempted > 0) {
     stats.averageAttempts = Math.round((stats.totalAttempts / stats.attempted) * 10) / 10;
@@ -472,45 +485,30 @@ const goToReviewRecording = (): boolean => {
 
 export function useRecordingSets() {
   return {
-    // State
     recordingSets,
     activeSet,
     currentRecording,
     activeSetId,
     currentRecordingIndex,
-    
-    // Actions
     createRecordingSet,
     setActiveSet,
     deleteRecordingSet,
-    
-    // Navigation
     goToRecording,
     nextRecording,
     previousRecording,
     randomRecording,
-    
-    // Progress
     updateProgress,
     markRecordingCompleted,
     updateUserRecording,
-    
-    // Utilities
-    processUploadedFiles,
     getSetStatistics,
-    
-    // Helpers
     generateId,
-    
-    // Session management
     sessionState,
     startSession,
     endSession,
     updateSessionStats,
-    
-    // Review and navigation helpers
     getReviewSuggestions,
     goToNextIncomplete,
-    goToReviewRecording
+    goToReviewRecording,
+    processUploadedFiles
   };
 }

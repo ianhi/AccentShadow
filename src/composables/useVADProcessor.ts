@@ -501,7 +501,15 @@ export function useVADProcessor() {
       isProcessing.value = true;
 
       // Use provided boundaries or calculate new ones
-      const boundaries = providedBoundaries || await detectSpeechBoundariesVAD(audioBlob, options);
+      const vadOptions: VADOptions = {
+        threshold: (options as any).threshold,
+        minSpeechDuration: (options as any).minSpeechDuration,
+        maxSilenceDuration: (options as any).maxSilenceDuration,
+        positiveSpeechThreshold: (options as any).positiveSpeechThreshold,
+        negativeSpeechThreshold: (options as any).negativeSpeechThreshold,
+        minSpeechFrames: (options as any).minSpeechFrames
+      };
+      const boundaries = providedBoundaries || await detectSpeechBoundariesVAD(audioBlob, vadOptions);
 
       if (boundaries.silenceStart < 0.1 && boundaries.silenceEnd < 0.1) {
         console.log('📄 No significant silence detected, keeping original');

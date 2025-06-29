@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Folder Audio Processing</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+        .log { background: #f5f5f5; padding: 10px; font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug Folder Audio Processing</h1>
+    <p>This page tests whether folder-uploaded audio goes through the same VAD processing as single file uploads.</p>
+
+    <div class="test-section">
+        <h3>Test 1: Load Audio File and Check Processing</h3>
+        <button onclick="testAudioProcessing()">Test with patth.wav</button>
+        <div id="test1-log" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 2: Check if Audio Gets Trimmed</h3>
+        <button onclick="testTrimming()">Check VAD Trimming</button>
+        <div id="test2-log" class="log"></div>
+    </div>
+
+    <script>
+        function log(testId, message) {
+            const logDiv = document.getElementById(testId + '-log');
+            logDiv.textContent += new Date().toISOString().substr(11, 8) + ': ' + message + '\n';
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function testAudioProcessing() {
+            log('test1', '🔍 Starting audio processing test...');
+            
+            try {
+                // Load the test audio file
+                log('test1', '📁 Loading patth.wav...');
+                const response = await fetch('/patth.wav');
+                const audioBlob = await response.blob();
+                log('test1', `✅ Loaded audio: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+
+                // Get audio duration
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await audioBlob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                log('test1', `📊 Original duration: ${audioBuffer.duration.toFixed(3)}s`);
+
+                // Simulate what folder processing should do
+                log('test1', '🎯 This should be the same processing that folder recordings get...');
+                log('test1', '📋 Expected: VAD processing with trimming and normalization');
+                log('test1', '📋 Actual in app: Check browser console when selecting folder recording');
+
+            } catch (error) {
+                log('test1', `❌ Error: ${error.message}`);
+            }
+        }
+
+        async function testTrimming() {
+            log('test2', '🔍 Testing VAD trimming behavior...');
+            
+            try {
+                const response = await fetch('/patth.wav');
+                const audioBlob = await response.blob();
+                
+                // Get original duration
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await audioBlob.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                log('test2', `📊 Original audio: ${audioBuffer.duration.toFixed(3)}s`);
+                log('test2', '🎯 Expected behavior for folder recordings:');
+                log('test2', '  1. VAD should detect speech boundaries');
+                log('test2', '  2. Audio should be trimmed to remove silence');
+                log('test2', '  3. Result should be ~0.976s (like single file upload)');
+                log('test2', '');
+                log('test2', '🔍 To test in app:');
+                log('test2', '  1. Import a folder containing patth.wav');
+                log('test2', '  2. Select that recording');
+                log('test2', '  3. Check if target audio shows trimmed duration');
+                log('test2', '  4. Look for VAD processing logs in console');
+
+            } catch (error) {
+                log('test2', `❌ Error: ${error.message}`);
+            }
+        }
+
+        // Auto-run first test
+        window.addEventListener('load', () => {
+            testAudioProcessing();
+        });
+    </script>
+</body>
+</html>

@@ -284,14 +284,10 @@ const { syncEnabled, toggleSync } = useTimeSync();
 onMounted(async () => {
   await initDB();
   // Initialize VAD model for professional audio processing
-  console.log('🤖 Initializing professional VAD model...');
   try {
     await initVAD();
     if (vadReady.value) {
-      console.log('✅ Professional VAD ready for use');
     } else {
-      console.log('ℹ️ VAD not available, will use enhanced energy detection');
-      console.log('🔍 VAD Status:', { vadReady: vadReady.value, secureContext: window.isSecureContext });
     }
   } catch (error) {
     console.warn('⚠️ VAD initialization failed:', error.message);
@@ -307,7 +303,6 @@ const triggerFileInput = () => {
 
 const handleVADSettingsSave = (newSettings) => {
   vadSettings.value = { ...newSettings };
-  console.log('🔧 VAD settings updated:', vadSettings.value);
 };
 
 // Unified function to set and process target audio from any source
@@ -331,7 +326,10 @@ const setTargetAudio = async (audioBlob, source = {}) => {
   }
 
   try {
-    console.log('🎯 Processing target audio:', source.name || source.fileName || 'Unknown source');
+    const sourceType = source.source || 'manual';
+    
+    if (sourceType === 'folder') {
+    }
     
     // Store old URL for cleanup
     const oldTargetUrl = targetAudioUrl.value;
@@ -347,7 +345,6 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     };
     
     // Process target audio with VAD using exact aggressive settings from tuner
-    console.log('🎯 Processing target audio with aggressive VAD settings from tuner testing');
     const targetProcessed = await processAudio(audioBlob, {
       positiveSpeechThreshold: 0.3,  // Exact tuner setting
       negativeSpeechThreshold: 0.2,  // Exact tuner setting
@@ -357,12 +354,6 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     });
     
     if (targetProcessed.processed && targetProcessed.vadBoundaries) {
-      console.log('🎯 Target audio VAD analysis complete:', {
-        speechStart: targetProcessed.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
-        speechEnd: targetProcessed.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
-        paddedStart: targetProcessed.vadBoundaries.startTime?.toFixed(3) + 's',
-        paddedEnd: targetProcessed.vadBoundaries.endTime?.toFixed(3) + 's'
-      });
       
       // Normalize target audio to have consistent padding
       const normalizedBlob = await normalizeAudioSilence(
@@ -389,7 +380,15 @@ const setTargetAudio = async (audioBlob, source = {}) => {
         trimmedAmount: (rawDuration - finalDuration).toFixed(3)
       };
       
-      console.log('🎵 Target audio processed with VAD trimming');
+      
+      if (sourceType === 'folder') {
+        console.log('✅ FOLDER AUDIO PROCESSING: Successfully completed VAD processing', {
+          rawDuration: rawDuration.toFixed(3) + 's',
+          finalDuration: finalDuration.toFixed(3) + 's',
+          trimmedAmount: (rawDuration - finalDuration).toFixed(3) + 's',
+          fileName: source.fileName
+        });
+      }
     } else {
       console.log('📏 Target VAD processing failed - using original audio');
       
@@ -467,7 +466,6 @@ const handleUrlLoad = async () => {
   const url = tempAudioUrl.value.trim();
   if (!url) return;
   
-  console.log('Loading audio from URL:', url);
   
   try {
     // Validate URL format
@@ -492,7 +490,6 @@ const handleUrlLoad = async () => {
     
     showUrlModal.value = false;
     tempAudioUrl.value = '';
-    console.log('Successfully loaded audio from URL');
     
   } catch (error) {
     console.error('Error loading audio from URL:', error);
@@ -511,16 +508,31 @@ watch(showUrlModal, (newValue) => {
 
 // Process recordings when they become current (unified processing for all sources)
 watch(currentRecording, async (newRecording, oldRecording) => {
+
   // Only process if we're switching to a new recording that has audio
   if (newRecording && newRecording !== oldRecording && newRecording.audioBlob) {
-    await setTargetAudio(newRecording.audioBlob, {
-      name: newRecording.name,
-      fileName: newRecording.metadata?.fileName,
-      source: 'folder'
-    });
+
+    try {
+      await setTargetAudio(newRecording.audioBlob, {
+        name: newRecording.name,
+        fileName: newRecording.metadata?.fileName,
+        source: 'folder'
+      });
+      console.log('✅ FOLDER PROCESSING: Successfully processed folder recording');
+    } catch (error) {
+      console.error('❌ FOLDER PROCESSING: Failed to process folder recording:', error);
+    }
   } else if (!newRecording) {
+    console.log('🗑️ FOLDER PROCESSING: Clearing target audio (no recording selected)');
     // Clear when no recording is selected
     await setTargetAudio(null);
+  } else {
+    console.log('⏸️ FOLDER PROCESSING: Skipping processing', {
+      reason: !newRecording ? 'no recording' : 
+              newRecording === oldRecording ? 'same recording' : 
+              !newRecording.audioBlob ? 'no audio blob' : 
+              'unknown'
+    });
   }
   // Note: if newRecording === oldRecording, we don't reprocess (efficiency)
 });
@@ -541,7 +553,6 @@ const handleRecordingStopped = () => {
 };
 
 const handleRecordedAudio = async (blob) => {
-  console.log('🎤 PracticeView: Received recorded audio blob, size:', blob?.size);
   
   // Validate audio blob
   if (!blob || blob.size === 0) {
@@ -549,11 +560,9 @@ const handleRecordedAudio = async (blob) => {
     return;
   }
   
-  console.log('🎤 Original blob URL:', URL.createObjectURL(blob));
   
   userAudioBlob.value = blob;
   userAudioUrl.value = URL.createObjectURL(blob);
-  console.log('🎤 Initial User Audio URL created:', userAudioUrl.value);
   
   // Store raw duration for debugging
   const rawUserDuration = await getAudioDuration(blob);
@@ -575,7 +584,6 @@ const handleRecordedAudio = async (blob) => {
       
       // Process the recorded audio with VAD to get speech boundaries
       // Use more lenient settings for user recordings (microphone audio)
-      console.log('🎤 Processing user recording with lenient VAD settings for microphone audio');
       const userProcessed = await processAudio(blob, {
         threshold: 0.3,           // More sensitive for user recordings
         minSpeechDuration: 30,    // Shorter minimum speech duration
@@ -1149,7 +1157,6 @@ const getUserAudioKey = () => {
     // Use the full URL hash to ensure uniqueness when URL changes
     const urlHash = url.split('//')[1] || url; // Remove protocol for shorter key
     const uniqueKey = `user-${urlHash}`;
-    console.log('🔑 USER AUDIO KEY: Generated key:', uniqueKey, 'for URL:', url.slice(0, 50) + '...');
     return uniqueKey;
   }
   console.log('🔑 USER AUDIO KEY: No URL, returning default key');

@@ -90,14 +90,7 @@ watch(duration, (newDuration) => {
 
 
 watch(() => props.audioUrl, async (newUrl, oldUrl) => {
-  console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: audioUrl watcher triggered`);
-  console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: oldUrl = ${oldUrl ? oldUrl.slice(0, 50) + '...' : 'null'}`);
-  console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: newUrl = ${newUrl ? newUrl.slice(0, 50) + '...' : 'null'}`);
-  console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: URL changed = ${newUrl !== oldUrl}`);
-  console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: URL type = ${newUrl ? (newUrl.startsWith('blob:') ? 'blob' : 'other') : 'none'}`);
-  
   if (newUrl && newUrl !== oldUrl) {
-    console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Loading new audio URL`);
     
     // Light visual indicator during update
     isUpdating.value = true;

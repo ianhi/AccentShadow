@@ -263,7 +263,6 @@ watch(uploadedFiles, async (files) => {
     try {
       const text = await csvFile.text();
       csvData.value = parseCSV(text);
-      console.log('📄 CSV data loaded:', csvData.value);
     } catch (error) {
       console.error('❌ Error parsing CSV:', error);
       csvData.value = null;
@@ -355,7 +354,6 @@ const importFromUrl = async () => {
     
     // For direct URLs, try to fetch the content
     // This is a basic implementation - real implementation would need CORS proxy
-    console.log('🌐 Attempting to import from URL:', processedUrl);
     alert('🚧 URL import is not yet implemented. Please download files manually and upload.');
     
   } catch (error) {
@@ -373,7 +371,6 @@ const importRecordings = async () => {
     isImporting.value = true;
     importProgress.value = { current: 0, total: audioFiles.value.length };
     
-    console.log('📁 Starting import of', audioFiles.value.length, 'files');
     
     // Process files with progress tracking
     const recordings = [];
@@ -434,7 +431,6 @@ const importRecordings = async () => {
       recordings
     );
     
-    console.log('✅ Successfully imported recording set:', recordingSet.name);
     
     // Emit success
     emit('imported', recordingSet);

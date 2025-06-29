@@ -15,7 +15,6 @@ const isSequentialPlaybackActive = ref(false);
 export function useAudioManager() {
   // Register an audio player with the manager
   const registerPlayer = (id: string, type: string, wavesurferInstance: any): PlayerInfo => {
-    console.log(`🎼 Registering audio player: ${id} (${type})`);
     return {
       id,
       type,
@@ -25,13 +24,10 @@ export function useAudioManager() {
 
   // Stop all currently playing audio
   const stopAll = () => {
-    console.log('🎼 Stopping all audio playback');
-    
     if (currentlyPlaying.value) {
       try {
         if (currentlyPlaying.value.wavesurfer && currentlyPlaying.value.wavesurfer.isPlaying()) {
           currentlyPlaying.value.wavesurfer.pause();
-          console.log(`🎼 Stopped ${currentlyPlaying.value.id} (${currentlyPlaying.value.type})`);
         }
       } catch (error) {
         console.warn('🎼 Error stopping audio:', error);
@@ -46,11 +42,8 @@ export function useAudioManager() {
 
   // Start playing a specific audio with exclusive control
   const play = (playerInfo: PlayerInfo, onFinish: (() => void) | null = null): boolean => {
-    console.log(`🎼 Request to play: ${playerInfo.id} (${playerInfo.type})`);
-    
     // Stop any currently playing audio first
     if (currentlyPlaying.value && currentlyPlaying.value.id !== playerInfo.id) {
-      console.log(`🎼 Stopping current audio: ${currentlyPlaying.value.id} to play ${playerInfo.id}`);
       stopAll();
     }
 
@@ -64,7 +57,6 @@ export function useAudioManager() {
       
       // Set up finish handler
       const handleFinish = () => {
-        console.log(`🎼 Audio finished: ${playerInfo.id} (${playerInfo.type})`);
         if (currentlyPlaying.value && currentlyPlaying.value.id === playerInfo.id) {
           currentlyPlaying.value = null;
         }
@@ -81,12 +73,10 @@ export function useAudioManager() {
       playerInfo.wavesurfer.un('pause');
       playerInfo.wavesurfer.on('pause', () => {
         if (currentlyPlaying.value && currentlyPlaying.value.id === playerInfo.id) {
-          console.log(`🎼 Audio paused: ${playerInfo.id}`);
           currentlyPlaying.value = null;
         }
       });
 
-      console.log(`🎼 Starting playback: ${playerInfo.id} (${playerInfo.type})`);
       playerInfo.wavesurfer.play();
       return true;
     } catch (error) {
@@ -98,8 +88,6 @@ export function useAudioManager() {
 
   // Sequential playback with proper coordination
   const playSequential = async (players: PlayerInfo[], delays: number[] = []): Promise<void> => {
-    console.log('🎼 Starting sequential playback with', players.length, 'players');
-    
     // Stop any current playback
     stopAll();
     isSequentialPlaybackActive.value = true;
@@ -107,23 +95,18 @@ export function useAudioManager() {
     for (let i = 0; i < players.length; i++) {
       // Check if sequential playback was cancelled
       if (!isSequentialPlaybackActive.value) {
-        console.log('🎼 Sequential playback cancelled');
         return;
       }
 
       const player = players[i];
       const delay = delays[i] || 0;
-
-      console.log(`🎼 Sequential step ${i + 1}: Playing ${player.id} (${player.type})`);
       
       if (delay > 0) {
-        console.log(`🎼 Waiting ${delay}ms before playing ${player.id}`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
 
       // Check again after delay
       if (!isSequentialPlaybackActive.value) {
-        console.log('🎼 Sequential playback cancelled after delay');
         return;
       }
 
@@ -136,14 +119,12 @@ export function useAudioManager() {
       await new Promise<void>((resolve) => {
         const success = play(player, () => resolve());
         if (!success) {
-          console.warn(`🎼 Failed to play ${player.id}, continuing sequence`);
           resolve();
         }
       });
     }
 
     isSequentialPlaybackActive.value = false;
-    console.log('🎼 Sequential playback completed');
   };
 
   // Get current playback state
@@ -153,7 +134,6 @@ export function useAudioManager() {
 
   // Emergency stop for recordings or other interruptions
   const emergencyStop = (reason: string = 'Emergency stop'): void => {
-    console.log(`🎼 ${reason} - stopping all audio`);
     stopAll();
   };
 

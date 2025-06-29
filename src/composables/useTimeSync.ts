@@ -14,10 +14,7 @@ export function useTimeSync() {
 
   // Watch for sync changes
   watch(syncEnabled, (newValue) => {
-    console.log('🕒 syncEnabled changed to:', newValue);
-    console.log('🕒 Current state:');
-    console.log('  - Target:', targetDuration.value + 's', '→', targetWidthPercent.value);
-    console.log('  - User:', userDuration.value + 's', '→', userWidthPercent.value);
+    // Removed excessive logging
   });
 
   // Calculate proportional widths (0-1 range)
@@ -70,35 +67,19 @@ export function useTimeSync() {
 
   const setTargetDuration = (duration: number): void => {
     targetDuration.value = duration;
-    console.log('🕒 Target duration set:', duration, 'seconds');
-    console.log('🕒 Audio lengths - Target:', targetDuration.value + 's', 'User:', userDuration.value + 's', 'Max:', maxDuration.value + 's');
-    console.log('🕒 Target calculations - Ratio:', targetWidthRatio.value, 'Width:', targetWidthPercent.value);
-    console.log('🕒 User calculations - Ratio:', userWidthRatio.value, 'Width:', userWidthPercent.value);
-    console.log('🕒 Sync enabled:', syncEnabled.value);
   };
 
   const setUserDuration = (duration: number): void => {
     userDuration.value = duration;
-    console.log('🕒 User duration set:', duration, 'seconds');
-    console.log('🕒 Audio lengths - Target:', targetDuration.value + 's', 'User:', userDuration.value + 's', 'Max:', maxDuration.value + 's');
-    console.log('🕒 Target calculations - Ratio:', targetWidthRatio.value, 'Width:', targetWidthPercent.value);
-    console.log('🕒 User calculations - Ratio:', userWidthRatio.value, 'Width:', userWidthPercent.value);
-    console.log('🕒 Sync enabled:', syncEnabled.value);
   };
 
   const toggleSync = () => {
     syncEnabled.value = !syncEnabled.value;
-    console.log('🕒 Time sync toggled:', syncEnabled.value);
-    console.log('🕒 Current state after toggle:');
-    console.log('  - Target:', targetDuration.value + 's', '→', targetWidthPercent.value);
-    console.log('  - User:', userDuration.value + 's', '→', userWidthPercent.value);
-    console.log('  - Max:', maxDuration.value + 's');
   };
 
   const resetDurations = () => {
     targetDuration.value = 0;
     userDuration.value = 0;
-    console.log('🕒 Durations reset');
   };
 
   return {
