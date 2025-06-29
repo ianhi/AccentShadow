@@ -15,7 +15,8 @@ export function useWaveform(
   containerRef: Ref<HTMLElement | null>, 
   spectrogramContainerRef: Ref<HTMLElement | null>, 
   audioId: string | null = null, 
-  audioType: string = 'unknown'
+  audioType: string = 'unknown',
+  onReadyToPlay?: () => void
 ) {
   const wavesurfer = shallowRef<WaveSurfer | null>(null);
   const isReady = ref(false);
@@ -106,27 +107,36 @@ export function useWaveform(
         wavesurfer.value.setVolume(volume.value);
         
         // Force manual resize and render for WaveSurfer v7+
-        setTimeout(() => {
-          if (wavesurfer.value && (wavesurfer.value as any).renderer) {
-            try {
-              const container = containerRef.value;
-              if (container) {
-                const width = container.offsetWidth;
-                const height = container.offsetHeight;
-                
-                // Try gentle redraw methods
-                if ((wavesurfer.value as any).redraw) {
-                  (wavesurfer.value as any).redraw();
-                }
-                if ((wavesurfer.value as any).renderer.setSize) {
-                  (wavesurfer.value as any).renderer.setSize(width, height);
-                }
+        if (wavesurfer.value && (wavesurfer.value as any).renderer) {
+          try {
+            const container = containerRef.value;
+            if (container) {
+              const width = container.offsetWidth;
+              const height = container.offsetHeight;
+              
+              // Try gentle redraw methods
+              if ((wavesurfer.value as any).redraw) {
+                (wavesurfer.value as any).redraw();
               }
-            } catch (e) {
-              // Silent handling of render errors
+              if ((wavesurfer.value as any).renderer.setSize) {
+                (wavesurfer.value as any).renderer.setSize(width, height);
+              }
             }
+          } catch (e) {
+            // Silent handling of render errors
           }
-        }, 200);
+        }
+        
+        // If we have a ready-to-play callback, call it now that everything is set up
+        if (onReadyToPlay) {
+          console.log('🎵 Audio ready event fired - calling auto-play callback')
+          onReadyToPlay();
+        }
+      });
+
+      // Keep decode event for debugging but ready event should be sufficient
+      wavesurfer.value?.on('decode', () => {
+        console.log('🎵 Audio decode event fired')
       });
 
       wavesurfer.value?.on('error', (error: any) => {

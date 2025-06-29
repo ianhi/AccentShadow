@@ -55,7 +55,17 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  autoPlayOnReady: {
+    type: Boolean,
+    default: false,
+  },
+  suppressAutoPlay: {
+    type: Boolean,
+    default: false,
+  },
 });
+
+const emit = defineEmits(['auto-played'])
 
 const waveformContainer = ref(null);
 const spectrogramContainer = ref(null);
@@ -67,7 +77,43 @@ const {
   setUserDuration 
 } = useTimeSync();
 
-const { wavesurfer, isReady, isPlaying, currentTime, duration, volume, playbackRate, playerId, playerInfo, initWaveform, playPause, play, stop, setVolume, setPlaybackRate, loadAudio, destroyWaveform } = useWaveform(waveformContainer, spectrogramContainer, `${props.audioType}_player`, props.audioType);
+// Track if auto-play has been triggered for current audio
+const hasAutoPlayed = ref(false)
+
+// Auto-play callback for when audio is truly ready to play
+const handleReadyToPlay = () => {
+  console.log(`🎵 [${props.audioType.toUpperCase()}] Ready to play - autoPlayOnReady: ${props.autoPlayOnReady}, hasAutoPlayed: ${hasAutoPlayed.value}, suppressAutoPlay: ${props.suppressAutoPlay}`)
+  
+  if (props.autoPlayOnReady && props.audioType === 'target' && !hasAutoPlayed.value && !props.suppressAutoPlay) {
+    console.log('🎵 Audio ready to play, starting auto-play')
+    hasAutoPlayed.value = true // Prevent multiple auto-plays for same audio
+    
+    const playResult = play()
+    if (playResult instanceof Promise) {
+      playResult
+        .then(() => {
+          console.log('🎵 Auto-play succeeded')
+          emit('auto-played')
+        })
+        .catch(error => console.warn('🎵 Auto-play failed:', error))
+    } else {
+      console.log('🎵 Auto-play result:', playResult)
+      if (playResult) {
+        emit('auto-played')
+      }
+    }
+  } else if (props.suppressAutoPlay) {
+    console.log('🎵 Auto-play suppressed (alignment in progress)')
+  } else if (props.audioType !== 'target') {
+    console.log(`🎵 Auto-play skipped - not target audio (type: ${props.audioType})`)
+  } else if (!props.autoPlayOnReady) {
+    console.log('🎵 Auto-play skipped - autoPlayOnReady is false')
+  } else if (hasAutoPlayed.value) {
+    console.log('🎵 Auto-play skipped - already played for this audio')
+  }
+}
+
+const { wavesurfer, isReady, isPlaying, currentTime, duration, volume, playbackRate, playerId, playerInfo, initWaveform, playPause, play, stop, setVolume, setPlaybackRate, loadAudio, destroyWaveform } = useWaveform(waveformContainer, spectrogramContainer, `${props.audioType}_player`, props.audioType, handleReadyToPlay);
 
 // Smooth transition state
 const isUpdating = ref(false);
@@ -91,6 +137,10 @@ watch(duration, (newDuration) => {
 
 watch(() => props.audioUrl, async (newUrl, oldUrl) => {
   if (newUrl && newUrl !== oldUrl) {
+    // Reset auto-play flag for new audio, but NOT during alignment operations
+    if (!props.suppressAutoPlay) {
+      hasAutoPlayed.value = false;
+    }
     
     // Light visual indicator during update
     isUpdating.value = true;
@@ -122,6 +172,7 @@ watch(() => props.audioUrl, async (newUrl, oldUrl) => {
     }
   } else if (!newUrl) {
     console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: No URL provided, destroying waveform`);
+    hasAutoPlayed.value = false; // Always reset flag when audio is removed
     destroyWaveform();
     // Reset duration when audio is removed
     if (props.audioType === 'target') {
@@ -179,6 +230,15 @@ watch(() => props.isRecording, (newRecording, oldRecording) => {
   if (newRecording && !oldRecording) {
     console.log(`🎵 Recording started for ${props.audioType}, stopping audio`);
     audioManager.emergencyStop('Recording started');
+  }
+});
+
+// Reset auto-play flag only when audio is completely removed
+watch(() => props.audioUrl, (newUrl) => {
+  if (!newUrl) {
+    // Audio removed completely, reset for next upload
+    hasAutoPlayed.value = false;
+    console.log('🎵 Audio removed, auto-play flag reset');
   }
 });
 

@@ -1,7 +1,7 @@
 <template>
   <div class="practice-view">
     <div class="main-content">
-      <MainHeader />
+      <MainHeader @open-settings="openAppSettingsModal" />
 
       <SessionStats />
       <RecordingNavigation />
@@ -12,6 +12,7 @@
         :currentRecording="currentRecording"
         :isRecording="isRecordingActive"
         :vadSettings="vadSettings"
+        :appSettings="appSettings"
         @browse-file="triggerFileInput"
         @load-url="showUrlModalHandler"
         @show-vad-settings="showVADSettings"
@@ -150,11 +151,19 @@
       @manual-align-triggered="handleManualAlignTriggered"
       @sequential-delay-updated="handleSequentialDelayUpdated"
     />
+    
+    <!-- App Settings Modal -->
+    <AppSettingsModal
+      :isOpen="showAppSettingsModal"
+      :settings="appSettings"
+      @close="closeAppSettingsModal"
+      @save="handleAppSettingsSave"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, nextTick } from 'vue';
 import RecordingNavigation from '../components/RecordingNavigation.vue';
 import SessionStats from '../components/SessionStats.vue';
 import RecordingSetsManager from '../components/RecordingSetsManager.vue';
@@ -167,6 +176,7 @@ import SavedRecordingsSection from '../components/SavedRecordingsSection.vue';
 import RecordingManager from '../components/RecordingManager.vue';
 import RecordingStateManager from '../components/RecordingStateManager.vue';
 import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
+import AppSettingsModal from '../components/AppSettingsModal.vue';
 import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useRecordingSets } from '../composables/useRecordingSets';
 import { useAppState } from '../composables/useAppState';
@@ -177,6 +187,7 @@ import { usePlaybackControls } from '../composables/usePlaybackControls';
 const {
   globalPlaybackSpeed,
   isRecordingActive,
+  appSettings,
   vadSettings,
   targetAudioPlayerRef,
   userAudioPlayerRef,
@@ -186,6 +197,7 @@ const {
   getTargetBlob,
   getUserBlob,
   updateVadSettings,
+  updateAppSettings,
   updatePlaybackSpeed,
   setRecordingActive,
   setTargetAudioPlayerRef,
@@ -201,6 +213,8 @@ const { currentRecording, updateUserRecording } = useRecordingSets()
 // to avoid provide/inject within the same component (which doesn't work in Vue setup)
 const appStateForComposables = {
   audioVisualizationPanel,
+  appSettings,
+  updateAppSettings,
   vadSettings,
   updateVadSettings,
   targetAudioPlayerRef,
@@ -213,6 +227,7 @@ const appStateForComposables = {
 const {
   showUrlModal,
   showVadModal,
+  showAppSettingsModal,
   urlToLoad,
   triggerFileInput,
   loadAudioFromUrl,
@@ -222,6 +237,9 @@ const {
   openVadModal,
   closeVadModal,
   handleVadSettingsSave: handleVadSettingsSaveUtil,
+  openAppSettingsModal,
+  closeAppSettingsModal,
+  handleAppSettingsSave,
   saveRecording: saveRecordingUtil,
   loadSavedRecording,
   deleteSavedRecording,
@@ -256,8 +274,9 @@ const handleUserAudioPlayerRef = (ref) => {
   setUserAudioPlayerRef(ref)
 }
 
-const handleAudioProcessed = (data) => {
+const handleAudioProcessed = async (data) => {
   console.log('Audio processed:', data)
+  // Auto-play is now handled automatically by AudioPlayer when wavesurfer is ready
 }
 
 // Simplified event handlers using utilities

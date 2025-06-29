@@ -13,7 +13,10 @@
       :audioType="audioType"
       :isRecording="isRecording"
       :debugInfo="debugInfo"
+      :autoPlayOnReady="autoPlayOnReady"
+      :suppressAutoPlay="suppressAutoPlay"
       :key="audioKey"
+      @auto-played="$emit('auto-played')"
     />
     
     <div v-else class="placeholder" :class="placeholderClass">
@@ -61,10 +64,18 @@ const props = defineProps({
   defaultPlaceholder: {
     type: String,
     default: 'No audio available'
+  },
+  autoPlayOnReady: {
+    type: Boolean,
+    default: false
+  },
+  suppressAutoPlay: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['audio-player-ref'])
+const emit = defineEmits(['audio-player-ref', 'auto-played'])
 
 // Handle AudioPlayer ref via callback
 const setAudioPlayerRef = (ref) => {

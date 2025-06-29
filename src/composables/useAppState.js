@@ -11,6 +11,12 @@ export function useAppState() {
   // Core application state
   const globalPlaybackSpeed = ref(1)
   const isRecordingActive = ref(false)
+  
+  // General app settings
+  const appSettings = ref({
+    autoPlayTargetOnUpload: true  // Play target audio immediately after upload
+  })
+  
   const vadSettings = ref({
     padding: 0.2,
     threshold: 0.25,
@@ -45,6 +51,10 @@ export function useAppState() {
     vadSettings.value = { ...vadSettings.value, ...newSettings }
   }
 
+  const updateAppSettings = (newSettings) => {
+    appSettings.value = { ...appSettings.value, ...newSettings }
+  }
+
   const updatePlaybackSpeed = (newSpeed) => {
     globalPlaybackSpeed.value = newSpeed
   }
@@ -70,6 +80,7 @@ export function useAppState() {
     // Reactive state
     globalPlaybackSpeed,
     isRecordingActive,
+    appSettings,
     vadSettings,
     targetAudioPlayerRef,
     userAudioPlayerRef,
@@ -85,6 +96,7 @@ export function useAppState() {
     
     // State update methods
     updateVadSettings,
+    updateAppSettings,
     updatePlaybackSpeed,
     setRecordingActive,
     setTargetAudioPlayerRef,

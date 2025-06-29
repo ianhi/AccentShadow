@@ -18,7 +18,10 @@
         audioType="target"
         :audioKey="targetAudioKey"
         :debugInfo="targetDebugInfo"
+        :autoPlayOnReady="appSettings.autoPlayTargetOnUpload"
+        :suppressAutoPlay="isAligning || hasTargetAutoPlayed"
         @audio-player-ref="handleTargetAudioPlayerRef"
+        @auto-played="handleTargetAutoPlayed"
       >
         <template #placeholder>
           {{ currentRecording ? 'Select a recording from the set' : 'Please upload a target audio file or load from URL.' }}
@@ -74,6 +77,12 @@ const props = defineProps({
       maxTrimStart: 3.0,
       maxTrimEnd: 2.0
     })
+  },
+  appSettings: {
+    type: Object,
+    default: () => ({
+      autoPlayTargetOnUpload: true
+    })
   }
 })
 
@@ -108,6 +117,8 @@ const targetAudioProcessed = ref(null)
 const autoPlayBoth = ref(true)
 const autoAlignEnabled = ref(true)
 const sequentialDelay = ref(0)
+const isAligning = ref(false) // Track alignment operations to suppress auto-play
+const hasTargetAutoPlayed = ref(false) // Track if target has auto-played for current upload
 
 // Audio player refs
 const targetAudioPlayerRef = ref(null)
@@ -131,6 +142,11 @@ const userAudioKey = computed(() => userAudioUrl.value ? `user-${Date.now()}` : 
 const handleTargetAudioPlayerRef = (ref) => {
   targetAudioPlayerRef.value = ref
   emit('target-audio-ref', ref)
+}
+
+const handleTargetAutoPlayed = () => {
+  hasTargetAutoPlayed.value = true
+  console.log('🎯 Target audio auto-played - flag set to prevent further auto-play')
 }
 
 const handleUserAudioPlayerRef = (ref) => {
@@ -182,6 +198,7 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     originalTargetAudioBlob.value = null // Clear original as well
     targetAudioUrl.value = null
     targetAudioBlob.value = null
+    hasTargetAutoPlayed.value = false // Reset auto-play flag when target is cleared
     
     // Cleanup old blob URL
     if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
@@ -201,6 +218,12 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     // Store the original target audio blob to prevent progressive trimming
     originalTargetAudioBlob.value = audioBlob
     console.log('💾 Stored original target audio blob for future alignments')
+    
+    // Reset auto-play flag for new target audio (but not during alignment)
+    if (!isAligning.value) {
+      hasTargetAutoPlayed.value = false
+      console.log('🎯 New target audio - reset auto-play flag')
+    }
     
     // Get raw duration for debugging
     const rawDuration = await getAudioDuration(audioBlob)
@@ -363,6 +386,7 @@ const processUserAudio = async (blob) => {
         // If we have both target and user audio, align them together for matching lengths
         if (targetAudioBlob.value) {
           console.log('🔄 Both target and user audio available - performing smart alignment...')
+          isAligning.value = true // Suppress auto-play during alignment
           
           try {
             // Always use original target audio to prevent progressive trimming
@@ -450,6 +474,8 @@ const processUserAudio = async (blob) => {
             }
           } catch (alignError) {
             console.error('❌ Smart alignment failed:', alignError)
+          } finally {
+            isAligning.value = false // Re-enable auto-play after alignment
           }
         } else {
           console.log('🎯 No target audio - processing user audio individually')

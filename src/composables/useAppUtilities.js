@@ -40,6 +40,7 @@ export function useAppUtilities(providedAppState = null) {
   // Modal states
   const showUrlModal = ref(false)
   const showVadModal = ref(false)
+  const showAppSettingsModal = ref(false)
   const urlToLoad = ref('')
 
   // File input ref for triggering file selection
@@ -147,6 +148,21 @@ export function useAppUtilities(providedAppState = null) {
     closeVadModal()
   }
 
+  const openAppSettingsModal = () => {
+    showAppSettingsModal.value = true
+  }
+
+  const closeAppSettingsModal = () => {
+    showAppSettingsModal.value = false
+  }
+
+  const handleAppSettingsSave = (newSettings) => {
+    if (appState.updateAppSettings) {
+      appState.updateAppSettings(newSettings)
+    }
+    closeAppSettingsModal()
+  }
+
   // Recording management utilities
   const saveRecording = async (targetBlob, userBlob) => {
     if (!targetBlob || !userBlob) {
@@ -251,6 +267,7 @@ export function useAppUtilities(providedAppState = null) {
     // Modal states
     showUrlModal,
     showVadModal,
+    showAppSettingsModal,
     urlToLoad,
 
     // File handling
@@ -266,6 +283,9 @@ export function useAppUtilities(providedAppState = null) {
     openVadModal,
     closeVadModal,
     handleVadSettingsSave,
+    openAppSettingsModal,
+    closeAppSettingsModal,
+    handleAppSettingsSave,
     
     // Recording management
     saveRecording,
