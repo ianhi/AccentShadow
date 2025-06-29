@@ -8,50 +8,50 @@
       <SessionStats />
       <RecordingNavigation />
       
-      <div class="visualization-container">
-      <div class="audio-column">
-        <div class="column-header">
-          <h3>Target Audio</h3>
-          <TargetAudioControls 
-            :currentAudioSource="currentAudioSource"
-            @browse-file="triggerFileInput"
-            @load-url="showUrlModal = true"
-          />
-        </div>
-        <AudioPlayer 
-          v-if="getTargetAudioUrl()" 
-          ref="targetAudioPlayerRef" 
-          :audioUrl="getTargetAudioUrl()" 
-          :audioType="'target'"
-          :debugInfo="targetDebugInfo"
-          :key="getTargetAudioKey()"
+      <!-- Target Audio Controls Section -->
+      <div class="target-controls-section">
+        <h3>📁 Load Target Audio</h3>
+        <TargetAudioControls 
+          :currentAudioSource="currentAudioSource"
+          @browse-file="triggerFileInput"
+          @load-url="showUrlModal = true"
         />
-        <div v-else class="placeholder">
-          {{ activeSet ? 'Select a recording from the set' : 'Please upload a target audio file or load from URL.' }}
-        </div>
       </div>
       
-      <div class="audio-column">
-        <div class="column-header">
-          <h3>User Recording</h3>
-        </div>
-        <AudioPlayer 
-          v-if="currentRecording?.userRecording?.audioUrl || userAudioUrl" 
-          ref="userAudioPlayerRef" 
-          :audioUrl="currentRecording?.userRecording?.audioUrl || userAudioUrl" 
-          :audioType="'user'"
-          :isRecording="isRecordingActive"
+      <div class="visualization-container">
+        <!-- Target Audio Column -->
+        <AudioColumn
+          title="Target Audio"
+          :audioUrl="getTargetAudioUrl()"
+          audioType="target"
+          :audioKey="getTargetAudioKey()"
+          :debugInfo="targetDebugInfo"
+          @audio-player-ref="handleTargetAudioPlayerRef"
+        >
+          <template #placeholder>
+            {{ activeSet ? 'Select a recording from the set' : 'Please upload a target audio file or load from URL.' }}
+          </template>
+        </AudioColumn>
+        
+        <!-- User Recording Column -->
+        <AudioColumn
+          title="User Recording"
+          :audioUrl="currentRecording?.userRecording?.audioUrl || userAudioUrl"
+          audioType="user"
+          :audioKey="getUserAudioKey()"
           :debugInfo="userDebugInfo"
-          :key="getUserAudioKey()"
-        />
-        <div v-else class="placeholder" :class="{ 'recording-placeholder': isRecordingActive }">
-          <span v-if="isRecordingActive" class="recording-indicator-text">
-            🔴 Recording in progress...
-          </span>
-          <span v-else>Record your audio.</span>
-        </div>
+          :isRecording="isRecordingActive"
+          :placeholderClass="{ 'recording-placeholder': isRecordingActive }"
+          @audio-player-ref="handleUserAudioPlayerRef"
+        >
+          <template #placeholder>
+            <span v-if="isRecordingActive" class="recording-indicator-text">
+              🔴 Recording in progress...
+            </span>
+            <span v-else>Record your audio.</span>
+          </template>
+        </AudioColumn>
       </div>
-    </div>
 
     <div class="central-playback-controls">
       <h3>Recording & Playback Controls</h3>
@@ -194,6 +194,7 @@ import VADSettingsModal from '../components/VADSettingsModal.vue';
 import PlaybackControls from '../components/PlaybackControls.vue';
 import TargetAudioControls from '../components/TargetAudioControls.vue';
 import SpeedControl from '../components/SpeedControl.vue';
+import AudioColumn from '../components/AudioColumn.vue';
 import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment';
 import { useRecordingSets } from '../composables/useRecordingSets';
@@ -506,6 +507,15 @@ watch(currentRecording, async (newRecording, oldRecording) => {
 
 const userAudioPlayerRef = ref(null);
 const targetAudioPlayerRef = ref(null);
+
+// Handle refs from AudioColumn components
+const handleTargetAudioPlayerRef = (ref) => {
+  targetAudioPlayerRef.value = ref;
+};
+
+const handleUserAudioPlayerRef = (ref) => {
+  userAudioPlayerRef.value = ref;
+};
 
 const handleRecordingStarted = () => {
   console.log('🎤 PracticeView: Recording started');
@@ -1236,23 +1246,7 @@ h1 {
 }
 
 
-.column-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #e5e7eb;
-  min-height: 80px; /* Fixed height to ensure alignment */
-}
-
-.column-header h3 {
-  margin: 0;
-  color: #1f2937;
-  font-weight: 600;
-  font-size: 18px;
-  text-shadow: none; /* Ensure good contrast */
-}
+/* Column header styles moved to AudioColumn component */
 
 /* Target controls styles moved to TargetAudioControls component */
 
@@ -1760,67 +1754,50 @@ h1 {
   flex-shrink: 0; /* Prevent shrinking */
 }
 
+.target-controls-section {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.target-controls-section h3 {
+  margin: 0 0 12px 0;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
 .visualization-container {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-  align-items: start;
+  gap: 20px;
+  margin-bottom: 20px;
+  align-items: stretch; /* Ensure equal heights */
 }
 
-.audio-column {
-  background-color: #ffffff; /* Light background for better text contrast */
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 16px;
-  min-width: 0;
-  min-height: 300px;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-
-.placeholder {
-  padding: 40px;
-  text-align: center;
-  color: #6b7280;
-  border: 2px dashed #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-  background-color: #f9fafb;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 220px;
-  transition: all 0.3s ease;
-}
-
-.recording-placeholder {
-  background-color: #fef2f2;
-  border-color: #ef4444;
-  color: #dc2626;
-}
-
-.recording-indicator-text {
-  font-weight: 600;
-  animation: pulse 1.5s infinite;
-}
+/* Old light theme audio column styles removed - now using AudioColumn component with proper dark theme */
 
 .section {
-  background-color: #f9f9f9;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 h2 {
-  color: #374151;
+  color: white;
   margin-top: 0;
   margin-bottom: 15px;
   font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 button {
@@ -1858,19 +1835,20 @@ button:disabled {
     padding: 15px;
   }
   
+  .target-controls-section {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  
+  .target-controls-section h3 {
+    font-size: 15px;
+  }
+  
   .visualization-container {
     grid-template-columns: 1fr;
   }
   
-  .column-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-  
-  .column-header h3 {
-    text-align: center;
-  }
+  /* Column header mobile styles moved to AudioColumn component */
   
   .bottom-controls {
     flex-direction: column;
