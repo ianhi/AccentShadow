@@ -1,167 +1,213 @@
 <template>
   <div class="mobile-practice-a">
-    <!-- Mobile Header -->
+    <!-- Compact Mobile Header -->
     <header class="mobile-header">
-      <button class="back-btn" @click="goBack">
-        <span class="icon">←</span>
+      <button class="header-btn" @click="toggleRecordingSets">
+        <span class="icon">📚</span>
       </button>
       <div class="header-title">
-        <h1>Pronunciation Practice</h1>
-        <span class="progress">3 / 25</span>
+        <h1>{{ currentRecording?.name || 'Practice' }}</h1>
+        <span class="progress" v-if="activeSet">{{ activeSet.name }}</span>
       </div>
-      <button class="settings-btn" @click="showSettings">
-        <span class="icon">⚙️</span>
+      <button class="header-btn" @click="showOptionsMenu">
+        <span class="icon">⋮</span>
       </button>
     </header>
 
-    <!-- Compact Audio Loading -->
-    <section class="compact-loading-section">
-      <div class="loading-bar">
-        <span class="current-file">{{ currentAudioName || 'No audio selected' }}</span>
-        <div class="loading-actions">
-          <button class="action-btn file-btn" @click="selectFile">📁</button>
-          <button class="action-btn url-btn" @click="showUrlInput">🌐</button>
-        </div>
+    <!-- Compact Audio Info -->
+    <section class="audio-info-compact">
+      <div class="audio-name">{{ getCurrentAudioName() }}</div>
+      <div class="audio-controls">
+        <button class="load-btn" @click="showLoadOptions">
+          <span class="btn-icon">📁</span>
+          <span class="btn-text">Load File</span>
+        </button>
       </div>
     </section>
 
-    <!-- Target Audio Section -->
+    <!-- Target Audio Visualizations -->
     <section class="audio-section target-section">
-      <div class="section-header">
-        <h2>Target Audio</h2>
+      <div class="section-label">Target Audio</div>
+      <div class="waveform-container target-wave" ref="targetWaveformRef">
+        <div v-if="!targetReady" class="placeholder">🎵 Target waveform will appear here</div>
       </div>
-
-      <!-- Target Waveform (no label, compact) -->
-      <div class="visualization-wrapper" :style="{ width: syncEnabled ? targetWidthPercent : '100%' }">
-        <div class="waveform-container target-wave" ref="targetWaveformRef">
-          <div v-if="!targetReady" class="placeholder-wave">🎵 Loading target waveform...</div>
-        </div>
+      <div class="spectrogram-container large target-spectrogram" ref="targetSpectrogramRef">
+        <div v-if="!targetReady" class="placeholder large">Target SPECTROGRAM</div>
       </div>
+    </section>
 
-      <!-- Target Spectrogram (always visible, no label) -->
-      <div class="visualization-wrapper" :style="{ width: syncEnabled ? targetWidthPercent : '100%' }">
-        <div class="spectrogram-container target-spectrogram" ref="targetSpectrogramRef">
-          <div v-if="!targetReady" class="placeholder-spectrogram">🌈 Loading target spectrogram...</div>
+    <!-- User Audio Visualizations - only show when audio exists -->
+    <section class="audio-section user-section" v-if="userAudioUrl">
+      <div class="spectrogram-container large user-spectrogram" ref="userSpectrogramRef">
+        <div v-if="!userReady" class="placeholder large">User SPECTROGRAM</div>
+      </div>
+      <div class="section-label">User Audio</div>
+      <div class="waveform-container user-wave" ref="userWaveformRef">
+        <div v-if="!userReady" class="placeholder">🎵 User waveform will appear here</div>
+      </div>
+    </section>
+
+    <!-- Recording Placeholder when no user audio -->
+    <section class="audio-section recording-section" v-else>
+      <div class="recording-placeholder">
+        <div class="record-button-large" @click="startRecording" :disabled="!getTargetAudioUrl() || recorderIsRecording">
+          <span class="record-icon">{{ recorderIsRecording ? '⏹️' : '🎤' }}</span>
+          <span class="record-text">{{ recorderIsRecording ? 'Recording...' : 'Tap to Record' }}</span>
         </div>
       </div>
     </section>
 
-
-    <!-- User Audio Section -->
-    <section class="audio-section user-section">
-
-      <!-- User Waveform (no label, compact) -->
-      <div class="visualization-wrapper" :style="{ width: syncEnabled ? userWidthPercent : '100%' }">
-        <div class="waveform-container user-wave" ref="userWaveformRef">
-          <div v-if="!userReady" class="placeholder-wave">🎵 Loading user waveform...</div>
-        </div>
-      </div>
-
-      <!-- User Spectrogram (always visible, no label) -->
-      <div class="visualization-wrapper" :style="{ width: syncEnabled ? userWidthPercent : '100%' }">
-        <div class="spectrogram-container user-spectrogram" ref="userSpectrogramRef">
-          <div v-if="!userReady" class="placeholder-spectrogram">🌈 Loading user spectrogram...</div>
-        </div>
+    <!-- Compact Controls -->
+    <section class="controls-section">
+      <!-- Playback Controls Row -->
+      <div class="playback-row">
+        <PlaybackButton 
+          icon="▶️" 
+          label="Play Target" 
+          variant="target"
+          :disabled="!getTargetAudioUrl()"
+          @click="playTarget"
+        />
+        
+        <PlaybackButton 
+          icon="▶️" 
+          label="Play User" 
+          variant="user"
+          :disabled="!userAudioUrl"
+          @click="playUser"
+        />
+        
+        <PlaybackButton 
+          icon="▶️" 
+          label="Play Both" 
+          variant="overlapping"
+          :disabled="!getTargetAudioUrl() || !userAudioUrl"
+          @click="playBoth"
+        />
+        
+        <PlaybackButton 
+          icon="⚡" 
+          :label="`Speed ${currentSpeed}x`" 
+          variant="default"
+          @click="cycleSpeed"
+        />
       </div>
       
-      <!-- Alignment Status Indicator -->
-      <div v-if="vadTrimInfo?.aligned" class="alignment-indicator">
-        <span class="alignment-icon">🎯↔️🎤</span>
-        <span class="alignment-text">Audio aligned (+{{ vadTrimInfo.paddingAdded?.toFixed(2) }}s silence)</span>
-      </div>
-      
-      <!-- Unified Control Bar -->
-      <div class="unified-control-bar">
-        <!-- Main Playback Controls -->
-        <button class="control-btn play-target" @click="playTarget" :disabled="!targetReady">
-          <span class="btn-icon">▶️</span>
-          <span class="btn-label">Target</span>
-        </button>
-        
-        <button class="control-btn play-user" @click="playUser" :disabled="!userReady">
-          <span class="btn-icon">▶️</span>
-          <span class="btn-label">User</span>
-        </button>
-        
-        <button class="control-btn play-both" @click="playBoth" :disabled="!targetReady || !userReady">
-          <span class="btn-icon">▶️</span>
-          <span class="btn-label">Both</span>
-        </button>
-        
-        <!-- Speed Controls -->
-        <button class="control-btn speed-cycle" @click="cycleSpeed">
-          <span class="btn-icon">⚡</span>
-          <span class="btn-label">{{ currentSpeed }}x</span>
-        </button>
-        
-        <!-- VAD Toggle -->
-        <button class="control-btn vad-toggle" @click="vadEnabled = !vadEnabled" :class="{ 'vad-enabled': vadEnabled, 'vad-processing': isVadProcessing }" :disabled="isVadProcessing">
-          <span class="btn-icon">{{ isVadProcessing ? '⏳' : '✂️' }}</span>
-          <span class="btn-label">{{ isVadProcessing ? 'VAD...' : 'VAD' }}</span>
-        </button>
-        
-        <!-- Manual Alignment -->
-        <button v-if="hasUserRecording && targetReady" class="control-btn align-btn" @click="manuallyAlignAudio" :disabled="isVadProcessing || !vadEnabled">
-          <span class="btn-icon">🎯</span>
-          <span class="btn-label">Align</span>
-        </button>
-        
-        <!-- Record Again -->
-        <button class="control-btn record-again" @click="resetUserRecording" :disabled="isProcessing">
-          <span class="btn-icon">🎤</span>
-          <span class="btn-label">{{ isProcessing ? 'Processing...' : 'Record Again' }}</span>
-        </button>
+      <!-- Record Button Row -->
+      <div class="record-row" v-if="userAudioUrl">
+        <PlaybackButton 
+          icon="🎤" 
+          :label="recorderIsRecording ? 'Stop' : 'Record Again'" 
+          variant="primary"
+          :disabled="!getTargetAudioUrl() || isProcessing"
+          :processing="isProcessing"
+          @click="toggleRecording"
+        />
       </div>
     </section>
 
-    <!-- Recording Status (when recording) -->
-    <section v-if="isRecording" class="recording-status-section">
-      <div class="recording-indicator">
-        <span class="status-text">{{ recordingStatus }}</span>
-        <span class="recording-timer">{{ recordingTime }}</span>
-      </div>
-    </section>
-
-    <!-- Comparison Controls -->
-    <section v-if="hasUserRecording" class="comparison-section">
-      <div class="comparison-header">
-        <h2>Compare & Analyze</h2>
-      </div>
-      <div class="comparison-controls">
-        <button class="comparison-btn" @click="playBoth">
-          🔄 Play Both
-        </button>
-        <button class="comparison-btn" @click="toggleOverlay">
-          📊 {{ overlayMode ? 'Split View' : 'Overlay' }}
-        </button>
-        <button class="comparison-btn" @click="syncPlayback">
-          ⚡ Sync Play
+    <!-- Bottom Navigation -->
+    <nav class="bottom-navigation" v-if="activeSet">
+      <div class="nav-center">
+        <span class="nav-progress">{{ activeSet.name }}</span>
+        <button v-if="hasUserRecording && currentRecording" class="complete-btn" @click="markRecordingCompleted">
+          Mark Complete
         </button>
       </div>
-    </section>
-
-    <!-- Action Panel -->
-    <section class="action-panel">
-      <div class="action-buttons">
-        <button class="action-primary save-btn" @click="saveRecording" :disabled="!hasUserRecording">
-          💾 Save Recording
-        </button>
-        <button class="action-primary complete-btn" @click="markComplete" :disabled="!hasUserRecording">
-          ✅ Mark Complete
-        </button>
-      </div>
-      <div class="navigation-buttons">
-        <button class="nav-btn prev-btn" @click="previousRecording">
-          ← Previous
-        </button>
-        <button class="nav-btn next-btn" @click="nextRecording">
-          Next →
-        </button>
-      </div>
-    </section>
+    </nav>
 
     <!-- Bottom Safe Area -->
     <div class="bottom-safe-area"></div>
+
+    <!-- Hidden File Input -->
+    <input 
+      type="file" 
+      accept="audio/*" 
+      @change="handleFileSelection" 
+      ref="hiddenFileInput"
+      style="display: none;"
+    />
+
+    <!-- URL Input Modal -->
+    <div v-if="showUrlModal" class="modal-overlay" @click="showUrlModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>🌐 Load Audio from URL</h3>
+          <button class="close-btn" @click="showUrlModal = false">×</button>
+        </div>
+        <div class="modal-body">
+          <input 
+            type="url" 
+            v-model="tempAudioUrl" 
+            placeholder="Enter audio URL (e.g., https://example.com/audio.mp3)"
+            class="url-input"
+            @keyup.enter="handleUrlLoad"
+            ref="urlInputRef"
+          />
+          <div class="modal-actions">
+            <button @click="showUrlModal = false" class="cancel-btn">Cancel</button>
+            <button @click="handleUrlLoad" :disabled="!tempAudioUrl.trim()" class="load-btn-modal">
+              Load Audio
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recording Sets Modal -->
+    <div v-if="showRecordingSetsModal" class="modal-overlay" @click="showRecordingSetsModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Recording Sets</h3>
+          <button class="close-btn" @click="showRecordingSetsModal = false">×</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="!activeSet" class="empty-state">
+            <p>No recording set active</p>
+            <p>Please use the desktop version to create and manage recording sets.</p>
+          </div>
+          <div v-else class="recording-sets-list">
+            <div class="recording-set-item active">
+              <div class="set-info">
+                <h4>{{ activeSet.name }}</h4>
+                <p>{{ activeSet.recordings?.length || 0 }} recordings</p>
+                <div class="progress-bar">
+                  <div class="progress-fill" :style="{ width: (activeSet.progress?.percentage || 0) + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Options Modal -->
+    <div v-if="showOptionsModal" class="modal-overlay" @click="showOptionsModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Options</h3>
+          <button class="close-btn" @click="showOptionsModal = false">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="option-item" @click="selectFile">
+            <span class="option-icon">📁</span>
+            <span class="option-text">Upload Audio File</span>
+          </div>
+          <div class="option-item" @click="showUrlInput">
+            <span class="option-icon">🌐</span>
+            <span class="option-text">Load from URL</span>
+          </div>
+          <div class="option-item" @click="showFolderUpload">
+            <span class="option-icon">📂</span>
+            <span class="option-text">Upload Folder</span>
+          </div>
+          <div class="option-item" @click="showSettings">
+            <span class="option-icon">⚙️</span>
+            <span class="option-text">Settings</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -169,17 +215,46 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useWaveform } from '../composables/useWaveform'
 import { useTimeSync } from '../composables/useTimeSync'
-import { useVADProcessor } from '../composables/useVADProcessor'
+import { useRecordingSets } from '../composables/useRecordingSets'
+import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment'
+import { useIndexedDB } from '../composables/useIndexedDB'
 import { useAudioProcessing } from '../composables/useAudioProcessing'
+import { useAudioRecorder } from '../composables/useAudioRecorder'
+import PlaybackButton from '../components/PlaybackButton.vue'
+
+// Same composables as desktop
+const { initDB, addRecording, deleteRecording } = useIndexedDB()
+const { 
+  isProcessing: vadIsProcessing,
+  vadReady,
+  initVAD,
+  processAudio,
+  normalizeAudioSilence,
+  alignTwoAudios
+} = useSmartAudioAlignment()
+
+// Recording sets integration (same as desktop)
+const { 
+  activeSet, 
+  currentRecording, 
+  updateUserRecording,
+  markRecordingCompleted 
+} = useRecordingSets()
 
 // Reactive state
+const showRecordingSetsModal = ref(false)
+const showOptionsModal = ref(false)
+const showUrlModal = ref(false)
+const tempAudioUrl = ref('')
+const hiddenFileInput = ref(null)
+const urlInputRef = ref(null)
 const currentAudioName = ref('patth.wav')
 const targetAudio = ref(null)
 const targetAudioUrl = ref(null)
 const hasUserRecording = ref(false)
-const isRecording = ref(false)
 const isProcessing = ref(false)
-const recordingTime = ref('00:00')
+const userAudioUrl = ref(null)
+const userAudioBlob = ref(null)
 const userDuration = ref('0:02')
 const vadEnabled = ref(true)
 const autoPlayEnabled = ref(true)
@@ -210,17 +285,22 @@ const {
   setUserDuration 
 } = useTimeSync()
 
-// Voice Activity Detection for audio trimming
+// Audio processing for alignment and VAD
 const { 
-  trimAudioWithVAD, 
-  detectSpeechBoundariesVAD, 
-  vadReady, 
-  initVAD 
-} = useVADProcessor()
-
-const { 
-  autoAlignRecordings 
+  autoAlignRecordings,
+  trimAudioWithVAD,
+  detectSpeechBoundariesVAD,
+  vadReady: vadProcessorReady,
+  initVAD: initVADProcessor
 } = useAudioProcessing()
+
+// Audio recording functionality
+const { 
+  isRecording: recorderIsRecording,
+  recordingTime: recorderRecordingTime,
+  startRecording: startAudioRecording,
+  stopRecording: stopAudioRecording
+} = useAudioRecorder()
 
 // Function to add silence padding to audio blob
 const addSilencePadding = async (audioBlob, paddingSeconds, atStart = true) => {
@@ -492,6 +572,30 @@ watch(vadEnabled, async (newVadEnabled, oldVadEnabled) => {
   }
 })
 
+// Watch for user audio URL changes (desktop pattern)
+watch(userAudioUrl, async (newUrl) => {
+  if (newUrl) {
+    console.log('🎵 User audio URL changed, loading into waveforms:', newUrl)
+    
+    // Wait for waveforms to be ready then load the audio
+    await nextTick()
+    if (userWaveformRef.value && userSpectrogramRef.value) {
+      if (!userReady.value) {
+        initUserWaveform()
+        await new Promise(resolve => setTimeout(resolve, 200))
+      }
+      
+      // Load the user audio using the existing loadUserAudio function
+      try {
+        await loadUserAudio(newUrl)
+        console.log('✅ User audio loaded successfully via watch')
+      } catch (error) {
+        console.error('❌ Failed to load user audio via watch:', error)
+      }
+    }
+  }
+})
+
 // UI state
 const collapsedSections = ref({
   loading: false
@@ -505,30 +609,200 @@ const expandedSpectrograms = ref({
 // Computed
 const recordingStatus = computed(() => {
   if (isProcessing.value) return 'Processing...'
-  if (isRecording.value) return 'Recording...'
-  if (hasUserRecording.value) return 'Recording complete'
+  if (recorderIsRecording.value) return 'Recording...'
+  if (userAudioUrl.value) return 'Recording complete'
   return 'Ready to record'
 })
 
 // Methods
-const goBack = () => {
-  console.log('Go back')
+const toggleRecordingSets = () => {
+  showRecordingSetsModal.value = !showRecordingSetsModal.value
+  console.log('Toggle recording sets modal:', showRecordingSetsModal.value)
 }
 
-const showSettings = () => {
-  console.log('Show settings')
+const showOptionsMenu = () => {
+  showOptionsModal.value = !showOptionsModal.value
+  console.log('Show options menu:', showOptionsModal.value)
 }
 
-const toggleSection = (section) => {
-  collapsedSections.value[section] = !collapsedSections.value[section]
+const getCurrentAudioName = () => {
+  return currentRecording.value?.name || currentAudioName.value || 'No audio loaded'
 }
+
+const getTargetAudioUrl = () => {
+  return currentRecording.value?.audioUrl || targetAudioUrl.value
+}
+
+const showLoadOptions = () => {
+  showOptionsModal.value = true
+}
+
+const triggerFileInput = () => {
+  hiddenFileInput.value?.click()
+}
+
+// Utility function for getting audio duration (same as desktop)
+const getAudioDuration = async (audioBlob) => {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio()
+    audio.onloadedmetadata = () => {
+      resolve(audio.duration)
+    }
+    audio.onerror = () => {
+      reject(new Error('Failed to load audio for duration calculation'))
+    }
+    audio.src = URL.createObjectURL(audioBlob)
+  })
+}
+
+const setTargetAudio = async (audioBlob, source = {}) => {
+  if (!audioBlob) {
+    console.warn('🎯 setTargetAudio: No audio blob provided')
+    // Clear everything
+    const oldTargetUrl = targetAudioUrl.value
+    targetAudioUrl.value = null
+    currentAudioName.value = 'No audio loaded'
+    
+    // Cleanup old blob URL
+    if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+      setTimeout(() => {
+        URL.revokeObjectURL(oldTargetUrl)
+      }, 3000)
+    }
+    return
+  }
+
+  try {
+    const sourceType = source.source || 'manual'
+    
+    // Store old URL for cleanup
+    const oldTargetUrl = targetAudioUrl.value
+    
+    // Get raw duration for debugging
+    const rawDuration = await getAudioDuration(audioBlob)
+    
+    // Process target audio with VAD
+    const targetProcessed = await processAudio(audioBlob, {
+      positiveSpeechThreshold: 0.3,
+      negativeSpeechThreshold: 0.2,
+      minSpeechFrames: 3,
+      redemptionFrames: 32,
+      padding: 0.05
+    })
+    
+    if (targetProcessed.processed && targetProcessed.vadBoundaries) {
+      // Normalize target audio to have consistent padding
+      const normalizedBlob = await normalizeAudioSilence(
+        targetProcessed.audioBlob,
+        targetProcessed.vadBoundaries,
+        200 // 200ms padding
+      )
+      
+      // Update state with processed audio
+      targetAudioUrl.value = URL.createObjectURL(normalizedBlob)
+      currentAudioName.value = source.name || source.fileName || 'Loaded audio'
+      
+      console.log('✅ Target audio processed successfully')
+    } else {
+      console.log('📏 Target VAD processing failed - using original audio')
+      
+      // Use original audio when VAD processing fails
+      targetAudioUrl.value = URL.createObjectURL(audioBlob)
+      currentAudioName.value = source.name || source.fileName || 'Loaded audio'
+    }
+    
+    // Cleanup old blob URL
+    if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+      setTimeout(() => {
+        URL.revokeObjectURL(oldTargetUrl)
+      }, 3000)
+    }
+    
+    // Initialize target waveform with new audio
+    setTimeout(() => {
+      if (targetAudioUrl.value) {
+        loadTargetAudio(targetAudioUrl.value)
+      }
+    }, 100)
+    
+  } catch (error) {
+    console.error('Error setting target audio:', error)
+  }
+}
+
+const handleFileSelection = async (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    await setTargetAudio(file, { name: file.name, fileName: file.name })
+    
+    // Reset the input so the same file can be selected again if needed
+    event.target.value = ''
+  }
+}
+
+const handleUrlLoad = async () => {
+  const url = tempAudioUrl.value.trim()
+  if (!url) return
+  
+  try {
+    // Validate URL format
+    new URL(url)
+    
+    // Fetch the audio file
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    // Convert to blob
+    const blob = await response.blob()
+    
+    // Validate it's an audio file
+    if (!blob.type.startsWith('audio/')) {
+      throw new Error('URL does not point to an audio file')
+    }
+    
+    // Use unified processing
+    await setTargetAudio(blob, { url: url, name: url })
+    
+    showUrlModal.value = false
+    tempAudioUrl.value = ''
+    
+  } catch (error) {
+    console.error('Error loading audio from URL:', error)
+    alert(`Failed to load audio from URL: ${error.message}`)
+  }
+}
+
+// Recording sets are managed by the desktop version
+// Mobile version displays the currently active set
 
 const selectFile = () => {
   console.log('Select file')
+  showOptionsModal.value = false
+  triggerFileInput()
 }
 
 const showUrlInput = () => {
   console.log('Show URL input')
+  showOptionsModal.value = false
+  showUrlModal.value = true
+}
+
+const showFolderUpload = () => {
+  console.log('Show folder upload')
+  showOptionsModal.value = false
+  // TODO: Implement folder upload modal
+}
+
+const showSettings = () => {
+  console.log('Show settings')
+  showOptionsModal.value = false
+  // TODO: Implement settings modal
+}
+
+const toggleSection = (section) => {
+  collapsedSections.value[section] = !collapsedSections.value[section]
 }
 
 // Function to load target audio with VAD processing
@@ -599,34 +873,21 @@ const initializeTargetWaveform = async () => {
   }
 }
 
+// Simplified user waveform initialization (follows desktop pattern)
 const initializeUserWaveform = async () => {
   await nextTick()
 
   if (userWaveformRef.value && userSpectrogramRef.value) {
-    console.log('Initializing user waveform...')
+    console.log('🎵 Initializing user waveform containers...')
     initUserWaveform()
-
-    // Wait for initialization then load audio
-    setTimeout(() => {
-      loadUserAudio('/path.mp3')
-      // Set hasUserRecording to true since we're loading a fake user audio
-      hasUserRecording.value = true
-    }, 100)
+    console.log('✅ User waveform containers ready')
   } else {
-    console.warn('User waveform containers not ready, retrying...')
-    // Retry after a delay for better HMR stability
+    console.warn('⚠️ User waveform containers not ready, retrying...')
     setTimeout(async () => {
       await nextTick()
       if (userWaveformRef.value && userSpectrogramRef.value) {
-        console.log('Retry successful - initializing user waveform...')
         initUserWaveform()
-        setTimeout(() => {
-          loadUserAudio('/path.mp3')
-          // Set hasUserRecording to true since we're loading a fake user audio
-          hasUserRecording.value = true
-        }, 100)
-      } else {
-        console.error('User refs still not available after retry')
+        console.log('✅ User waveform containers ready after retry')
       }
     }, 100)
   }
@@ -795,78 +1056,12 @@ const processUserRecordingWithVAD = async (audioBlob) => {
 }
 
 const toggleRecording = async () => {
-  if (isRecording.value) {
+  if (recorderIsRecording.value) {
     // Stop recording
-    isRecording.value = false
-    isProcessing.value = true
-
-    console.log('🎤 Recording stopped, starting VAD processing...')
-    
-    try {
-      // For demo purposes, we'll simulate processing with the existing path.mp3 file
-      // In a real implementation, this would be the actual recorded audio blob
-      
-      // Simulate VAD processing delay
-      setTimeout(async () => {
-        try {
-          // Load the demo user audio file to simulate VAD processing
-          const response = await fetch('/path.mp3')
-          const audioBlob = await response.blob()
-          
-          console.log('🎤 Simulating VAD trimming on demo audio...')
-          
-          // Process with VAD trimming (this will work with the real VAD system)
-          const processedBlob = await processUserRecordingWithVAD(audioBlob)
-          
-          // Create blob URL for the processed audio
-          const processedUrl = URL.createObjectURL(processedBlob)
-          
-          // Load the processed audio into the user waveform
-          if (processedUrl) {
-            console.log('🎤 Loading VAD-processed audio into user waveform')
-            loadUserAudio(processedUrl)
-          }
-          
-          isProcessing.value = false
-          hasUserRecording.value = true
-          
-          console.log('🎤 Recording processing completed with VAD trimming')
-          
-          // Show VAD trim info if available
-          if (vadTrimInfo.value) {
-            console.log('🎤 VAD Trim Results:', vadTrimInfo.value)
-          }
-          
-        } catch (error) {
-          console.error('🎤 Error during recording processing:', error)
-          isProcessing.value = false
-          hasUserRecording.value = true
-        }
-      }, 1500) // Simulate processing time
-      
-    } catch (error) {
-      console.error('🎤 Error stopping recording:', error)
-      isProcessing.value = false
-    }
+    await stopRecording()
   } else {
     // Start recording
-    isRecording.value = true
-    recordingTime.value = '00:00'
-
-    console.log('🎤 Starting recording...')
-
-    // Simulate recording timer
-    let seconds = 0
-    const timer = setInterval(() => {
-      if (!isRecording.value) {
-        clearInterval(timer)
-        return
-      }
-      seconds++
-      const mins = Math.floor(seconds / 60)
-      const secs = seconds % 60
-      recordingTime.value = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-    }, 1000)
+    await startRecording()
   }
 }
 
@@ -912,6 +1107,103 @@ const retryRecording = () => {
 
 const enhanceRecording = () => {
   console.log('Enhance recording')
+}
+
+const playOverlapping = () => {
+  console.log('Play overlapping view')
+  // Toggle overlay mode for waveforms
+  overlayMode.value = !overlayMode.value
+}
+
+const startRecording = async () => {
+  try {
+    console.log('🎤 Starting recording...')
+    if (recorderIsRecording.value) {
+      // If already recording, stop it
+      await stopRecording()
+    } else {
+      // Start recording
+      await startAudioRecording()
+    }
+  } catch (error) {
+    console.error('❌ Failed to start recording:', error)
+    alert('Could not start recording. Please ensure you have a microphone and have granted permission.')
+  }
+}
+
+const stopRecording = async () => {
+  try {
+    console.log('⏹️ Stopping recording...')
+    isProcessing.value = true
+    
+    // Get the recorded audio blob
+    const recordedBlob = await stopAudioRecording()
+    
+    if (recordedBlob) {
+      console.log('✅ Recording captured, processing...')
+      
+      // Use desktop pattern for handling recorded audio
+      await handleRecordedAudio(recordedBlob)
+    } else {
+      console.warn('⚠️ No recording data received')
+      isProcessing.value = false
+    }
+  } catch (error) {
+    console.error('❌ Failed to stop recording:', error)
+    isProcessing.value = false
+  }
+}
+
+// Desktop pattern: simple and clean recording handling
+const handleRecordedAudio = async (blob) => {
+  try {
+    // Validate the audio blob (same as desktop)
+    if (!blob || blob.size === 0) {
+      console.warn('🎤 Empty or invalid audio blob received, skipping processing')
+      isProcessing.value = false
+      return
+    }
+    
+    // Create URL and set basic state (same as desktop)
+    userAudioBlob.value = blob
+    userAudioUrl.value = URL.createObjectURL(blob)
+    hasUserRecording.value = true
+    
+    console.log('✅ User audio URL created:', userAudioUrl.value)
+    
+    // Update recording set if active (use existing desktop function)
+    if (currentRecording.value && typeof updateUserRecording === 'function') {
+      updateUserRecording(blob, userAudioUrl.value)
+      console.log('💾 Recording updated in recording set')
+    }
+    
+    // Auto-play both audios (same as desktop)
+    if (autoPlayEnabled.value) {
+      console.log('🎵 Auto-playing both audios...')
+      setTimeout(() => {
+        if (targetReady.value && userReady.value) {
+          playBoth()
+        } else {
+          console.log('⚠️ Waveforms not ready for auto-play, skipping')
+        }
+      }, 1000)
+    }
+    
+    isProcessing.value = false
+    
+  } catch (error) {
+    console.error('❌ Failed to handle recorded audio:', error)
+    isProcessing.value = false
+  }
+}
+
+
+const saveRecording = () => {
+  console.log('Save recording')
+  if (currentRecording.value && hasUserRecording.value) {
+    // TODO: Save user recording to current recording set
+    console.log('Recording saved for:', currentRecording.value.name)
+  }
 }
 
 const playBoth = async () => {
@@ -974,21 +1266,7 @@ const syncPlayback = () => {
   console.log('Sync playback')
 }
 
-const saveRecording = () => {
-  console.log('Save recording')
-}
-
-const markComplete = () => {
-  console.log('Mark complete')
-}
-
-const previousRecording = () => {
-  console.log('Previous recording')
-}
-
-const nextRecording = () => {
-  console.log('Next recording')
-}
+// These functions are already imported from useRecordingSets composable
 
 // Reset user recording and reload demo audio
 const resetUserRecording = async () => {
@@ -1093,18 +1371,37 @@ const manuallyAlignAudio = async () => {
 onMounted(async () => {
   console.log('Mobile Test A mounted')
 
-  // Initialize VAD for audio trimming
-  console.log('Initializing VAD processor...')
+  // Same initialization pattern as desktop
+  await initDB()
+  
+  // Initialize VAD model for professional audio processing
   try {
     await initVAD()
-    console.log('VAD processor initialized successfully')
+    if (vadReady.value) {
+      console.log('✅ VAD processor initialized successfully')
+    } else {
+      console.log('⚠️ VAD processor not ready after initialization')
+    }
   } catch (error) {
-    console.warn('VAD initialization failed, will use energy-based fallback:', error)
+    console.warn('⚠️ VAD initialization failed:', error.message)
+    console.error('🔍 VAD Error details:', error)
   }
 
   // Initialize waveforms after component is mounted
   await initializeTargetWaveform()
   await initializeUserWaveform()
+  
+  // Auto-load patth.wav from public directory
+  try {
+    const response = await fetch('/patth.wav')
+    if (response.ok) {
+      const blob = await response.blob()
+      await setTargetAudio(blob, { name: 'patth.wav', fileName: 'patth.wav' })
+      console.log('✅ Auto-loaded patth.wav')
+    }
+  } catch (error) {
+    console.log('ℹ️ patth.wav not found in public directory, will load on user action')
+  }
 })
 </script>
 
@@ -1168,11 +1465,261 @@ onMounted(async () => {
   margin-top: 2px;
 }
 
-/* Section Styling */
-section {
-  margin: 0;
-  background: #ffffff;
-  border-bottom: 8px solid #f3f4f6;
+/* Audio Loading Control */
+.audio-loading-control {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  margin: 8px 16px;
+  overflow: hidden;
+}
+
+.loading-header {
+  background: #f8fafc;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.loading-content {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.current-file {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loading-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.load-btn, .speed-btn {
+  padding: 6px 12px;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  background: white;
+  color: #3b82f6;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.load-btn:hover, .speed-btn:hover {
+  background: #eff6ff;
+}
+
+/* Compact Audio Info */
+.audio-info-compact {
+  background: white;
+  margin: 4px 16px;
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.audio-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.audio-controls .load-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.audio-controls .load-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.audio-controls .btn-icon {
+  font-size: 14px;
+}
+
+.audio-controls .btn-text {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Audio Sections - Reduced Spacing */
+.audio-section {
+  background: white;
+  margin: 4px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.section-label {
+  background: #f8fafc;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+  letter-spacing: 0.5px;
+}
+
+/* Compact Controls Section */
+.controls-section {
+  background: white;
+  margin: 8px 16px;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+
+.playback-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.record-row {
+  display: flex;
+  justify-content: center;
+}
+
+/* Button styles removed - now using PlaybackButton component */
+
+.waveform-container {
+  height: 50px;
+  width: 100%;
+  background: #fafbfc;
+  position: relative;
+  border-bottom: 1px solid #e5e7eb;
+  z-index: 2;
+}
+
+.spectrogram-container {
+  height: 70px;
+  width: 100%;
+  background: #fafbfc;
+  position: relative;
+  z-index: 1;
+}
+
+.spectrogram-container.large {
+  height: 100px;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+  padding: 8px;
+}
+
+.placeholder.large {
+  font-size: 16px;
+  font-weight: 700;
+  color: #6b7280;
+  letter-spacing: 1px;
+}
+
+/* Recording Placeholder */
+.recording-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  background: #f8fafc;
+}
+
+.record-button-large {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border: 2px solid #10b981;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.record-button-large:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.record-button-large:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.record-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.record-text {
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Alignment Status */
+.alignment-status {
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: rgba(34, 197, 94, 0.9);
+  color: white;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.status-icon {
+  font-size: 10px;
+}
+
+.status-text {
+  font-size: 9px;
 }
 
 .section-header {
@@ -1272,24 +1819,123 @@ section {
   color: white;
 }
 
-/* Unified Control Bar */
-.unified-control-bar {
+/* Recording Controls */
+.recording-controls {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  margin: 8px 16px;
+  padding: 16px;
+}
+
+.controls-container {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  padding: 10px 12px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  margin: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  gap: 6px;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
-  row-gap: 8px;
+}
+
+/* Play button styles removed - now using PlaybackButton component */
+
+.play-icon {
+  font-size: 18px;
+  color: #3b82f6;
+  margin-bottom: 4px;
+}
+
+.play-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+}
+
+.speed-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.speed-label {
+  font-size: 9px;
+  font-weight: 500;
+  color: #6b7280;
+  text-align: center;
+}
+
+.speed-control .speed-btn {
+  padding: 6px 12px;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  background: white;
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.speed-control .speed-btn:hover {
+  background: #fffbeb;
+}
+
+.record-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 12px;
+  border: 2px solid #ef4444;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 80px;
+}
+
+.record-btn:hover:not(:disabled) {
+  background: #fef2f2;
+  transform: translateY(-1px);
+}
+
+.record-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.record-icon {
+  font-size: 18px;
+  color: #ef4444;
+  margin-bottom: 4px;
+}
+
+.record-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
 }
 
 
 .control-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 64px;
+  font-size: 12px;
+  flex: 1;
+  max-width: 80px;
+}
+
+.control-btn-sm {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1300,45 +1946,59 @@ section {
   background: white;
   cursor: pointer;
   transition: all 0.2s;
-  min-width: 52px;
+  min-width: 48px;
   font-size: 10px;
-  flex-shrink: 0;
 }
 
-/* Primary controls (play buttons) get priority */
-.play-target,
-.play-user,
-.play-both,
-.speed-cycle,
-.record-again {
-  order: 1;
+.play-both {
+  border-color: #8b5cf6;
+  color: #8b5cf6;
 }
 
-/* Secondary controls (VAD, Align) can wrap to second row */
-.vad-toggle,
+.play-both:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #7c3aed;
+}
+
+.record-btn {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.record-btn:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #dc2626;
+}
+
 .align-btn {
-  order: 2;
+  border-color: #f59e0b;
+  color: #f59e0b;
 }
 
-/* Add visual separation between rows */
+.align-btn:hover:not(:disabled) {
+  background: #fffbeb;
+  border-color: #d97706;
+}
+
 .vad-toggle {
-  margin-left: auto; /* Push secondary controls to the right */
+  border-color: #6b7280;
+  color: #6b7280;
 }
 
-/* Ensure proper spacing on mobile */
-@media (max-width: 400px) {
-  .unified-control-bar {
-    justify-content: center;
-  }
-  
-  .vad-toggle {
-    margin-left: 0;
-  }
-  
-  .control-btn {
-    min-width: 48px;
-    padding: 6px 6px;
-  }
+.vad-toggle.active {
+  border-color: #10b981;
+  color: #10b981;
+  background: #ecfdf5;
+}
+
+.save-btn {
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #f0fdf4;
+  border-color: #16a34a;
 }
 
 .control-btn:hover:not(:disabled) {
@@ -1394,15 +2054,362 @@ section {
 }
 
 .btn-icon {
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+
+.btn-text {
+  font-size: 10px;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.sm-icon {
   font-size: 14px;
   margin-bottom: 2px;
 }
 
-.btn-label {
+.sm-text {
   font-size: 9px;
   font-weight: 500;
   text-align: center;
-  line-height: 1;
+  line-height: 1.1;
+}
+
+/* Bottom Navigation */
+.bottom-navigation {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 60px;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nav-icon {
+  font-size: 16px;
+  margin: 2px 0;
+}
+
+.nav-text {
+  font-size: 10px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.nav-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.nav-progress {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.complete-btn {
+  padding: 6px 12px;
+  border: 1px solid #22c55e;
+  border-radius: 6px;
+  background: #22c55e;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.complete-btn:hover {
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
+/* Bottom Safe Area */
+.bottom-safe-area {
+  height: env(safe-area-inset-bottom, 0px);
+  background: white;
+}
+
+/* Header Button Styling */
+.header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: #f3f4f6;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.header-btn:hover {
+  background: #e5e7eb;
+}
+
+.header-btn .icon {
+  font-size: 16px;
+  color: #374151;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .controls-container {
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  .play-btn, .record-btn {
+    min-width: 50px;
+    padding: 6px 8px;
+  }
+  
+  .play-icon, .record-icon {
+    font-size: 16px;
+  }
+  
+  .play-label, .record-label {
+    font-size: 9px;
+  }
+  
+  .speed-controls {
+    order: -1;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .compact-visualizations {
+    height: 90px;
+  }
+  
+  .control-btn {
+    min-width: 50px;
+    padding: 5px 6px;
+  }
+  
+  .btn-text {
+    font-size: 8px;
+  }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  width: 100%;
+  max-height: 80vh;
+  overflow: hidden;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 20px;
+  font-weight: 300;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.modal-body {
+  padding: 16px 24px 24px;
+  max-height: calc(80vh - 100px);
+  overflow-y: auto;
+}
+
+/* Recording Sets Modal */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-state p {
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.add-btn {
+  padding: 8px 16px;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-btn:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.recording-sets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recording-set-item {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recording-set-item:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+}
+
+.recording-set-item.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.set-info h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+}
+
+.set-info p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #3b82f6;
+  transition: width 0.3s ease;
+}
+
+/* Options Modal */
+.option-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 4px;
+}
+
+.option-item:hover {
+  background: #f3f4f6;
+}
+
+.option-icon {
+  font-size: 20px;
+  margin-right: 12px;
+  width: 24px;
+  text-align: center;
+}
+
+.option-text {
+  font-size: 16px;
+  color: #374151;
+  font-weight: 500;
 }
 
 .speed-cycle {
@@ -1942,5 +2949,62 @@ section {
     margin: 0 auto;
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
   }
+}
+
+/* URL Input Modal */
+.url-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.url-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancel-btn, .load-btn-modal {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn {
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+}
+
+.cancel-btn:hover {
+  background: #f3f4f6;
+}
+
+.load-btn-modal {
+  border: 1px solid #3b82f6;
+  background: #3b82f6;
+  color: white;
+}
+
+.load-btn-modal:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.load-btn-modal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>
