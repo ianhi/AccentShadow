@@ -42,11 +42,14 @@ export function useWaveform(
     if (containerRef.value && spectrogramContainerRef.value) {
       // Check if containers have proper dimensions
       if (containerRef.value.offsetWidth === 0 || containerRef.value.offsetHeight === 0) {
-        setTimeout(() => {
+        // Use ResizeObserver instead of arbitrary timing
+        const observer = new ResizeObserver(() => {
           if (containerRef.value && containerRef.value.offsetWidth > 0) {
+            observer.disconnect();
             initWaveform();
           }
-        }, 50);
+        });
+        observer.observe(containerRef.value);
         return;
       }
 
@@ -175,11 +178,14 @@ export function useWaveform(
     // If WaveSurfer doesn't exist, create it first
     if (!wavesurfer.value) {
       initWaveform();
-      setTimeout(() => {
-        if (wavesurfer.value) {
-          loadAudioDirect(url);
-        }
-      }, 100);
+      // Wait for initialization to complete using nextTick instead of arbitrary delay
+      import('vue').then(({ nextTick }) => {
+        nextTick(() => {
+          if (wavesurfer.value) {
+            loadAudioDirect(url);
+          }
+        });
+      });
       return;
     }
     
@@ -203,14 +209,17 @@ export function useWaveform(
       console.error(`🎵 Error loading audio:`, error);
       // If loading fails, try recreating the instance
       destroyWaveform();
-      setTimeout(() => {
-        initWaveform();
-        setTimeout(() => {
-          if (wavesurfer.value) {
-            loadAudioDirect(url);
-          }
-        }, 100);
-      }, 50);
+      // Use nextTick for proper Vue reactivity instead of arbitrary delays
+      import('vue').then(({ nextTick }) => {
+        nextTick(() => {
+          initWaveform();
+          nextTick(() => {
+            if (wavesurfer.value) {
+              loadAudioDirect(url);
+            }
+          });
+        });
+      });
     }
   };
 

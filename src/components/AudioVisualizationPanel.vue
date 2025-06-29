@@ -132,6 +132,34 @@ const {
   normalizeAudioSilence,
   alignTwoAudios
 } = useSmartAudioAlignment()
+
+// URL cleanup management - avoid arbitrary delays
+const pendingCleanups = new Set()
+
+const scheduleUrlCleanup = (url) => {
+  if (!url || !url.startsWith('blob:')) return
+  
+  // Add to pending cleanup list
+  pendingCleanups.add(url)
+  console.log('📋 Scheduled URL cleanup:', url)
+  
+  // Clean up after a short safety delay (much shorter than 3 seconds)
+  setTimeout(() => {
+    if (pendingCleanups.has(url)) {
+      URL.revokeObjectURL(url)
+      pendingCleanups.delete(url)
+      console.log('🗑️ Cleaned up blob URL:', url)
+    }
+  }, 500) // Short delay to ensure audio is loaded elsewhere
+}
+
+const immediateUrlCleanup = (url) => {
+  if (!url || !url.startsWith('blob:')) return
+  
+  URL.revokeObjectURL(url)
+  pendingCleanups.delete(url)
+  console.log('🗑️ Immediate cleanup of blob URL:', url)
+}
 const { syncEnabled } = useTimeSync()
 
 // Computed properties for audio keys (force re-render when audio changes)
@@ -200,11 +228,9 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     targetAudioBlob.value = null
     hasTargetAutoPlayed.value = false // Reset auto-play flag when target is cleared
     
-    // Cleanup old blob URL
+    // Cleanup old blob URL - will be handled by URL manager
     if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
-      setTimeout(() => {
-        URL.revokeObjectURL(oldTargetUrl)
-      }, 3000)
+      scheduleUrlCleanup(oldTargetUrl)
     }
     return
   }
@@ -296,12 +322,10 @@ const setTargetAudio = async (audioBlob, source = {}) => {
       }
     }
     
-    // Cleanup old blob URL after delay to ensure audio player has loaded
-    setTimeout(() => {
-      if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(oldTargetUrl)
-      }
-    }, 3000)
+    // Cleanup old blob URL
+    if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+      scheduleUrlCleanup(oldTargetUrl)
+    }
     
     // Update current audio source display
     if (source.name) {
@@ -335,11 +359,9 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     }
     
     // Cleanup old blob URL
-    setTimeout(() => {
-      if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(oldTargetUrl)
-      }
-    }, 3000)
+    if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+      scheduleUrlCleanup(oldTargetUrl)
+    }
   }
 }
 
@@ -458,15 +480,13 @@ const processUserAudio = async (blob) => {
                 targetDebugInfo.value.trimmedAmount = isFinite(trimmedTarget) ? trimmedTarget.toFixed(3) : '0.000'
               }
               
-              // Clean up old URLs after delay
-              setTimeout(() => {
-                if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
-                  URL.revokeObjectURL(oldUserUrl)
-                }
-                if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
-                  URL.revokeObjectURL(oldTargetUrl)
-                }
-              }, 3000)
+              // Clean up old URLs
+              if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
+                scheduleUrlCleanup(oldUserUrl)
+              }
+              if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+                scheduleUrlCleanup(oldTargetUrl)
+              }
               
               console.log('✅ Smart alignment and audio update complete')
             } else {
@@ -501,11 +521,9 @@ const processUserAudio = async (blob) => {
           }
           
           // Clean up old URL
-          setTimeout(() => {
-            if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
-              URL.revokeObjectURL(oldUserUrl)
-            }
-          }, 3000)
+          if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
+            scheduleUrlCleanup(oldUserUrl)
+          }
         }
       } else {
         console.log('📏 User audio VAD processing failed - using original')
@@ -646,14 +664,12 @@ const manualAlign = async () => {
       }
       
       // Clean up old URLs
-      setTimeout(() => {
-        if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(oldUserUrl)
-        }
-        if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(oldTargetUrl)
-        }
-      }, 3000)
+      if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
+        scheduleUrlCleanup(oldUserUrl)
+      }
+      if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
+        scheduleUrlCleanup(oldTargetUrl)
+      }
       
       console.log('✅ Manual alignment complete')
     } else {
