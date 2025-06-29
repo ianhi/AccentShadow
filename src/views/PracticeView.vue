@@ -13,8 +13,8 @@
         :isRecording="isRecordingActive"
         :vadSettings="vadSettings"
         @browse-file="triggerFileInput"
-        @load-url="showUrlModal = true"
-        @show-vad-settings="showVADSettings = true"
+        @load-url="showUrlModal"
+        @show-vad-settings="showVADSettings"
         @target-audio-ref="handleTargetAudioPlayerRef"
         @user-audio-ref="handleUserAudioPlayerRef"
         @audio-processed="handleAudioProcessed"
@@ -49,7 +49,7 @@
         @toggle-auto-play="toggleAutoPlay"
         @toggle-auto-align="toggleAutoAlign"
         @manual-align="manualAlign"
-        @show-vad-settings="showVADSettings = true"
+        @show-vad-settings="showVADSettings"
         @update-sequential-delay="updateSequentialDelay"
       />
 
@@ -58,71 +58,106 @@
         :hasTargetAudio="!!getTargetBlob()"
         :hasUserAudio="!!getUserBlob()"
         :currentRecording="currentRecording"
-        @save-recording="saveRecording"
-        @mark-completed="markCurrentCompleted"
+        @save-recording="handleSaveRecording"
+        @mark-completed="handleMarkCompleted"
       />
 
-    <div class="section">
-      <h2>Saved Recordings</h2>
-      <RecordingList @load-recording="loadSavedRecording" @delete-recording="deleteSavedRecording" />
-    </div>
-    </div>
+      <!-- Saved Recordings Section -->
+      <SavedRecordingsSection
+        @load-recording="handleLoadRecording"
+        @delete-recording="handleDeleteRecording"
+      />
 
-    <!-- Recording Sets Manager -->
-    <RecordingSetsManager />
+      <!-- Recording Sets Manager -->
+      <RecordingSetsManager />
+    </div>
     
-    <!-- Hidden File Input -->
-    <input 
-      type="file" 
-      accept="audio/*" 
-      @change="handleFileSelection" 
-      ref="hiddenFileInput"
-      style="display: none;"
+    <!-- File Upload Manager -->
+    <FileUploadManager
+      ref="fileUploadManager"
+      @file-selected="handleFileSelected"
     />
     
-    <!-- URL Input Modal -->
-    <UrlInputModal
-      :isOpen="showUrlModal"
-      :url="tempAudioUrl"
-      @close="showUrlModal = false"
-      @load-url="handleUrlLoad"
+    <!-- Audio Loading Manager -->
+    <AudioLoadingManager
+      ref="audioLoadingManager"
+      @audio-loaded="handleAudioLoaded"
+      @loading-error="handleLoadingError"
     />
     
-    <!-- VAD Settings Modal -->
-    <VADSettingsModal 
-      :isOpen="showVADSettings" 
-      :settings="vadSettings" 
-      @close="showVADSettings = false"
-      @save="handleVADSettingsSave"
+    <!-- Modal Manager -->
+    <ModalManager
+      ref="modalManager"
+      :vadSettings="vadSettings"
+      @url-load-requested="handleUrlLoadRequested"
+      @vad-settings-saved="handleVADSettingsSave"
+    />
+    
+    <!-- Recording Manager -->
+    <RecordingManager
+      ref="recordingManager"
+      @recording-saved="handleRecordingSaved"
+      @recording-deleted="handleRecordingDeleted"
+      @recording-loaded="handleRecordingLoaded"
+      @recording-completed="handleRecordingCompleted"
+      @operation-error="handleOperationError"
+    />
+    
+    <!-- Recording State Manager -->
+    <RecordingStateManager
+      ref="recordingStateManager"
+      @recording-started="handleRecordingStarted"
+      @recording-stopped="handleRecordingStopped"
+      @recording-completed="handleRecordedAudio"
+      @state-changed="handleRecordingStateChanged"
+    />
+    
+    <!-- Playback Controller -->
+    <PlaybackController
+      ref="playbackController"
+      :targetAudioPlayerRef="targetAudioPlayerRef"
+      :userAudioPlayerRef="userAudioPlayerRef"
+      :sequentialDelay="audioVisualizationPanel?.sequentialDelay || 0"
+      :globalPlaybackSpeed="globalPlaybackSpeed"
+      @playback-speed-updated="handlePlaybackSpeedUpdated"
+    />
+    
+    <!-- Audio Processing Handler -->
+    <AudioProcessingHandler
+      ref="audioProcessingHandler"
+      :audioVisualizationPanel="audioVisualizationPanel"
+      @auto-play-toggled="handleAutoPlayToggled"
+      @auto-align-toggled="handleAutoAlignToggled"
+      @manual-align-triggered="handleManualAlignTriggered"
+      @sequential-delay-updated="handleSequentialDelayUpdated"
     />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, watch } from 'vue';
-import RecordingList from '../components/RecordingList.vue';
 import RecordingNavigation from '../components/RecordingNavigation.vue';
 import SessionStats from '../components/SessionStats.vue';
 import RecordingSetsManager from '../components/RecordingSetsManager.vue';
-import VADSettingsModal from '../components/VADSettingsModal.vue';
 import AudioVisualizationPanel from '../components/AudioVisualizationPanel.vue';
 import MainHeader from '../components/MainHeader.vue';
 import CentralPlaybackControls from '../components/CentralPlaybackControls.vue';
 import AudioProcessingControls from '../components/AudioProcessingControls.vue';
 import RecordingActions from '../components/RecordingActions.vue';
-import UrlInputModal from '../components/UrlInputModal.vue';
+import SavedRecordingsSection from '../components/SavedRecordingsSection.vue';
+import FileUploadManager from '../components/FileUploadManager.vue';
+import AudioLoadingManager from '../components/AudioLoadingManager.vue';
+import ModalManager from '../components/ModalManager.vue';
+import RecordingManager from '../components/RecordingManager.vue';
+import RecordingStateManager from '../components/RecordingStateManager.vue';
+import PlaybackController from '../components/PlaybackController.vue';
+import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
 import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useRecordingSets } from '../composables/useRecordingSets';
-import { useTimeSync } from '../composables/useTimeSync.ts';
-import { audioManager } from '../composables/useAudioManager.ts';
 
-// UI state
-const globalPlaybackSpeed = ref(1); // Global playback speed control
-const showUrlModal = ref(false);
-const tempAudioUrl = ref('');
-const hiddenFileInput = ref(null);
-const isRecordingActive = ref(false);
-const showVADSettings = ref(false);
+// Core state and refs
+const globalPlaybackSpeed = ref(1)
+const isRecordingActive = ref(false)
 const vadSettings = ref({
   padding: 0.2,
   threshold: 0.25,
@@ -130,321 +165,200 @@ const vadSettings = ref({
   maxSilenceDuration: 500,
   maxTrimStart: 3.0,
   maxTrimEnd: 2.0
-});
+})
 
 // Component refs
-const audioVisualizationPanel = ref(null);
+const audioVisualizationPanel = ref(null)
+const fileUploadManager = ref(null)
+const audioLoadingManager = ref(null)
+const modalManager = ref(null)
+const recordingManager = ref(null)
+const recordingStateManager = ref(null)
+const playbackController = ref(null)
+const audioProcessingHandler = ref(null)
 
 // Audio player refs (handled by AudioVisualizationPanel)
-const targetAudioPlayerRef = ref(null);
-const userAudioPlayerRef = ref(null);
+const targetAudioPlayerRef = ref(null)
+const userAudioPlayerRef = ref(null)
 
-const { initDB, addRecording, deleteRecording } = useIndexedDB();
-const { 
-  activeSet, 
-  currentRecording, 
-  updateUserRecording,
-  markRecordingCompleted 
-} = useRecordingSets();
+// Core composables
+const { initDB } = useIndexedDB()
+const { currentRecording, updateUserRecording } = useRecordingSets()
 
 onMounted(async () => {
-  await initDB();
-});
+  await initDB()
+})
 
-const triggerFileInput = () => {
-  hiddenFileInput.value?.click();
-};
+// Helper functions that delegate to AudioVisualizationPanel
+const getTargetBlob = () => audioVisualizationPanel.value?.getTargetBlob() || null
+const getUserBlob = () => audioVisualizationPanel.value?.getUserBlob() || null
 
-const handleVADSettingsSave = (newSettings) => {
-  vadSettings.value = { ...newSettings };
-};
-
-// Handle events from AudioVisualizationPanel
+// Audio Visualization Panel event handlers
 const handleTargetAudioPlayerRef = (ref) => {
-  targetAudioPlayerRef.value = ref;
-};
+  targetAudioPlayerRef.value = ref
+}
 
 const handleUserAudioPlayerRef = (ref) => {
-  userAudioPlayerRef.value = ref;
-};
+  userAudioPlayerRef.value = ref
+}
 
 const handleAudioProcessed = (data) => {
-  // Handle any additional processing when audio is processed
-  console.log('Audio processed:', data);
-};
+  console.log('Audio processed:', data)
+}
 
-// Simplified delegation to AudioVisualizationPanel (kept for compatibility)
-const setTargetAudio = async (audioBlob, source = {}) => {
+// File Upload Manager event handlers
+const triggerFileInput = () => fileUploadManager.value?.triggerFileInput()
+
+const handleFileSelected = async ({ file, source }) => {
   if (audioVisualizationPanel.value) {
-    return audioVisualizationPanel.value.setTargetAudio(audioBlob, source);
+    await audioVisualizationPanel.value.setTargetAudio(file, source)
   }
-};
+}
 
-const handleFileSelection = async (event) => {
-  const file = event.target.files[0];
-  if (file && audioVisualizationPanel.value) {
-    await audioVisualizationPanel.value.setTargetAudio(file, { name: file.name, fileName: file.name });
-    
-    // Reset the input so the same file can be selected again if needed
-    event.target.value = '';
+// Audio Loading Manager event handlers
+const handleUrlLoadRequested = (url) => {
+  audioLoadingManager.value?.loadAudioFromUrl(url)
+}
+
+const handleAudioLoaded = async ({ blob, source }) => {
+  if (audioVisualizationPanel.value) {
+    await audioVisualizationPanel.value.setTargetAudio(blob, source)
   }
-};
+}
 
-const handleUrlLoad = async (url) => {
-  if (typeof url === 'string') {
-    // Called from UrlInputModal with URL as parameter
-    tempAudioUrl.value = url
-  } else {
-    // Fallback to existing logic (shouldn't happen with new modal)
-    url = tempAudioUrl.value.trim()
-  }
-  if (!url || !audioVisualizationPanel.value) return;
-  
-  try {
-    // Validate URL format
-    new URL(url);
-    
-    // Fetch the audio file
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    // Convert to blob
-    const blob = await response.blob();
-    
-    // Validate it's an audio file
-    if (!blob.type.startsWith('audio/')) {
-      throw new Error('URL does not point to an audio file');
-    }
-    
-    // Use AudioVisualizationPanel for processing
-    await audioVisualizationPanel.value.setTargetAudio(blob, { url: url, name: url });
-    
-    showUrlModal.value = false;
-    tempAudioUrl.value = '';
-    
-  } catch (error) {
-    console.error('Error loading audio from URL:', error);
-    alert(`Failed to load audio from URL: ${error.message}`);
-  }
-};
+const handleLoadingError = ({ message }) => {
+  alert(message)
+}
 
-// URL modal auto-focus is now handled by UrlInputModal component
+// Modal Manager event handlers
+const showUrlModal = () => modalManager.value?.showUrlModal()
+const showVADSettings = () => modalManager.value?.showVadModal()
 
+const handleVADSettingsSave = (newSettings) => {
+  vadSettings.value = { ...newSettings }
+}
+
+// Recording Manager event handlers
+const handleSaveRecording = () => {
+  const targetBlob = getTargetBlob()
+  const userBlob = getUserBlob()
+  recordingManager.value?.saveRecording(targetBlob, userBlob)
+}
+
+const handleMarkCompleted = () => {
+  recordingManager.value?.markCurrentCompleted(currentRecording.value)
+}
+
+const handleLoadRecording = (recording) => {
+  recordingManager.value?.loadSavedRecording(recording)
+}
+
+const handleDeleteRecording = (id) => {
+  recordingManager.value?.deleteSavedRecording(id)
+}
+
+const handleRecordingSaved = () => {
+  alert('Recording saved!')
+}
+
+const handleRecordingDeleted = () => {
+  console.log('Recording deleted successfully')
+}
+
+const handleRecordingLoaded = (recording) => {
+  console.log('Recording loaded:', recording)
+}
+
+const handleRecordingCompleted = (recording) => {
+  console.log('Recording marked as completed:', recording)
+}
+
+const handleOperationError = ({ message }) => {
+  alert(message)
+}
+
+// Recording State Manager event handlers
 const handleRecordingStarted = () => {
-  console.log('🎤 PracticeView: Recording started');
-  isRecordingActive.value = true;
-  // Stop all audio when recording starts
-  audioManager.emergencyStop('Recording started');
-};
+  isRecordingActive.value = true
+  console.log('Recording started in PracticeView')
+}
 
 const handleRecordingStopped = () => {
-  console.log('🎤 PracticeView: Recording stopped');
-  isRecordingActive.value = false;
-};
+  isRecordingActive.value = false
+  console.log('Recording stopped in PracticeView')
+}
 
 const handleRecordedAudio = async (blob) => {
-  // Validate audio blob
-  if (!blob || blob.size === 0) {
-    console.warn('🎤 PracticeView: Empty or invalid audio blob received, skipping processing');
-    return;
-  }
-  
   // Delegate audio processing to AudioVisualizationPanel
   if (audioVisualizationPanel.value) {
-    await audioVisualizationPanel.value.processUserAudio(blob);
+    await audioVisualizationPanel.value.processUserAudio(blob)
   }
   
   // Update the current recording if we have an active set
   if (currentRecording.value && blob) {
-    const userUrl = audioVisualizationPanel.value?.getUserUrl();
+    const userUrl = audioVisualizationPanel.value?.getUserUrl()
     if (userUrl) {
-      updateUserRecording(blob, userUrl);
+      updateUserRecording(blob, userUrl)
     }
   }
-  
-  // Auto-play functionality - delegate to panel's auto-play settings
-  const shouldAutoPlay = audioVisualizationPanel.value?.autoPlayBoth;
-  if (shouldAutoPlay) {
-    console.log('🎵 Auto-play delegated to AudioVisualizationPanel');
-    // Auto-play logic is now handled by the panel itself
-  }
-};
+}
 
-// URL modal logic moved to UrlInputModal component
+const handleRecordingStateChanged = ({ isRecording }) => {
+  console.log('Recording state changed:', isRecording)
+}
 
-// Simplified helper functions that delegate to AudioVisualizationPanel
-const getTargetBlob = () => {
-  return audioVisualizationPanel.value?.getTargetBlob() || null;
-};
+// Playback Controller event handlers
+const playTarget = () => playbackController.value?.playTarget()
+const playUser = () => playbackController.value?.playUser()
+const playOverlapping = () => playbackController.value?.playOverlapping()
+const playSequential = () => playbackController.value?.playSequential()
+const stopAll = () => playbackController.value?.stopAll()
+const updatePlaybackSpeed = (newSpeed) => playbackController.value?.updatePlaybackSpeed(newSpeed)
 
-const getUserBlob = () => {
-  return audioVisualizationPanel.value?.getUserBlob() || null;
-};
+const handlePlaybackSpeedUpdated = (newSpeed) => {
+  globalPlaybackSpeed.value = newSpeed
+}
 
-// Process recordings when they become current (unified processing for all sources)
+// Audio Processing Handler event handlers
+const toggleAutoPlay = (event) => audioProcessingHandler.value?.toggleAutoPlay(event)
+const toggleAutoAlign = (event) => audioProcessingHandler.value?.toggleAutoAlign(event)
+const manualAlign = () => audioProcessingHandler.value?.manualAlign()
+const updateSequentialDelay = (event) => audioProcessingHandler.value?.updateSequentialDelay(event)
+
+const handleAutoPlayToggled = (value) => {
+  console.log('Auto-play toggled:', value)
+}
+
+const handleAutoAlignToggled = (value) => {
+  console.log('Auto-align toggled:', value)
+}
+
+const handleManualAlignTriggered = () => {
+  console.log('Manual alignment triggered')
+}
+
+const handleSequentialDelayUpdated = (value) => {
+  console.log('Sequential delay updated:', value)
+}
+
+// Watch for recording changes to load target audio
 watch(currentRecording, async (newRecording, oldRecording) => {
-  // Only process if we're switching to a new recording that has audio
   if (newRecording && newRecording !== oldRecording && newRecording.audioBlob && audioVisualizationPanel.value) {
     try {
       await audioVisualizationPanel.value.setTargetAudio(newRecording.audioBlob, {
         name: newRecording.name,
         fileName: newRecording.metadata?.fileName,
         source: 'folder'
-      });
-      console.log('✅ FOLDER PROCESSING: Successfully processed folder recording');
+      })
+      console.log('✅ FOLDER PROCESSING: Successfully processed folder recording')
     } catch (error) {
-      console.error('❌ FOLDER PROCESSING: Failed to process folder recording:', error);
+      console.error('❌ FOLDER PROCESSING: Failed to process folder recording:', error)
     }
   } else if (!newRecording && audioVisualizationPanel.value) {
-    console.log('🗑️ FOLDER PROCESSING: Clearing target audio (no recording selected)');
-    await audioVisualizationPanel.value.setTargetAudio(null);
+    console.log('🗑️ FOLDER PROCESSING: Clearing target audio (no recording selected)')
+    await audioVisualizationPanel.value.setTargetAudio(null)
   }
-});
-
-// Playback control functions (delegate to audio players)
-const playTarget = () => {
-  if (targetAudioPlayerRef.value) {
-    audioManager.emergencyStop('Playing target audio');
-    targetAudioPlayerRef.value.play();
-  }
-};
-
-const playUser = () => {
-  if (userAudioPlayerRef.value) {
-    audioManager.emergencyStop('Playing user audio');
-    userAudioPlayerRef.value.play();
-  }
-};
-
-const playOverlapping = async () => {
-  audioManager.emergencyStop('Playing overlapping audio');
-  
-  const targetPlayer = targetAudioPlayerRef.value;
-  const userPlayer = userAudioPlayerRef.value;
-  
-  if (targetPlayer && userPlayer) {
-    try {
-      // Play both simultaneously
-      await Promise.all([
-        targetPlayer.play(),
-        userPlayer.play()
-      ]);
-    } catch (error) {
-      console.error('Error playing overlapping audio:', error);
-    }
-  } else if (targetPlayer) {
-    targetPlayer.play();
-  } else if (userPlayer) {
-    userPlayer.play();
-  }
-};
-
-const playSequential = async () => {
-  audioManager.emergencyStop('Playing sequential audio');
-  
-  const targetPlayer = targetAudioPlayerRef.value;
-  const userPlayer = userAudioPlayerRef.value;
-  const delay = audioVisualizationPanel.value?.sequentialDelay || 0;
-  
-  if (targetPlayer) {
-    targetPlayer.play();
-    
-    if (userPlayer && delay > 0) {
-      setTimeout(() => {
-        userPlayer.play();
-      }, delay);
-    } else if (userPlayer) {
-      // Play immediately after target finishes
-      targetPlayer.wavesurfer?.on('finish', () => {
-        userPlayer.play();
-      });
-    }
-  } else if (userPlayer) {
-    userPlayer.play();
-  }
-};
-
-const stopAll = () => {
-  audioManager.emergencyStop('Manual stop all');
-};
-
-const updatePlaybackSpeed = (newSpeed) => {
-  globalPlaybackSpeed.value = newSpeed;
-  
-  // Update both players if they exist
-  if (targetAudioPlayerRef.value) {
-    targetAudioPlayerRef.value.setPlaybackRate(newSpeed);
-  }
-  if (userAudioPlayerRef.value) {
-    userAudioPlayerRef.value.setPlaybackRate(newSpeed);
-  }
-};
-
-// Recording management functions
-const markCurrentCompleted = () => {
-  if (currentRecording.value && !currentRecording.value.userRecording.isCompleted) {
-    markRecordingCompleted();
-    console.log('✅ Marked current recording as completed via button');
-  }
-};
-
-const saveRecording = async () => {
-  const targetBlob = getTargetBlob();
-  const userBlob = getUserBlob();
-  
-  if (targetBlob && userBlob) {
-    try {
-      await addRecording(targetBlob, userBlob);
-      alert('Recording saved!');
-      console.log('Recording saved and cleared.');
-    } catch (error) {
-      console.error('Error saving recording:', error);
-      alert('Failed to save recording.');
-    }
-  }
-};
-
-const loadSavedRecording = (recording) => {
-  // Load saved recording logic would go here
-  console.log('Loading saved recording:', recording);
-};
-
-const deleteSavedRecording = async (id) => {
-  try {
-    await deleteRecording(id);
-    console.log('Recording deleted:', id);
-  } catch (error) {
-    console.error('Error deleting recording:', error);
-    alert('Failed to delete recording.');
-  }
-};
-
-// Audio processing control handlers
-const toggleAutoPlay = (event) => {
-  if (audioVisualizationPanel.value) {
-    audioVisualizationPanel.value.autoPlayBoth = event.target.checked;
-  }
-};
-
-const toggleAutoAlign = (event) => {
-  if (audioVisualizationPanel.value) {
-    audioVisualizationPanel.value.autoAlignEnabled = event.target.checked;
-  }
-};
-
-const manualAlign = () => {
-  if (audioVisualizationPanel.value) {
-    audioVisualizationPanel.value.manualAlign();
-  }
-};
-
-const updateSequentialDelay = (event) => {
-  if (audioVisualizationPanel.value) {
-    audioVisualizationPanel.value.sequentialDelay = parseInt(event.target.value);
-  }
-};
+})
 </script>
 
 <style scoped>

@@ -205,18 +205,19 @@ const getSourceIcon = (source) => {
 
 <style scoped>
 .recording-sets-manager {
-  background-color: white;
-  border: 2px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  margin-top: 20px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  margin: 20px 0;
   overflow: hidden;
 }
 
 .manager-header {
   padding: 16px 20px;
-  background-color: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -225,20 +226,41 @@ const getSourceIcon = (source) => {
 .manager-header h3 {
   margin: 0;
   font-size: 18px;
-  color: #1f2937;
+  color: white;
   font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .current-set {
-  color: #3b82f6;
+  color: rgba(59, 130, 246, 0.9);
   font-weight: 500;
   font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .manager-content {
   padding: 20px;
   max-height: 400px;
   overflow-y: auto;
+}
+
+/* Custom scrollbar styling for dark theme */
+.manager-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.manager-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.manager-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+.manager-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .action-buttons {
@@ -259,26 +281,30 @@ const getSourceIcon = (source) => {
   display: flex;
   align-items: center;
   gap: 8px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .upload-btn {
-  background-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.9);
   color: white;
 }
 
 .upload-btn:hover {
-  background-color: #2563eb;
+  background: rgba(37, 99, 235, 0.9);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .online-btn {
-  background-color: #10b981;
+  background: rgba(16, 185, 129, 0.9);
   color: white;
 }
 
 .online-btn:hover {
-  background-color: #059669;
+  background: rgba(5, 150, 105, 0.9);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .search-filter {
@@ -290,22 +316,44 @@ const getSourceIcon = (source) => {
 .search-input {
   flex: 1;
   padding: 10px 12px;
-  border: 2px solid #d1d5db;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 8px;
   font-size: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  backdrop-filter: blur(10px);
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .language-filter {
   padding: 10px 12px;
-  border: 2px solid #d1d5db;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 8px;
   font-size: 14px;
-  background-color: white;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.language-filter:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.language-filter option {
+  background: #1a1a2e;
+  color: white;
 }
 
 .sets-grid {
@@ -315,24 +363,26 @@ const getSourceIcon = (source) => {
 }
 
 .set-card {
-  background-color: #f9fafb;
-  border: 2px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
   padding: 16px;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
+  backdrop-filter: blur(10px);
 }
 
 .set-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  transform: translateY(-1px);
 }
 
 .set-card.active {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  background-color: #eff6ff;
+  border-color: rgba(59, 130, 246, 0.8);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .set-header {
@@ -344,8 +394,9 @@ const getSourceIcon = (source) => {
 
 .set-name {
   font-weight: 600;
-  color: #1f2937;
+  color: white;
   font-size: 16px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .delete-btn {
@@ -353,15 +404,17 @@ const getSourceIcon = (source) => {
   height: 28px;
   border: none;
   border-radius: 6px;
-  background-color: #fee2e2;
-  color: #dc2626;
+  background: rgba(220, 38, 38, 0.2);
+  color: rgba(248, 113, 113, 0.9);
   cursor: pointer;
   font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(248, 113, 113, 0.3);
 }
 
 .set-card:hover .delete-btn {
@@ -369,7 +422,8 @@ const getSourceIcon = (source) => {
 }
 
 .delete-btn:hover {
-  background-color: #fecaca;
+  background: rgba(220, 38, 38, 0.3);
+  transform: scale(1.1);
 }
 
 .set-meta {
@@ -382,21 +436,25 @@ const getSourceIcon = (source) => {
 
 .language-badge,
 .source-badge {
-  background-color: #f3f4f6;
+  background: rgba(255, 255, 255, 0.15);
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .language-badge {
-  color: #3b82f6;
-  background-color: #eff6ff;
+  color: rgba(59, 130, 246, 0.9);
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .count {
   font-size: 12px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.7);
   font-weight: 500;
 }
 
@@ -410,37 +468,38 @@ const getSourceIcon = (source) => {
 .progress-bar {
   flex: 1;
   height: 6px;
-  background-color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background-color: #10b981;
+  background: rgba(16, 185, 129, 0.8);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
 
 .progress-text {
   font-size: 12px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.7);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .current-recording {
   font-size: 12px;
-  color: #3b82f6;
+  color: rgba(59, 130, 246, 0.9);
   font-weight: 500;
   padding-top: 8px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .empty-state {
   text-align: center;
   padding: 40px 20px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .empty-icon {
@@ -450,7 +509,7 @@ const getSourceIcon = (source) => {
 
 .empty-hint {
   font-size: 14px;
-  color: #9ca3af;
+  color: rgba(255, 255, 255, 0.5);
   font-style: italic;
 }
 
@@ -468,32 +527,45 @@ const getSourceIcon = (source) => {
 }
 
 .modal-content {
-  background: white;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 24px;
   border-radius: 12px;
   text-align: center;
   max-width: 400px;
   margin: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .modal-content h3 {
   margin: 0 0 16px 0;
-  color: #1f2937;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content p {
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .close-modal-btn {
   margin-top: 16px;
   padding: 10px 20px;
-  background-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.9);
   color: white;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
   cursor: pointer;
   font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s;
 }
 
 .close-modal-btn:hover {
-  background-color: #2563eb;
+  background: rgba(37, 99, 235, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 @media (max-width: 768px) {
