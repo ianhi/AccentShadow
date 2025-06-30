@@ -221,12 +221,12 @@ export function useSmartAudioAlignment() {
       if (audio1.alreadyNormalized) {
         console.log('🎯 ✅ SKIP: Audio1 normalization skipped (already normalized - prevents double trimming)');
       } else {
-        console.log('🎯 🔄 PROCESS: Audio1 being normalized');
+        console.log('🎯 🔄 PROCESS: Audio1 being normalized (recalculating padding from original)');
       }
       if (audio2.alreadyNormalized) {
         console.log('🎯 ✅ SKIP: Audio2 normalization skipped (already normalized - prevents double trimming)');
       } else {
-        console.log('🎯 🔄 PROCESS: Audio2 being normalized');
+        console.log('🎯 🔄 PROCESS: Audio2 being normalized (fresh padding calculation)');
       }
       
       // Get durations of normalized audios

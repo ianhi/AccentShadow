@@ -466,13 +466,14 @@ const processUserAudio = async (blob) => {
             if (targetAudioProcessed.value) {
               console.log('🎧 [DEBUG] Using cached target processing')
               console.log('🎯 Using cached target audio processing (optimized - no reprocessing)')
-              // Use cached processing result but mark it as already normalized to prevent double-processing
+              // Use cached VAD boundaries but original audio blob to recalculate padding correctly
               targetProcessed = {
                 ...targetAudioProcessed.value,
-                alreadyNormalized: true,  // CRITICAL: Mark as already processed to prevent double trimming
-                audioBlob: targetAudioBlob.value  // Use the current processed blob, not the original
+                audioBlob: originalTargetAudioBlob.value,  // CRITICAL: Use original blob to prevent padding accumulation
+                alreadyNormalized: false  // Allow re-normalization to calculate correct padding for current user recording
               }
-              console.log('🎧 [DEBUG] FIXED: Target marked as alreadyNormalized=true to prevent double trimming')
+              console.log('🎧 [DEBUG] FIXED: Using original target blob to prevent padding accumulation')
+              console.log('🎧 [DEBUG] Target audio normalization will recalculate padding for current user recording')
             } else {
               console.log('🎧 [DEBUG] No cached target processing, processing original target...')
               console.log('🎯 No cached target processing - processing original target audio for alignment')
