@@ -1,18 +1,19 @@
 <template>
-  <div class="audio-recorder">
+  <div class="audio-recorder" :class="{ 'compact': shouldUseMobileLayout }">
     <div class="recorder-controls">
-      <button @click="toggleRecording" :class="{ 'recording': isRecording }" class="record-btn">
+      <button @click="toggleRecording" :class="{ 'recording': isRecording, 'compact': shouldUseMobileLayout }" class="record-btn">
         <span class="btn-icon">{{ isRecording ? '⏹' : '🎤' }}</span>
-        <span>{{ isRecording ? 'Stop Recording' : 'Start Recording' }}</span>
+        <span v-if="!shouldUseMobileLayout">{{ isRecording ? 'Stop Recording' : 'Start Recording' }}</span>
       </button>
-      <div class="recording-status" :class="{ 'visible': isRecording }">
+      <div class="recording-status" :class="{ 'visible': isRecording, 'compact': shouldUseMobileLayout }">
         <span class="recording-indicator"></span>
         <span class="recording-time">{{ formatTime(recordingTime) }}</span>
       </div>
     </div>
     
-    <!-- Microphone Selection -->
+    <!-- Microphone Selection - Hidden on mobile -->
     <MicrophoneSelector 
+      v-if="!shouldUseMobileLayout"
       :availableDevices="availableDevices"
       :selectedDeviceId="selectedDeviceId"
       :disabled="isRecording"
@@ -26,11 +27,13 @@ import { ref, onUnmounted } from 'vue';
 import { useAudioRecorder } from '../composables/useAudioRecorder';
 import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts';
 import MicrophoneSelector from './MicrophoneSelector.vue';
+import { useViewport } from '../composables/useViewport';
 
 const emit = defineEmits(['recorded', 'recording-started', 'recording-stopped']);
 
 const { isRecording, recordingTime, startRecording, stopRecording } = useAudioRecorder();
 const { availableDevices, selectedDeviceId, setSelectedDevice, getMediaStream } = useMicrophoneDevices();
+const { shouldUseMobileLayout } = useViewport();
 
 let timer = null;
 
@@ -174,6 +177,53 @@ const formatTime = (seconds) => {
   font-size: 14px;
   white-space: nowrap;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Compact mode styles */
+.audio-recorder.compact {
+  width: auto;
+}
+
+.audio-recorder.compact .recorder-controls {
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  width: auto;
+}
+
+.record-btn.compact {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  font-size: 11px;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.record-btn.compact .btn-icon {
+  font-size: 16px;
+}
+
+.recording-status.compact {
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.recording-status.compact.visible {
+  opacity: 1;
+}
+
+.recording-status.compact .recording-indicator {
+  width: 6px;
+  height: 6px;
 }
 
 /* Microphone selector styles moved to MicrophoneSelector component */

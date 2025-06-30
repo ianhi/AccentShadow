@@ -1,24 +1,24 @@
 <template>
-  <div class="playback-buttons">
+  <div class="playback-buttons" :class="{ 'compact': compact }">
     <button @click="$emit('play-target')" :disabled="!hasTargetAudio" class="playback-btn target-btn">
       <span class="btn-icon">🎯</span>
-      <span>Play Target</span>
+      <span v-if="!compact">Play Target</span>
     </button>
     <button @click="$emit('play-user')" :disabled="!hasUserAudio" class="playback-btn user-btn">
       <span class="btn-icon">🎤</span>
-      <span>Play Recording</span>
+      <span v-if="!compact">Play Recording</span>
     </button>
     <button @click="$emit('play-overlapping')" :disabled="!hasTargetAudio || !hasUserAudio" class="playback-btn overlapping-btn">
       <span class="btn-icon">🔄</span>
-      <span>Play Overlapping</span>
+      <span v-if="!compact">Play Overlapping</span>
     </button>
     <button @click="$emit('play-sequential')" :disabled="!hasTargetAudio || !hasUserAudio" class="playback-btn sequential-btn">
       <span class="btn-icon">📋</span>
-      <span>Play Sequential</span>
+      <span v-if="!compact">Play Sequential</span>
     </button>
     <button @click="$emit('stop-all')" class="playback-btn stop-btn">
       <span class="btn-icon">⏹</span>
-      <span>Stop All</span>
+      <span v-if="!compact">Stop All</span>
     </button>
   </div>
 </template>
@@ -30,6 +30,10 @@ defineProps({
     default: false
   },
   hasUserAudio: {
+    type: Boolean,
+    default: false
+  },
+  compact: {
     type: Boolean,
     default: false
   }
@@ -140,6 +144,29 @@ defineEmits([
 
 .playback-btn.stop-btn:hover:not(:disabled) {
   background-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Compact mode styles */
+.playback-buttons.compact {
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.playback-buttons.compact .playback-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px;
+  font-size: 11px;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.playback-buttons.compact .btn-icon {
+  font-size: 16px;
 }
 
 /* Mobile responsive */

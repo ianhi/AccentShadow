@@ -1,7 +1,7 @@
 <template>
-  <div class="audio-visualization-panel">
-    <!-- Target Audio Controls Section -->
-    <div class="target-controls-section">
+  <div class="audio-visualization-panel" :class="{ 'mobile-layout': shouldUseMobileLayout }">
+    <!-- Target Audio Controls Section - Show on mobile too -->
+    <div class="target-controls-section" :class="{ 'mobile-controls': shouldUseMobileLayout }">
       <h3>📁 Load Target Audio</h3>
       <TargetAudioControls 
         :currentAudioSource="currentAudioSource"
@@ -10,7 +10,7 @@
       />
     </div>
     
-    <div class="visualization-container">
+    <div class="visualization-container" :class="{ 'mobile-stacked': shouldUseMobileLayout }">
       <!-- Target Audio Column -->
       <AudioColumn
         title="Target Audio"
@@ -22,6 +22,8 @@
         :suppressAutoPlay="isAligning || hasTargetAutoPlayed"
         @audio-player-ref="handleTargetAudioPlayerRef"
         @auto-played="handleTargetAutoPlayed"
+        :class="{ 'mobile-audio-column': shouldUseMobileLayout }"
+        :showTitleOnMobile="true"
       >
         <template #placeholder>
           {{ currentRecording ? 'Select a recording from the set' : 'Please upload a target audio file or load from URL.' }}
@@ -38,6 +40,8 @@
         :isRecording="isRecording"
         :placeholderClass="{ 'recording-placeholder': isRecording }"
         @audio-player-ref="handleUserAudioPlayerRef"
+        :class="{ 'mobile-audio-column': shouldUseMobileLayout }"
+        :showTitleOnMobile="false"
       >
         <template #placeholder>
           <span v-if="isRecording" class="recording-indicator-text">
@@ -57,6 +61,7 @@ import TargetAudioControls from './TargetAudioControls.vue'
 import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment'
 import { useTimeSync } from '../composables/useTimeSync.ts'
 import { audioManager } from '../composables/useAudioManager.ts'
+import { useViewport } from '../composables/useViewport'
 
 const props = defineProps({
   currentRecording: {
@@ -95,6 +100,9 @@ const emit = defineEmits([
   'audio-processed',
   'trigger-auto-play'
 ])
+
+// Mobile layout detection
+const { shouldUseMobileLayout } = useViewport()
 
 // Audio state
 const targetAudioUrl = ref(null)
@@ -182,34 +190,57 @@ const handleUserAudioPlayerRef = (ref) => {
   emit('user-audio-ref', ref)
 }
 
-// Helper function to get audio duration
+// Helper function to get audio duration with better error handling
 const getAudioDuration = async (audioBlob) => {
   return new Promise((resolve, reject) => {
     const audio = new Audio()
     const url = URL.createObjectURL(audioBlob)
+    let resolved = false
     
     const cleanup = () => {
-      URL.revokeObjectURL(url)
+      if (!resolved) {
+        resolved = true
+        URL.revokeObjectURL(url)
+      }
+    }
+    
+    const handleDuration = (duration) => {
+      if (!resolved && isFinite(duration) && duration > 0) {
+        cleanup()
+        resolve(duration)
+      }
     }
     
     audio.addEventListener('loadedmetadata', () => {
-      const duration = audio.duration
-      cleanup()
-      
-      // Check for invalid duration values
-      if (!isFinite(duration) || duration <= 0) {
-        console.warn('⚠️ Invalid audio duration detected:', duration)
-        resolve(0)
-      } else {
-        resolve(duration)
-      }
+      handleDuration(audio.duration)
+    })
+    
+    // Fallback for when loadedmetadata gives invalid duration
+    audio.addEventListener('canplay', () => {
+      handleDuration(audio.duration)
+    })
+    
+    // Additional fallback for stubborn audio files
+    audio.addEventListener('loadeddata', () => {
+      handleDuration(audio.duration)
     })
     
     audio.addEventListener('error', (error) => {
-      cleanup()
-      console.error('❌ Error loading audio for duration:', error)
-      reject(error)
+      if (!resolved) {
+        cleanup()
+        console.error('❌ Error loading audio for duration:', error)
+        reject(error)
+      }
     })
+    
+    // Timeout fallback - if we can't get duration in 5 seconds, give up
+    setTimeout(() => {
+      if (!resolved) {
+        cleanup()
+        console.warn('⚠️ Audio duration detection timeout - using fallback of 0')
+        resolve(0)
+      }
+    }, 5000)
     
     audio.src = url
   })
@@ -367,34 +398,51 @@ const setTargetAudio = async (audioBlob, source = {}) => {
 
 // Process user recorded audio
 const processUserAudio = async (blob) => {
+  console.log('🎧 [DEBUG] processUserAudio started', {
+    blobSize: blob?.size,
+    hasTargetAudio: !!targetAudioBlob.value,
+    targetCached: !!targetAudioProcessed.value,
+    autoAlignEnabled: autoAlignEnabled.value,
+    timestamp: Date.now()
+  })
+  
   if (!blob || blob.size === 0) {
     console.warn('🎤 AudioVisualizationPanel: Empty or invalid audio blob received, skipping processing')
     return
   }
   
-  userAudioBlob.value = blob
-  userAudioUrl.value = URL.createObjectURL(blob)
+  // IMPORTANT: Don't set user audio immediately - wait for alignment to complete
+  // This prevents the intermediate display of raw audio before aligned version
+  console.log('🎧 [DEBUG] SOLUTION: Deferring user audio display until after alignment')
   
-  // Store raw duration for debugging
+  // Store raw duration for debugging (but don't set audio URLs yet)
+  console.log('🎧 [DEBUG] Getting raw user audio duration...')
   const rawUserDuration = await getAudioDuration(blob)
-  userDebugInfo.value = {
-    rawDuration: rawUserDuration.toFixed(3),
-    finalDuration: rawUserDuration.toFixed(3),
-    trimmedAmount: '0.000'
-  }
+  console.log('🎧 [DEBUG] Raw user audio duration:', rawUserDuration)
+  
+  // Store blob temporarily for processing, but don't set URL for display yet
+  let tempUserBlob = blob
+  let tempUserUrl = null
   
   // Smart VAD-based audio processing with normalized padding
   if (autoAlignEnabled.value) {
     try {
+      console.log('🎧 [DEBUG] Auto-align enabled, starting VAD processing...')
       console.log('🎧 Starting smart VAD-based audio processing...')
       
       // Process the recorded audio with VAD to get speech boundaries
       // Use more lenient settings for user recordings (microphone audio)
-      const userProcessed = await processAudio(blob, {
+      console.log('🎧 [DEBUG] Calling processAudio for user recording...')
+      const userProcessed = await processAudio(tempUserBlob, {
         threshold: 0.3,           // More sensitive for user recordings
         minSpeechDuration: 30,    // Shorter minimum speech duration
         maxSilenceDuration: 500,  // Allow longer silence gaps
         padding: 0.1
+      })
+      console.log('🎧 [DEBUG] User processAudio completed:', {
+        processed: userProcessed.processed,
+        hasBoundaries: !!userProcessed.vadBoundaries,
+        audioBlob: !!userProcessed.audioBlob
       })
       
       if (userProcessed.processed && userProcessed.vadBoundaries) {
@@ -407,22 +455,21 @@ const processUserAudio = async (blob) => {
         
         // If we have both target and user audio, align them together for matching lengths
         if (targetAudioBlob.value) {
+          console.log('🎧 [DEBUG] Target audio exists, entering alignment phase...')
           console.log('🔄 Both target and user audio available - performing smart alignment...')
           isAligning.value = true // Suppress auto-play during alignment
           
           try {
-            // Always use original target audio to prevent progressive trimming
+            console.log('🎧 [DEBUG] Alignment try block started')
+            // Use cached target audio processing when available for better performance
             let targetProcessed
-            if (targetAudioProcessed.value && originalTargetAudioBlob.value) {
-              console.log('🎯 Using cached VAD boundaries but processing original target audio for alignment')
-              // Use cached VAD boundaries but process the original audio blob
-              targetProcessed = {
-                ...targetAudioProcessed.value,
-                audioBlob: originalTargetAudioBlob.value, // ALWAYS use original blob
-                alreadyNormalized: false // Force fresh processing for alignment
-              }
-              console.log('🎯 Original target audio will be processed fresh to prevent cumulative trimming')
+            if (targetAudioProcessed.value) {
+              console.log('🎧 [DEBUG] Using cached target processing')
+              console.log('🎯 Using cached target audio processing (optimized - no reprocessing)')
+              // Use cached processing result directly - no need to reprocess
+              targetProcessed = targetAudioProcessed.value
             } else {
+              console.log('🎧 [DEBUG] No cached target processing, processing original target...')
               console.log('🎯 No cached target processing - processing original target audio for alignment')
               const audioToProcess = originalTargetAudioBlob.value || targetAudioBlob.value
               targetProcessed = await processAudio(audioToProcess)
@@ -436,12 +483,14 @@ const processUserAudio = async (blob) => {
             }
             
             if (targetProcessed.processed && userProcessed.processed) {
+              console.log('🎧 [DEBUG] Starting alignTwoAudios call...')
               // Align both audios using smart alignment
               const alignmentResult = await alignTwoAudios(
                 targetProcessed,
                 userProcessed,
                 props.vadSettings.padding * 1000 // Convert to milliseconds
               )
+              console.log('🎧 [DEBUG] alignTwoAudios completed')
               
               console.log('✅ Smart two-audio alignment complete:', {
                 method: alignmentResult.alignmentInfo.method,
@@ -452,17 +501,22 @@ const processUserAudio = async (blob) => {
               // Store old URLs for cleanup after new audio is loaded
               const oldUserUrl = userAudioUrl.value
               const oldTargetUrl = targetAudioUrl.value
+              console.log('🎧 [DEBUG] Stored old URLs for cleanup')
               
               // Always update target audio with aligned result
-              console.log('🎯 Updating target audio with aligned result')
+              console.log('🎧 [DEBUG] Updating target audio with aligned result...')
               targetAudioBlob.value = alignmentResult.audio1Aligned
               targetAudioUrl.value = URL.createObjectURL(alignmentResult.audio1Aligned)
+              console.log('🎧 [DEBUG] Target audio updated')
               
               // Always update user audio with aligned result
+              console.log('🎧 [DEBUG] Setting user audio for FIRST TIME with aligned result...')
               userAudioBlob.value = alignmentResult.audio2Aligned
               userAudioUrl.value = URL.createObjectURL(alignmentResult.audio2Aligned)
+              console.log('🎧 [DEBUG] User audio set for first time with aligned version (no intermediate display)')
               
               // Update debug info for user audio
+              console.log('🎧 [DEBUG] Getting final user audio duration...')
               const finalUserDuration = await getAudioDuration(alignmentResult.audio2Aligned)
               const trimmedUser = rawUserDuration - finalUserDuration
               userDebugInfo.value = {
@@ -470,8 +524,10 @@ const processUserAudio = async (blob) => {
                 finalDuration: finalUserDuration.toFixed(3),
                 trimmedAmount: isFinite(trimmedUser) ? trimmedUser.toFixed(3) : '0.000'
               }
+              console.log('🎧 [DEBUG] Updated user debug info')
               
               // Also update target debug info since it may have changed
+              console.log('🎧 [DEBUG] Getting final target audio duration...')
               const finalTargetDuration = await getAudioDuration(alignmentResult.audio1Aligned)
               if (targetDebugInfo.value) {
                 const targetRawDuration = parseFloat(targetDebugInfo.value.rawDuration)
@@ -479,6 +535,7 @@ const processUserAudio = async (blob) => {
                 targetDebugInfo.value.finalDuration = finalTargetDuration.toFixed(3)
                 targetDebugInfo.value.trimmedAmount = isFinite(trimmedTarget) ? trimmedTarget.toFixed(3) : '0.000'
               }
+              console.log('🎧 [DEBUG] Updated target debug info')
               
               // Clean up old URLs
               if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
@@ -487,79 +544,170 @@ const processUserAudio = async (blob) => {
               if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
                 scheduleUrlCleanup(oldTargetUrl)
               }
+              console.log('🎧 [DEBUG] Scheduled URL cleanup')
               
               console.log('✅ Smart alignment and audio update complete')
+              
+              // Emit both audios after successful alignment
+              console.log('🎧 [DEBUG] Emitting target audio-processed event...')
+              emit('audio-processed', { type: 'target', blob: targetAudioBlob.value, url: targetAudioUrl.value })
+              console.log('🎧 [DEBUG] Emitting user audio-processed event...')
+              emit('audio-processed', { type: 'user', blob: userAudioBlob.value, url: userAudioUrl.value })
+              console.log('🎧 [DEBUG] Both audio-processed events emitted')
+              
+              // Auto-play both audios after alignment if enabled
+              if (autoPlayBoth.value) {
+                console.log('🎧 [DEBUG] Auto-play both is enabled after alignment, preparing simultaneous playback...')
+                
+                // Use nextTick to ensure Vue has updated player refs with aligned audio
+                console.log('🎧 [DEBUG] Waiting for nextTick before checking player readiness...')
+                await nextTick()
+                
+                const targetReady = targetAudioPlayerRef.value?.isReady
+                const userReady = userAudioPlayerRef.value?.isReady
+                console.log('🎧 [DEBUG] Player readiness after nextTick:', { targetReady, userReady })
+                
+                if (targetReady && userReady) {
+                  console.log('🎧 [DEBUG] Both players ready after alignment, triggering overlapping playback immediately')
+                  emit('trigger-auto-play')
+                } else {
+                  console.log('🎧 [DEBUG] Players not ready after alignment, setting up watchers...', { targetReady, userReady })
+                  setupAutoPlayWatchers()
+                }
+              } else {
+                console.log('🎧 [DEBUG] Auto-play both is disabled')
+              }
+              
             } else {
               console.warn('⚠️ Cannot align audios - one or both processing failed')
+              console.log('🎧 [DEBUG] Fallback: setting user audio with raw blob since alignment failed')
+              // Fallback: set user audio with raw blob since alignment failed
+              userAudioBlob.value = tempUserBlob
+              userAudioUrl.value = URL.createObjectURL(tempUserBlob)
+              emit('audio-processed', { type: 'user', blob: userAudioBlob.value, url: userAudioUrl.value })
             }
           } catch (alignError) {
             console.error('❌ Smart alignment failed:', alignError)
+            console.log('🎧 [DEBUG] Fallback: setting user audio with raw blob since alignment failed (catch block)')
+            // Fallback: set user audio with raw blob since alignment failed
+            userAudioBlob.value = tempUserBlob
+            userAudioUrl.value = URL.createObjectURL(tempUserBlob)
+            emit('audio-processed', { type: 'user', blob: userAudioBlob.value, url: userAudioUrl.value })
           } finally {
+            console.log('🎧 [DEBUG] Alignment phase completed, re-enabling auto-play')
             isAligning.value = false // Re-enable auto-play after alignment
           }
         } else {
-          console.log('🎯 No target audio - processing user audio individually')
+          console.log('🎧 [DEBUG] No target audio - processing user audio individually')
           // Process user audio individually without alignment
+          console.log('🎧 [DEBUG] Normalizing user audio silence...')
           const normalizedBlob = await normalizeAudioSilence(
             userProcessed.audioBlob,
             userProcessed.vadBoundaries,
             props.vadSettings.padding * 1000
           )
+          console.log('🎧 [DEBUG] User audio silence normalized')
           
           // Store old URL for cleanup
           const oldUserUrl = userAudioUrl.value
           
+          console.log('🎧 [DEBUG] Setting user audio for FIRST TIME with normalized version...')
           userAudioBlob.value = normalizedBlob
           userAudioUrl.value = URL.createObjectURL(normalizedBlob)
+          console.log('🎧 [DEBUG] User audio set for first time with normalized version (no intermediate display)')
           
           // Update debug info
+          console.log('🎧 [DEBUG] Getting final normalized user audio duration...')
           const finalUserDuration = await getAudioDuration(normalizedBlob)
           userDebugInfo.value = {
             rawDuration: rawUserDuration.toFixed(3),
             finalDuration: finalUserDuration.toFixed(3),
             trimmedAmount: (rawUserDuration - finalUserDuration).toFixed(3)
           }
+          console.log('🎧 [DEBUG] Updated user debug info for normalized audio')
           
           // Clean up old URL
           if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
             scheduleUrlCleanup(oldUserUrl)
           }
+          console.log('🎧 [DEBUG] Scheduled old URL cleanup for normalized audio')
         }
       } else {
-        console.log('📏 User audio VAD processing failed - using original')
+        console.log('🎧 [DEBUG] User audio VAD processing failed - setting original blob')
+        // VAD failed, set original audio
+        userAudioBlob.value = tempUserBlob
+        userAudioUrl.value = URL.createObjectURL(tempUserBlob)
+        
+        // Set basic debug info
+        userDebugInfo.value = {
+          rawDuration: rawUserDuration.toFixed(3),
+          finalDuration: rawUserDuration.toFixed(3),
+          trimmedAmount: '0.000'
+        }
       }
     } catch (error) {
       console.error('❌ User audio processing failed:', error)
-    }
-  }
-  
-  emit('audio-processed', { type: 'user', blob: userAudioBlob.value, url: userAudioUrl.value })
-  
-  // Auto-play both audios after recording if enabled
-  if (autoPlayBoth.value) {
-    console.log('🎵 Auto-play both is enabled, preparing simultaneous playback...')
-    
-    // Check if both players are ready immediately, then trigger
-    const checkAndTriggerAutoPlay = () => {
-      const targetReady = targetAudioPlayerRef.value?.isReady
-      const userReady = userAudioPlayerRef.value?.isReady
+      console.log('🎧 [DEBUG] Processing error occurred - setting original blob')
+      // Processing failed, set original audio
+      userAudioBlob.value = tempUserBlob
+      userAudioUrl.value = URL.createObjectURL(tempUserBlob)
       
-      if (targetReady && userReady) {
-        console.log('🎵 Both players ready, triggering overlapping playback')
-        emit('trigger-auto-play')
-        return true
-      } else {
-        console.log('🎵 Players not ready yet, waiting...', { targetReady, userReady })
-        return false
+      // Set basic debug info
+      userDebugInfo.value = {
+        rawDuration: rawUserDuration.toFixed(3),
+        finalDuration: rawUserDuration.toFixed(3),
+        trimmedAmount: '0.000'
       }
     }
+  } else {
+    console.log('🎧 [DEBUG] Auto-align disabled - setting original blob')
+    // Auto-align disabled, set original audio
+    userAudioBlob.value = tempUserBlob
+    userAudioUrl.value = URL.createObjectURL(tempUserBlob)
     
-    // Try immediately first
-    if (!checkAndTriggerAutoPlay()) {
-      // If not ready immediately, set up watchers for when they become ready
-      setupAutoPlayWatchers()
+    // Set basic debug info
+    userDebugInfo.value = {
+      rawDuration: rawUserDuration.toFixed(3),
+      finalDuration: rawUserDuration.toFixed(3),
+      trimmedAmount: '0.000'
     }
   }
+  
+  // Only emit user audio if we don't have target audio (no alignment needed)
+  // If we have target audio, alignment will happen and we'll emit after that
+  const shouldEmitNow = !targetAudioBlob.value
+  console.log('🎧 [DEBUG] Determining if should emit now:', { shouldEmitNow, hasTarget: !!targetAudioBlob.value })
+  if (shouldEmitNow) {
+    console.log('🎧 [DEBUG] No target audio - emitting user audio immediately')
+    emit('audio-processed', { type: 'user', blob: userAudioBlob.value, url: userAudioUrl.value })
+  } else {
+    console.log('🎧 [DEBUG] Target audio exists - deferring user audio emit until after alignment')
+  }
+  
+  // Auto-play both audios after recording if enabled (only if no alignment needed)
+  if (autoPlayBoth.value && shouldEmitNow) {
+    console.log('🎧 [DEBUG] Auto-play both is enabled, preparing simultaneous playback...')
+    
+    // Use nextTick to ensure Vue has updated player refs with new audio
+    console.log('🎧 [DEBUG] Waiting for nextTick before checking player readiness (no alignment path)...')
+    await nextTick()
+    
+    const targetReady = targetAudioPlayerRef.value?.isReady
+    const userReady = userAudioPlayerRef.value?.isReady
+    console.log('🎧 [DEBUG] Player readiness (no alignment path):', { targetReady, userReady })
+    
+    if (targetReady && userReady) {
+      console.log('🎧 [DEBUG] Both players ready, triggering overlapping playback immediately (no alignment path)')
+      emit('trigger-auto-play')
+    } else {
+      console.log('🎧 [DEBUG] Players not ready yet, setting up watchers (no alignment path)...', { targetReady, userReady })
+      setupAutoPlayWatchers()
+    }
+  } else {
+    console.log('🎧 [DEBUG] Auto-play conditions not met:', { autoPlayBoth: autoPlayBoth.value, shouldEmitNow })
+  }
+  
+  console.log('🎧 [DEBUG] processUserAudio function completed')
 }
 
 // Set up watchers to trigger auto-play when both players become ready
@@ -752,7 +900,32 @@ defineExpose({
   font-weight: 600;
 }
 
-/* Mobile responsive */
+/* Mobile layout styles */
+.mobile-layout {
+  gap: 12px;
+}
+
+.mobile-controls {
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.mobile-controls h3 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.mobile-stacked {
+  grid-template-columns: 1fr !important;
+  gap: 16px;
+  min-height: auto;
+}
+
+.mobile-audio-column {
+  min-height: auto;
+}
+
+/* Mobile responsive breakpoint */
 @media (max-width: 768px) {
   .visualization-container {
     grid-template-columns: 1fr;
@@ -772,6 +945,25 @@ defineExpose({
   
   .delay-slider {
     min-width: 100%;
+  }
+}
+
+/* Portrait orientation optimization */
+@media (max-width: 768px) and (orientation: portrait) {
+  .mobile-layout {
+    gap: 8px;
+  }
+  
+  .mobile-controls {
+    padding: 8px 12px;
+  }
+  
+  .mobile-stacked {
+    gap: 8px;
+  }
+  
+  .mobile-audio-column {
+    min-height: 180px;
   }
 }
 </style>

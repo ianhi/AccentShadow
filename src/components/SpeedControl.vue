@@ -1,7 +1,8 @@
 <template>
-  <div class="speed-control-section">
+  <div class="speed-control-section" :class="{ 'compact': compact }">
     <div class="speed-control">
-      <span class="speed-label" :class="{ 'disabled': !enabled }">⚡ Playback Speed:</span>
+      <span class="speed-label" :class="{ 'disabled': !enabled }" v-if="!compact">⚡ Playback Speed:</span>
+      <span class="speed-label compact-label" :class="{ 'disabled': !enabled }" v-if="compact">⚡</span>
       <input 
         type="range" 
         min="0.25" 
@@ -26,6 +27,10 @@ const props = defineProps({
   enabled: {
     type: Boolean,
     default: true
+  },
+  compact: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -116,6 +121,34 @@ const handleSpeedChange = (event) => {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   min-width: 40px;
   text-align: center;
+}
+
+/* Compact mode styles */
+.speed-control-section.compact {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.speed-control-section.compact .speed-control {
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.speed-control-section.compact .speed-label.compact-label {
+  font-size: 16px;
+  min-width: auto;
+}
+
+.speed-control-section.compact .speed-slider {
+  min-width: 80px;
+  max-width: 120px;
+  flex: none;
+}
+
+.speed-control-section.compact .speed-display {
+  font-size: 12px;
+  min-width: 30px;
 }
 
 /* Mobile responsive */

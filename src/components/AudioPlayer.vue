@@ -137,22 +137,18 @@ watch(() => props.audioUrl, async (newUrl, oldUrl) => {
     
     // Check if containers are available
     if (!waveformContainer.value || !spectrogramContainer.value) {
-      // Wait a bit more and try again
-      setTimeout(async () => {
-        await nextTick();
-        if (waveformContainer.value && spectrogramContainer.value) {
-          loadAudio(newUrl);
-          // End update indicator
-          setTimeout(() => { isUpdating.value = false; }, 200);
-        } else {
-          console.error(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers still not available after timeout`);
-          isUpdating.value = false;
-        }
-      }, 100);
+      // Wait for next tick and try again
+      await nextTick();
+      if (waveformContainer.value && spectrogramContainer.value) {
+        loadAudio(newUrl);
+        isUpdating.value = false;
+      } else {
+        console.error(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers still not available after nextTick`);
+        isUpdating.value = false;
+      }
     } else {
       loadAudio(newUrl);
-      // End update indicator after WaveSurfer processes
-      setTimeout(() => { isUpdating.value = false; }, 200);
+      isUpdating.value = false;
     }
   } else if (!newUrl) {
     hasAutoPlayed.value = false; // Always reset flag when audio is removed
