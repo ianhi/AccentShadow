@@ -27,6 +27,19 @@
             </label>
           </div>
         </div>
+
+        <!-- VAD Settings Section -->
+        <div class="settings-section">
+          <h3>🎛️ Audio Processing (VAD)</h3>
+          <p class="settings-description">Configure Voice Activity Detection settings for automatic silence trimming:</p>
+          
+          <div class="setting-group">
+            <button @click="openVadSettings" class="vad-settings-btn">
+              ⚙️ Configure VAD Settings
+            </button>
+            <p class="setting-description">Adjust threshold, padding, and other VAD parameters for better audio trimming</p>
+          </div>
+        </div>
       </div>
       
       <div class="modal-footer">
@@ -48,7 +61,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'save'])
+const emit = defineEmits(['close', 'save', 'open-vad-settings'])
 
 // Local settings for the modal
 const localSettings = ref({ ...props.settings })
@@ -65,6 +78,10 @@ const closeModal = () => {
 const saveSettings = () => {
   emit('save', localSettings.value)
   closeModal()
+}
+
+const openVadSettings = () => {
+  emit('open-vad-settings')
 }
 </script>
 
@@ -249,5 +266,26 @@ const saveSettings = () => {
 
 .cancel-btn:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.vad-settings-btn {
+  padding: 12px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+  backdrop-filter: blur(10px);
+  margin-bottom: 8px;
+  width: 100%;
+  font-size: 14px;
+}
+
+.vad-settings-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(96, 165, 250, 0.4);
+  transform: translateY(-1px);
 }
 </style>

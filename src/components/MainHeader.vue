@@ -1,8 +1,8 @@
 <template>
   <div class="main-header">
     <h1>{{ title }}</h1>
-    <button @click="openSettings" class="settings-btn" title="App Settings">
-      ⚙️
+    <button @click="openSettings" class="settings-btn desktop-only" title="Settings">
+      ⚙️ Settings
     </button>
   </div>
 </template>
@@ -63,15 +63,14 @@ const openSettings = () => {
   transform: translateY(-50%) scale(1.05);
 }
 
-/* Mobile responsive */
+/* Hide settings button on mobile - use bottom nav instead */
 @media (max-width: 768px) {
   .main-header h1 {
     font-size: 2rem;
   }
   
-  .settings-btn {
-    padding: 6px 10px;
-    font-size: 1em;
+  .desktop-only {
+    display: none;
   }
 }
 </style>

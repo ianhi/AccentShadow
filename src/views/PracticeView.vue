@@ -1,12 +1,15 @@
 <template>
-  <div class="practice-view">
+  <div class="practice-view" :class="{ 'mobile-layout': shouldUseMobileLayout }">
     <div class="main-content">
       <MainHeader @open-settings="openAppSettingsModal" />
 
-      <SessionStats />
-      <RecordingNavigation />
+      <!-- Session Stats - Hidden on mobile unless toggled -->
+      <SessionStats v-if="!shouldUseMobileLayout || showStatsOnMobile" />
       
-      <!-- Audio Visualization Panel -->
+      <!-- Recording Navigation - Hidden on mobile -->
+      <RecordingNavigation v-if="!shouldUseMobileLayout" />
+      
+      <!-- Audio Visualization Panel - Always visible -->
       <AudioVisualizationPanel
         :ref="setAudioVisualizationPanel"
         :currentRecording="currentRecording"
@@ -15,56 +18,99 @@
         :appSettings="appSettings"
         @browse-file="triggerFileInput"
         @load-url="showUrlModalHandler"
-        @show-vad-settings="showVADSettings"
         @target-audio-ref="handleTargetAudioPlayerRef"
         @user-audio-ref="handleUserAudioPlayerRef"
         @audio-processed="handleAudioProcessed"
         @trigger-auto-play="playOverlapping"
       />
 
-      <!-- Central Playback Controls -->
-      <CentralPlaybackControls
-        @recorded="handleRecordedAudio"
-        @recording-started="handleRecordingStarted"
-        @recording-stopped="handleRecordingStopped"
-        @play-target="playTarget"
-        @play-user="playUser"
-        @play-overlapping="playOverlapping"
-        @play-sequential="playSequentialWithDelay"
-        @stop-all="stopAll"
-        @speed-change="handleSpeedChange"
-      />
+      <!-- Central Playback Controls - Always visible, sticky on mobile -->
+      <div class="playback-controls-container" :class="{ 'sticky-controls': shouldUseMobileLayout }">
+        <CentralPlaybackControls
+          @recorded="handleRecordedAudio"
+          @recording-started="handleRecordingStarted"
+          @recording-stopped="handleRecordingStopped"
+          @play-target="playTarget"
+          @play-user="playUser"
+          @play-overlapping="playOverlapping"
+          @play-sequential="playSequentialWithDelay"
+          @stop-all="stopAll"
+          @speed-change="handleSpeedChange"
+        />
+      </div>
 
-      <!-- Audio Processing Controls -->
-      <AudioProcessingControls
-        :autoPlayBoth="audioVisualizationPanel?.autoPlayBoth || false"
-        :autoAlignEnabled="audioVisualizationPanel?.autoAlignEnabled || false"
-        :vadReady="audioVisualizationPanel?.vadReady || false"
-        :isProcessing="audioVisualizationPanel?.isProcessing || false"
-        :sequentialDelay="audioVisualizationPanel?.sequentialDelay || 0"
-        @toggle-auto-play="toggleAutoPlay"
-        @toggle-auto-align="toggleAutoAlign"
-        @manual-align="manualAlign"
-        @show-vad-settings="showVADSettings"
-        @update-sequential-delay="updateSequentialDelay"
-      />
+      <!-- Desktop-only components -->
+      <template v-if="!shouldUseMobileLayout">
+        <!-- Audio Processing Controls -->
+        <AudioProcessingControls
+          :autoPlayBoth="audioVisualizationPanel?.autoPlayBoth || false"
+          :autoAlignEnabled="audioVisualizationPanel?.autoAlignEnabled || false"
+          :vadReady="audioVisualizationPanel?.vadReady || false"
+          :isProcessing="audioVisualizationPanel?.isProcessing || false"
+          :sequentialDelay="audioVisualizationPanel?.sequentialDelay || 0"
+          @toggle-auto-play="toggleAutoPlay"
+          @toggle-auto-align="toggleAutoAlign"
+          @manual-align="manualAlign"
+          @update-sequential-delay="updateSequentialDelay"
+        />
 
-      <!-- Recording Actions -->
-      <RecordingActions
-        :currentRecording="currentRecording"
-        @save-recording="handleSaveRecording"
-        @mark-completed="handleMarkCompleted"
-      />
+        <!-- Recording Actions -->
+        <RecordingActions
+          :currentRecording="currentRecording"
+          @save-recording="handleSaveRecording"
+          @mark-completed="handleMarkCompleted"
+        />
 
-      <!-- Saved Recordings Section -->
-      <SavedRecordingsSection
-        @load-recording="handleLoadRecording"
-        @delete-recording="handleDeleteRecording"
-      />
+        <!-- Saved Recordings Section -->
+        <SavedRecordingsSection
+          @load-recording="handleLoadRecording"
+          @delete-recording="handleDeleteRecording"
+        />
 
-      <!-- Recording Sets Manager -->
-      <RecordingSetsManager />
+        <!-- Recording Sets Manager -->
+        <RecordingSetsManager />
+      </template>
     </div>
+
+    <!-- Mobile Bottom Navigation -->
+    <MobileBottomNav 
+      :activeTab="mobileActiveTab"
+      @tab-clicked="handleMobileTabClick"
+    />
+
+    <!-- Mobile Sidebar for Recording Sets -->
+    <Transition name="slide-left">
+      <div v-if="showMobileSidebar" class="mobile-sidebar-overlay" @click="closeMobileSidebar">
+        <div class="mobile-sidebar" @click.stop>
+          <div class="sidebar-header">
+            <h2>Recording Sets</h2>
+            <button @click="closeMobileSidebar" class="close-btn">×</button>
+          </div>
+          <div class="sidebar-content">
+            <RecordingSetsManager />
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Mobile Modal for Saved Recordings & Settings -->
+    <Transition name="fade">
+      <div v-if="showMobileModal" class="mobile-modal-overlay" @click="closeMobileModal">
+        <div class="mobile-modal" @click.stop>
+          <div class="modal-header">
+            <h2>{{ mobileModalTitle }}</h2>
+            <button @click="closeMobileModal" class="close-btn">×</button>
+          </div>
+          <div class="modal-content">
+            <SavedRecordingsSection 
+              v-if="mobileModalContent === 'saved'"
+              @load-recording="handleLoadRecording"
+              @delete-recording="handleDeleteRecording"
+            />
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- URL Input Modal -->
     <div v-if="showUrlModal" class="modal-overlay" @click="closeUrlModal">
@@ -86,42 +132,6 @@
       </div>
     </div>
 
-    <!-- VAD Settings Modal -->
-    <div v-if="showVadModal" class="modal-overlay" @click="closeVadModal">
-      <div class="modal-content" @click.stop>
-        <h3>🎛️ VAD Settings</h3>
-        <div class="vad-settings">
-          <div class="setting-group">
-            <label>Padding (seconds): {{ vadSettings.padding }}</label>
-            <input 
-              type="range" 
-              min="0" 
-              max="1" 
-              step="0.1"
-              :value="vadSettings.padding"
-              @input="vadSettings.padding = parseFloat($event.target.value)"
-            />
-          </div>
-          <div class="setting-group">
-            <label>Threshold: {{ vadSettings.threshold }}</label>
-            <input 
-              type="range" 
-              min="0.1" 
-              max="1" 
-              step="0.05"
-              :value="vadSettings.threshold"
-              @input="vadSettings.threshold = parseFloat($event.target.value)"
-            />
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button @click="handleVADSettingsSave(vadSettings)" class="save-btn">
-            Save Settings
-          </button>
-          <button @click="closeVadModal" class="cancel-btn">Cancel</button>
-        </div>
-      </div>
-    </div>
     
     <!-- Recording Manager -->
     <RecordingManager
@@ -158,12 +168,13 @@
       :settings="appSettings"
       @close="closeAppSettingsModal"
       @save="handleAppSettingsSave"
+      @open-vad-settings="openVadSettingsFromApp"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue';
+import { ref, onMounted, watch, nextTick, computed } from 'vue';
 import RecordingNavigation from '../components/RecordingNavigation.vue';
 import SessionStats from '../components/SessionStats.vue';
 import RecordingSetsManager from '../components/RecordingSetsManager.vue';
@@ -177,11 +188,15 @@ import RecordingManager from '../components/RecordingManager.vue';
 import RecordingStateManager from '../components/RecordingStateManager.vue';
 import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
 import AppSettingsModal from '../components/AppSettingsModal.vue';
+import MobileBottomNav from '../components/MobileBottomNav.vue';
+import MicrophoneSelector from '../components/MicrophoneSelector.vue';
 import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useRecordingSets } from '../composables/useRecordingSets';
 import { useAppState } from '../composables/useAppState';
 import { useAppUtilities } from '../composables/useAppUtilities';
 import { usePlaybackControls } from '../composables/usePlaybackControls';
+import { useViewport } from '../composables/useViewport';
+import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts';
 
 // IMPORTANT: Initialize global app state FIRST to provide it to all child components
 const {
@@ -208,6 +223,27 @@ const {
 // Core composables
 const { initDB } = useIndexedDB()
 const { currentRecording, updateUserRecording } = useRecordingSets()
+
+// Mobile layout detection
+const { shouldUseMobileLayout } = useViewport()
+
+// Microphone devices for mobile settings
+const { availableDevices, selectedDeviceId, setSelectedDevice } = useMicrophoneDevices()
+
+// Mobile layout state
+const mobileActiveTab = ref(null)
+const showMobileSidebar = ref(false)
+const showMobileModal = ref(false)
+const mobileModalContent = ref('')
+const showStatsOnMobile = ref(false)
+
+const mobileModalTitle = computed(() => {
+  switch (mobileModalContent.value) {
+    case 'saved': return 'Saved Recordings'
+    case 'settings': return 'Audio Settings'
+    default: return ''
+  }
+})
 
 // Since we're in the same component that provides the state, pass it directly
 // to avoid provide/inject within the same component (which doesn't work in Vue setup)
@@ -377,6 +413,53 @@ const handleAutoPlayToggled = (value) => console.log('Auto-play toggled:', value
 const handleAutoAlignToggled = (value) => console.log('Auto-align toggled:', value)
 const handleManualAlignTriggered = () => console.log('Manual alignment triggered')
 const handleSequentialDelayUpdated = (value) => console.log('Sequential delay updated:', value)
+
+// Mobile navigation handlers
+const handleMobileTabClick = (tabName) => {
+  mobileActiveTab.value = tabName
+  
+  switch (tabName) {
+    case 'sets':
+      showMobileSidebar.value = true
+      showMobileModal.value = false
+      break
+    case 'saved':
+      mobileModalContent.value = 'saved'
+      showMobileModal.value = true
+      showMobileSidebar.value = false
+      break
+    case 'settings':
+      // Open the unified app settings modal instead of mobile-specific modal
+      openAppSettingsModal()
+      // Reset mobile tab state since we're using the main settings modal
+      mobileActiveTab.value = null
+      break
+  }
+}
+
+const closeMobileSidebar = () => {
+  showMobileSidebar.value = false
+  if (mobileActiveTab.value === 'sets') {
+    mobileActiveTab.value = null
+  }
+}
+
+const closeMobileModal = () => {
+  showMobileModal.value = false
+  mobileModalContent.value = ''
+  if (mobileActiveTab.value === 'saved' || mobileActiveTab.value === 'settings') {
+    mobileActiveTab.value = null
+  }
+}
+
+const handleMicrophoneChange = (deviceId) => {
+  setSelectedDevice(deviceId)
+}
+
+// Open VAD settings from the unified app settings modal
+const openVadSettingsFromApp = () => {
+  openVadModal()
+}
 
 // Watch for recording changes to load target audio
 watch(currentRecording, async (newRecording, oldRecording) => {
@@ -555,6 +638,173 @@ watch(currentRecording, async (newRecording, oldRecording) => {
   transform: translateY(-1px);
 }
 
+/* Mobile Layout Styles */
+.mobile-layout .main-content {
+  padding-bottom: 80px; /* Space for bottom nav */
+}
+
+.sticky-controls {
+  position: sticky;
+  bottom: 80px; /* Above bottom nav */
+  z-index: 50;
+  background: rgba(26, 26, 46, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  margin: 12px 0;
+}
+
+/* Mobile Sidebar */
+.mobile-sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+}
+
+.mobile-sidebar {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  width: 280px;
+  max-width: 80vw;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+}
+
+/* Mobile Modal */
+.mobile-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.mobile-modal {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+}
+
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.mobile-settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mobile-microphone-section {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mobile-microphone-section h4 {
+  margin: 0 0 12px 0;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 4px;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* Animations */
+.slide-left-enter-active, .slide-left-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-left-enter-from, .slide-left-leave-to {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .main-content {
@@ -568,6 +818,19 @@ watch(currentRecording, async (newRecording, oldRecording) => {
   
   .modal-actions {
     flex-direction: column;
+  }
+}
+
+/* Portrait-specific mobile styles */
+@media (max-width: 768px) and (orientation: portrait) {
+  .mobile-layout .main-content {
+    padding: 12px;
+    padding-bottom: 80px;
+  }
+  
+  .sticky-controls {
+    margin: 8px 0;
+    bottom: 75px;
   }
 }
 </style>

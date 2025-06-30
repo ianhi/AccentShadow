@@ -18,9 +18,6 @@
         >
           {{ isProcessing ? '🔄 Trimming...' : '✂️ Trim Now' }}
         </button>
-        <button @click="$emit('show-vad-settings')" class="settings-btn" title="VAD Settings">
-          ⚙️
-        </button>
       </div>
       <div class="sequential-delay-control">
         <label class="delay-label">📋 Sequential delay:</label>
@@ -73,7 +70,6 @@ defineEmits([
   'toggle-auto-play',
   'toggle-auto-align',
   'manual-align',
-  'show-vad-settings',
   'update-sequential-delay'
 ])
 </script>
@@ -118,8 +114,7 @@ defineEmits([
   flex-wrap: wrap;
 }
 
-.align-btn,
-.settings-btn {
+.align-btn {
   padding: 8px 16px;
   border: none;
   border-radius: 8px;
@@ -133,8 +128,7 @@ defineEmits([
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.align-btn:hover:not(:disabled),
-.settings-btn:hover {
+.align-btn:hover:not(:disabled) {
   background: rgba(37, 99, 235, 0.9);
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
@@ -149,11 +143,6 @@ defineEmits([
 .align-btn.processing {
   background: rgba(245, 158, 11, 0.9);
   cursor: not-allowed;
-}
-
-.settings-btn {
-  padding: 8px 12px;
-  min-width: 40px;
 }
 
 .sequential-delay-control {

@@ -6,11 +6,18 @@ interface MicrophoneDevice {
   groupId: string;
 }
 
+// Global singleton state - shared across all component instances
+const globalMicrophoneState = {
+  availableDevices: ref<MicrophoneDevice[]>([]),
+  selectedDeviceId: ref<string | null>(null),
+  isLoading: ref(false),
+  error: ref<string | null>(null),
+  isInitialized: ref(false)
+};
+
 export function useMicrophoneDevices() {
-  const availableDevices = ref<MicrophoneDevice[]>([]);
-  const selectedDeviceId = ref<string | null>(null);
-  const isLoading = ref(false);
-  const error = ref<string | null>(null);
+  // Return the shared global state instead of creating new instances
+  const { availableDevices, selectedDeviceId, isLoading, error, isInitialized } = globalMicrophoneState;
 
   // Get list of available microphone devices
   const getAvailableDevices = async () => {
@@ -39,7 +46,7 @@ export function useMicrophoneDevices() {
         selectedDeviceId.value = audioInputs[0].deviceId;
       }
 
-      console.log('🎤 Available microphones:', availableDevices.value);
+      console.log('🎤 Available microphones (initialized once):', availableDevices.value);
       
     } catch (err) {
       console.error('Error getting microphone devices:', err);
@@ -83,10 +90,15 @@ export function useMicrophoneDevices() {
   };
 
   onMounted(() => {
-    if (typeof navigator.mediaDevices?.enumerateDevices === 'function') {
+    // Only initialize once globally
+    if (!isInitialized.value && typeof navigator.mediaDevices?.enumerateDevices === 'function') {
+      console.log('🎤 Initializing microphone devices (first time)');
+      isInitialized.value = true;
       getAvailableDevices();
       setupDeviceChangeListener();
-    } else {
+    } else if (isInitialized.value) {
+      console.log('🎤 Microphone devices already initialized, skipping');
+    } else if (!navigator.mediaDevices?.enumerateDevices) {
       error.value = 'Device enumeration not supported in this browser';
     }
   });
