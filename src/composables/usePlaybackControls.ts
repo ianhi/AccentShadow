@@ -1,13 +1,39 @@
-import { ref } from 'vue'
-import { useAppStateInject } from './useAppState'
+import { ref, type Ref } from 'vue'
+import { useAppStateInject, type AppState } from './useAppState'
+
+// Types
+interface AudioPlayer {
+  play?: () => Promise<void> | void;
+  stop?: () => void;
+  pause?: () => void;
+  setPlaybackRate?: (rate: number) => void;
+  playbackRate?: number;
+  currentTime?: number;
+  wavesurfer?: any;
+  playerInfo?: () => any;
+  audioElement?: HTMLAudioElement;
+}
+
+interface AudioManager {
+  activePlayback: string | null;
+  emergencyStop: (reason: string, newPlaybackType?: string | null) => void;
+  stopAll: () => void;
+}
+
+interface LocalAppState {
+  targetAudioPlayerRef: Ref<AudioPlayer | null>;
+  userAudioPlayerRef: Ref<AudioPlayer | null>;
+  globalPlaybackSpeed: Ref<number>;
+  updatePlaybackSpeed: (newSpeed: number) => void;
+}
 
 /**
  * Consolidated playback controls composable
  * Handles all audio playback functionality directly within the app state context
  */
-export function usePlaybackControls(providedAppState = null) {
+export function usePlaybackControls(providedAppState: AppState | null = null) {
   // Use provided app state if available, otherwise try to inject, otherwise create local state
-  let appState
+  let appState: AppState | LocalAppState
   
   if (providedAppState) {
     appState = providedAppState
@@ -18,11 +44,11 @@ export function usePlaybackControls(providedAppState = null) {
       // If no app state is available, create local refs
       console.warn('usePlaybackControls: No app state available, using local state')
       appState = {
-        targetAudioPlayerRef: ref(null),
-        userAudioPlayerRef: ref(null),
-        globalPlaybackSpeed: ref(1),
-        updatePlaybackSpeed: (newSpeed) => {
-          appState.globalPlaybackSpeed.value = newSpeed
+        targetAudioPlayerRef: ref<AudioPlayer | null>(null),
+        userAudioPlayerRef: ref<AudioPlayer | null>(null),
+        globalPlaybackSpeed: ref<number>(1),
+        updatePlaybackSpeed: (newSpeed: number) => {
+          (appState as LocalAppState).globalPlaybackSpeed.value = newSpeed
         }
       }
     }
@@ -36,7 +62,7 @@ export function usePlaybackControls(providedAppState = null) {
   } = appState
 
   // Helper function to get audio player component ref
-  const getAudioPlayer = (playerRef) => {
+  const getAudioPlayer = (playerRef: Ref<AudioPlayer | null>): AudioPlayer | null => {
     if (!playerRef?.value) {
       return null
     }
@@ -47,18 +73,23 @@ export function usePlaybackControls(providedAppState = null) {
     }
     
     // If it's a mock/test audio element (for testing)
-    if (playerRef.value.audioElement || (playerRef.value.play && playerRef.value.pause)) {
-      return playerRef.value.audioElement || playerRef.value
+    if (playerRef.value.audioElement) {
+      return playerRef.value
+    }
+    
+    // Check if it has audio element methods directly
+    if (playerRef.value.play && playerRef.value.pause) {
+      return playerRef.value
     }
     
     return null
   }
 
   // Audio manager for handling concurrent playback
-  const audioManager = {
+  const audioManager: AudioManager = {
     activePlayback: null,
     
-    emergencyStop(reason, newPlaybackType = null) {
+    emergencyStop(reason: string, newPlaybackType: string | null = null): void {
       // For overlapping and sequential playback, we want both players available
       // so only stop if we're changing to a single-player mode or stopping entirely
       if (this.activePlayback && this.activePlayback !== newPlaybackType) {
@@ -72,7 +103,7 @@ export function usePlaybackControls(providedAppState = null) {
       }
     },
     
-    stopAll() {
+    stopAll(): void {
       const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
       const userPlayer = getAudioPlayer(userAudioPlayerRef)
       
@@ -83,8 +114,8 @@ export function usePlaybackControls(providedAppState = null) {
             targetPlayer.stop()
           } else {
             // For raw audio elements (testing)
-            targetPlayer.pause()
-            targetPlayer.currentTime = 0
+            if (targetPlayer.pause) targetPlayer.pause()
+            if (targetPlayer.currentTime !== undefined) targetPlayer.currentTime = 0
           }
         } catch (error) {
           console.error('Error stopping target audio:', error)
@@ -98,8 +129,8 @@ export function usePlaybackControls(providedAppState = null) {
             userPlayer.stop()
           } else {
             // For raw audio elements (testing)
-            userPlayer.pause()
-            userPlayer.currentTime = 0
+            if (userPlayer.pause) userPlayer.pause()
+            if (userPlayer.currentTime !== undefined) userPlayer.currentTime = 0
           }
         } catch (error) {
           console.error('Error stopping user audio:', error)
@@ -111,7 +142,7 @@ export function usePlaybackControls(providedAppState = null) {
   }
 
   // Update playback speed for both players
-  const updatePlaybackSpeedValue = (newSpeed) => {
+  const updatePlaybackSpeedValue = (newSpeed: number): void => {
     updatePlaybackSpeed(newSpeed)
     
     // Apply speed to both audio players
@@ -124,7 +155,9 @@ export function usePlaybackControls(providedAppState = null) {
         targetPlayer.setPlaybackRate(newSpeed)
       } else {
         // For raw audio elements (testing)
-        targetPlayer.playbackRate = newSpeed
+        if (targetPlayer.playbackRate !== undefined) {
+          targetPlayer.playbackRate = newSpeed
+        }
       }
     }
     if (userPlayer) {
@@ -133,13 +166,15 @@ export function usePlaybackControls(providedAppState = null) {
         userPlayer.setPlaybackRate(newSpeed)
       } else {
         // For raw audio elements (testing)
-        userPlayer.playbackRate = newSpeed
+        if (userPlayer.playbackRate !== undefined) {
+          userPlayer.playbackRate = newSpeed
+        }
       }
     }
   }
 
   // Individual playback controls
-  const playTarget = async () => {
+  const playTarget = async (): Promise<void> => {
     audioManager.emergencyStop('Playing target audio', 'target')
     
     const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
@@ -150,10 +185,12 @@ export function usePlaybackControls(providedAppState = null) {
         if (typeof targetPlayer.setPlaybackRate === 'function') {
           targetPlayer.setPlaybackRate(globalPlaybackSpeed.value)
         } else {
-          targetPlayer.playbackRate = globalPlaybackSpeed.value
+          if (targetPlayer.playbackRate !== undefined) {
+            targetPlayer.playbackRate = globalPlaybackSpeed.value
+          }
         }
         
-        await targetPlayer.play()
+        await targetPlayer.play?.()
         audioManager.activePlayback = 'target'
       } catch (error) {
         console.error('❌ Error playing target audio:', error)
@@ -161,7 +198,7 @@ export function usePlaybackControls(providedAppState = null) {
     }
   }
 
-  const playUser = async () => {
+  const playUser = async (): Promise<void> => {
     audioManager.emergencyStop('Playing user audio', 'user')
     
     const userPlayer = getAudioPlayer(userAudioPlayerRef)
@@ -172,10 +209,12 @@ export function usePlaybackControls(providedAppState = null) {
         if (typeof userPlayer.setPlaybackRate === 'function') {
           userPlayer.setPlaybackRate(globalPlaybackSpeed.value)
         } else {
-          userPlayer.playbackRate = globalPlaybackSpeed.value
+          if (userPlayer.playbackRate !== undefined) {
+            userPlayer.playbackRate = globalPlaybackSpeed.value
+          }
         }
         
-        await userPlayer.play()
+        await userPlayer.play?.()
         audioManager.activePlayback = 'user'
       } catch (error) {
         console.error('❌ Error playing user audio:', error)
@@ -183,7 +222,7 @@ export function usePlaybackControls(providedAppState = null) {
     }
   }
 
-  const playOverlapping = async () => {
+  const playOverlapping = async (): Promise<void> => {
     const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
     const userPlayer = getAudioPlayer(userAudioPlayerRef)
     
@@ -193,13 +232,17 @@ export function usePlaybackControls(providedAppState = null) {
         if (typeof targetPlayer.setPlaybackRate === 'function') {
           targetPlayer.setPlaybackRate(globalPlaybackSpeed.value)
         } else {
-          targetPlayer.playbackRate = globalPlaybackSpeed.value
+          if (targetPlayer.playbackRate !== undefined) {
+            targetPlayer.playbackRate = globalPlaybackSpeed.value
+          }
         }
         
         if (typeof userPlayer.setPlaybackRate === 'function') {
           userPlayer.setPlaybackRate(globalPlaybackSpeed.value)
         } else {
-          userPlayer.playbackRate = globalPlaybackSpeed.value
+          if (userPlayer.playbackRate !== undefined) {
+            userPlayer.playbackRate = globalPlaybackSpeed.value
+          }
         }
         
         // Stop any existing playback in our local manager
@@ -245,7 +288,7 @@ export function usePlaybackControls(providedAppState = null) {
     }
   }
 
-  const playSequential = async (sequentialDelay = 0) => {
+  const playSequential = async (sequentialDelay: number = 0): Promise<void> => {
     // Stop any existing playback first
     if (audioManager.activePlayback) {
       audioManager.stopAll()
@@ -260,34 +303,46 @@ export function usePlaybackControls(providedAppState = null) {
         if (typeof targetPlayer.setPlaybackRate === 'function') {
           targetPlayer.setPlaybackRate(globalPlaybackSpeed.value)
         } else {
-          targetPlayer.playbackRate = globalPlaybackSpeed.value
+          if (targetPlayer.playbackRate !== undefined) {
+            targetPlayer.playbackRate = globalPlaybackSpeed.value
+          }
         }
         
         if (typeof userPlayer.setPlaybackRate === 'function') {
           userPlayer.setPlaybackRate(globalPlaybackSpeed.value)
         } else {
-          userPlayer.playbackRate = globalPlaybackSpeed.value
+          if (userPlayer.playbackRate !== undefined) {
+            userPlayer.playbackRate = globalPlaybackSpeed.value
+          }
         }
         
         // Play target first
-        await targetPlayer.play()
+        await targetPlayer.play?.()
         
-        // Get the actual duration from the target player and wait for it to finish
+        // Listen for the target audio to finish, then play user audio
         const targetWavesurfer = targetPlayer.wavesurfer
         if (targetWavesurfer) {
-          const baseDuration = targetWavesurfer.getDuration() * 1000 // Convert to ms
-          // Account for playback rate - if playing at 2x speed, it takes half the time
-          const adjustedDuration = baseDuration / globalPlaybackSpeed.value
-          const totalWaitTime = adjustedDuration + sequentialDelay
+          // Set up one-time finish listener for event-driven sequential playback
+          const handleTargetFinish = async (): Promise<void> => {
+            // Remove the listener to prevent memory leaks
+            targetWavesurfer.un('finish', handleTargetFinish)
+            
+            // Apply sequential delay if specified
+            if (sequentialDelay > 0) {
+              setTimeout(async () => {
+                await userPlayer.play?.()
+              }, sequentialDelay)
+            } else {
+              await userPlayer.play?.()
+            }
+          }
           
-          setTimeout(async () => {
-            await userPlayer.play()
-          }, totalWaitTime)
+          targetWavesurfer.once('finish', handleTargetFinish)
         } else {
           // Fallback: use a reasonable default duration adjusted for playback rate
           const fallbackDuration = 2000 / globalPlaybackSpeed.value
           setTimeout(async () => {
-            await userPlayer.play()
+            await userPlayer.play?.()
           }, fallbackDuration + sequentialDelay)
         }
         
@@ -302,7 +357,7 @@ export function usePlaybackControls(providedAppState = null) {
     }
   }
 
-  const stopAll = () => {
+  const stopAll = (): void => {
     audioManager.stopAll()
   }
 

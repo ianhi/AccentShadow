@@ -61,7 +61,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
 
@@ -71,10 +71,18 @@ const {
   endSession 
 } = useRecordingSets();
 
+// Types
+interface LastSessionStats {
+  recordingsCompleted: number;
+  totalTime: number;
+  averageAttempts: number;
+  endedAt: string;
+}
+
 // Component state
 const elapsedTime = ref(0);
-const lastSessionStats = ref(null);
-let timer = null;
+const lastSessionStats = ref<LastSessionStats | null>(null);
+let animationFrameId: number | null = null;
 
 // Computed properties
 const completionRate = computed(() => {
@@ -86,10 +94,20 @@ const completionRate = computed(() => {
 const updateTimer = () => {
   if (sessionState.value.isActive && sessionState.value.startTime) {
     elapsedTime.value = Date.now() - sessionState.value.startTime;
+    
+    // Use requestAnimationFrame for smooth, efficient updates
+    animationFrameId = requestAnimationFrame(() => {
+      // Schedule next update in approximately 1 second
+      setTimeout(() => {
+        if (sessionState.value.isActive) {
+          updateTimer();
+        }
+      }, 1000);
+    });
   }
 };
 
-const formatTime = (milliseconds) => {
+const formatTime = (milliseconds: number): string => {
   const seconds = Math.floor(milliseconds / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
@@ -105,12 +123,14 @@ const formatTime = (milliseconds) => {
 
 const endCurrentSession = () => {
   // Store the session stats before ending
-  lastSessionStats.value = {
-    recordingsCompleted: sessionState.value.recordingsCompleted,
-    totalTime: Date.now() - sessionState.value.startTime,
-    averageAttempts: sessionState.value.averageAttempts,
-    endedAt: new Date().toISOString()
-  };
+  if (sessionState.value.startTime) {
+    lastSessionStats.value = {
+      recordingsCompleted: sessionState.value.recordingsCompleted,
+      totalTime: Date.now() - sessionState.value.startTime,
+      averageAttempts: sessionState.value.averageAttempts,
+      endedAt: new Date().toISOString()
+    };
+  }
   
   endSession();
   console.log('📊 Session ended manually by user');
@@ -122,14 +142,14 @@ const clearLastSession = () => {
 
 // Lifecycle
 onMounted(() => {
-  // Update timer every second
-  timer = setInterval(updateTimer, 1000);
-  updateTimer(); // Initial update
+  // Start timer using requestAnimationFrame for better performance
+  updateTimer();
 });
 
 onUnmounted(() => {
-  if (timer) {
-    clearInterval(timer);
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
   }
 });
 </script>

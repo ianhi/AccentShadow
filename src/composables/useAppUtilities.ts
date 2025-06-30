@@ -1,14 +1,35 @@
-import { ref } from 'vue'
-import { useAppStateInject } from './useAppState'
+import { ref, type Ref } from 'vue'
+import { useAppStateInject, type AppState, type VADSettings } from './useAppState'
+
+// Types
+interface SavedRecording {
+  id: string;
+  targetBlob?: Blob;
+  userBlob?: Blob;
+  targetData?: string;
+  userData?: string;
+  timestamp: string;
+  name: string;
+}
+
+// Import from useAppState to ensure consistency
+import type { AudioVisualizationPanel as ImportedAudioVisualizationPanel } from './useAppState'
+
+interface LocalAppState {
+  audioVisualizationPanel: Ref<ImportedAudioVisualizationPanel | null>;
+  vadSettings: Ref<VADSettings>;
+  updateVadSettings: (newSettings: Partial<VADSettings>) => void;
+  updateAppSettings?: (newSettings: any) => void;
+}
 
 /**
  * Consolidated app utilities composable
  * Replaces FileUploadManager, AudioLoadingManager, and ModalManager components
  * with a single, more efficient utility system
  */
-export function useAppUtilities(providedAppState = null) {
+export function useAppUtilities(providedAppState: AppState | null = null) {
   // Use provided app state if available, otherwise try to inject, otherwise create local state
-  let appState
+  let appState: AppState | LocalAppState
   
   if (providedAppState) {
     appState = providedAppState
@@ -19,8 +40,8 @@ export function useAppUtilities(providedAppState = null) {
       // If no app state is available, create local refs
       console.warn('useAppUtilities: No app state available, using local state')
       appState = {
-        audioVisualizationPanel: ref(null),
-        vadSettings: ref({
+        audioVisualizationPanel: ref<ImportedAudioVisualizationPanel | null>(null),
+        vadSettings: ref<VADSettings>({
           padding: 0.2,
           threshold: 0.25,
           minSpeechDuration: 50,
@@ -28,8 +49,8 @@ export function useAppUtilities(providedAppState = null) {
           maxTrimStart: 3.0,
           maxTrimEnd: 2.0
         }),
-        updateVadSettings: (newSettings) => {
-          appState.vadSettings.value = { ...appState.vadSettings.value, ...newSettings }
+        updateVadSettings: (newSettings: Partial<VADSettings>) => {
+          (appState as LocalAppState).vadSettings.value = { ...(appState as LocalAppState).vadSettings.value, ...newSettings }
         }
       }
     }
@@ -38,16 +59,16 @@ export function useAppUtilities(providedAppState = null) {
   const { audioVisualizationPanel, vadSettings, updateVadSettings } = appState
 
   // Modal states
-  const showUrlModal = ref(false)
-  const showVadModal = ref(false)
-  const showAppSettingsModal = ref(false)
-  const urlToLoad = ref('')
+  const showUrlModal = ref<boolean>(false)
+  const showVadModal = ref<boolean>(false)
+  const showAppSettingsModal = ref<boolean>(false)
+  const urlToLoad = ref<string>('')
 
   // File input ref for triggering file selection
-  const fileInputRef = ref(null)
+  const fileInputRef = ref<HTMLInputElement | null>(null)
 
   // Create hidden file input element on first use
-  const createFileInput = () => {
+  const createFileInput = (): HTMLInputElement => {
     if (!fileInputRef.value) {
       const input = document.createElement('input')
       input.type = 'file'
@@ -61,16 +82,17 @@ export function useAppUtilities(providedAppState = null) {
   }
 
   // File handling
-  const triggerFileInput = () => {
+  const triggerFileInput = (): void => {
     const input = createFileInput()
     input.click()
   }
 
-  const handleFileInputChange = async (event) => {
-    const file = event.target.files?.[0]
+  const handleFileInputChange = async (event: Event): Promise<void> => {
+    const target = event.target as HTMLInputElement
+    const file = target.files?.[0]
     if (file && audioVisualizationPanel.value) {
       try {
-        await audioVisualizationPanel.value.setTargetAudio(file, {
+        await audioVisualizationPanel.value.setTargetAudio?.(file, {
           name: file.name,
           fileName: file.name,
           source: 'file'
@@ -78,15 +100,15 @@ export function useAppUtilities(providedAppState = null) {
         console.log('✅ File loaded successfully:', file.name)
       } catch (error) {
         console.error('❌ Failed to load file:', error)
-        alert('Failed to load audio file: ' + error.message)
+        alert('Failed to load audio file: ' + (error as Error).message)
       }
     }
     // Clear the input for future selections
-    event.target.value = ''
+    target.value = ''
   }
 
   // URL loading
-  const loadAudioFromUrl = async (url) => {
+  const loadAudioFromUrl = async (url: string): Promise<void> => {
     if (!url || !audioVisualizationPanel.value) return
 
     try {
@@ -104,7 +126,7 @@ export function useAppUtilities(providedAppState = null) {
         throw new Error('URL does not point to an audio file')
       }
 
-      await audioVisualizationPanel.value.setTargetAudio(blob, {
+      await audioVisualizationPanel.value.setTargetAudio?.(blob, {
         name: url.split('/').pop() || 'Remote Audio',
         fileName: url.split('/').pop() || 'remote-audio',
         source: 'url'
@@ -113,58 +135,58 @@ export function useAppUtilities(providedAppState = null) {
       console.log('✅ URL audio loaded successfully')
     } catch (error) {
       console.error('❌ Failed to load audio from URL:', error)
-      alert(`Failed to load audio from URL: ${error.message}`)
+      alert(`Failed to load audio from URL: ${(error as Error).message}`)
     }
   }
 
   // Modal management
-  const openUrlModal = () => {
+  const openUrlModal = (): void => {
     showUrlModal.value = true
     urlToLoad.value = ''
   }
 
-  const closeUrlModal = () => {
+  const closeUrlModal = (): void => {
     showUrlModal.value = false
     urlToLoad.value = ''
   }
 
-  const handleUrlSubmit = async () => {
+  const handleUrlSubmit = async (): Promise<void> => {
     if (urlToLoad.value.trim()) {
       await loadAudioFromUrl(urlToLoad.value.trim())
       closeUrlModal()
     }
   }
 
-  const openVadModal = () => {
+  const openVadModal = (): void => {
     showVadModal.value = true
   }
 
-  const closeVadModal = () => {
+  const closeVadModal = (): void => {
     showVadModal.value = false
   }
 
-  const handleVadSettingsSave = (newSettings) => {
+  const handleVadSettingsSave = (newSettings: Partial<VADSettings>): void => {
     updateVadSettings(newSettings)
     closeVadModal()
   }
 
-  const openAppSettingsModal = () => {
+  const openAppSettingsModal = (): void => {
     showAppSettingsModal.value = true
   }
 
-  const closeAppSettingsModal = () => {
+  const closeAppSettingsModal = (): void => {
     showAppSettingsModal.value = false
   }
 
-  const handleAppSettingsSave = (newSettings) => {
-    if (appState.updateAppSettings) {
+  const handleAppSettingsSave = (newSettings: any): void => {
+    if ('updateAppSettings' in appState && appState.updateAppSettings) {
       appState.updateAppSettings(newSettings)
     }
     closeAppSettingsModal()
   }
 
   // Recording management utilities
-  const saveRecording = async (targetBlob, userBlob) => {
+  const saveRecording = async (targetBlob: Blob, userBlob: Blob): Promise<SavedRecording | undefined> => {
     if (!targetBlob || !userBlob) {
       alert('Need both target and user audio to save')
       return
@@ -172,7 +194,7 @@ export function useAppUtilities(providedAppState = null) {
 
     try {
       // Create a recording object
-      const recording = {
+      const recording: SavedRecording = {
         id: `recording_${Date.now()}`,
         targetBlob,
         userBlob,
@@ -198,32 +220,32 @@ export function useAppUtilities(providedAppState = null) {
     }
   }
 
-  const loadSavedRecording = async (recording) => {
+  const loadSavedRecording = async (recording: SavedRecording): Promise<void> => {
     if (!audioVisualizationPanel.value) return
 
     try {
       // Convert base64 back to blobs
-      const targetBlob = base64ToBlob(recording.targetData)
-      const userBlob = base64ToBlob(recording.userData)
+      const targetBlob = base64ToBlob(recording.targetData!)
+      const userBlob = base64ToBlob(recording.userData!)
 
-      await audioVisualizationPanel.value.setTargetAudio(targetBlob, {
+      await audioVisualizationPanel.value.setTargetAudio?.(targetBlob, {
         name: recording.name,
         source: 'saved'
       })
       
-      await audioVisualizationPanel.value.processUserAudio(userBlob)
+      await audioVisualizationPanel.value.processUserAudio?.(userBlob)
 
       console.log('✅ Saved recording loaded successfully')
     } catch (error) {
       console.error('❌ Failed to load saved recording:', error)
-      alert('Failed to load saved recording: ' + error.message)
+      alert('Failed to load saved recording: ' + (error as Error).message)
     }
   }
 
-  const deleteSavedRecording = (recordingId) => {
+  const deleteSavedRecording = (recordingId: string): void => {
     try {
       const savedRecordings = JSON.parse(localStorage.getItem('savedRecordings') || '[]')
-      const filtered = savedRecordings.filter(r => r.id !== recordingId)
+      const filtered = savedRecordings.filter((r: SavedRecording) => r.id !== recordingId)
       localStorage.setItem('savedRecordings', JSON.stringify(filtered))
       console.log('✅ Recording deleted successfully')
     } catch (error) {
@@ -232,16 +254,16 @@ export function useAppUtilities(providedAppState = null) {
   }
 
   // Utility functions
-  const blobToBase64 = (blob) => {
+  const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result)
+      reader.onloadend = () => resolve(reader.result as string)
       reader.onerror = reject
       reader.readAsDataURL(blob)
     })
   }
 
-  const base64ToBlob = (base64) => {
+  const base64ToBlob = (base64: string): Blob => {
     const [header, data] = base64.split(',')
     const mimeMatch = header.match(/data:([^;]+)/)
     const mimeType = mimeMatch ? mimeMatch[1] : 'audio/wav'
@@ -256,7 +278,7 @@ export function useAppUtilities(providedAppState = null) {
   }
 
   // Cleanup on unmount
-  const cleanup = () => {
+  const cleanup = (): void => {
     if (fileInputRef.value) {
       document.body.removeChild(fileInputRef.value)
       fileInputRef.value = null

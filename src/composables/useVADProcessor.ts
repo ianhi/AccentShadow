@@ -50,19 +50,30 @@ export function useVADProcessor() {
         return;
       }
 
-      // Wait for global VAD library to be available
+      // Wait for global VAD library to be available using Promise-based approach
       console.log('📦 Waiting for VAD library from CDN...');
 
-      // Poll for the global vad object
-      let retries = 0;
-      while (!(window as any).vad && retries < 50) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        retries++;
-      }
+      await new Promise<void>((resolve, reject) => {
+        const maxWaitTime = 5000; // 5 seconds timeout
+        const startTime = Date.now();
 
-      if (!(window as any).vad) {
-        throw new Error('VAD library not loaded from CDN');
-      }
+        const checkVAD = () => {
+          if ((window as any).vad) {
+            resolve();
+            return;
+          }
+
+          if (Date.now() - startTime > maxWaitTime) {
+            reject(new Error('VAD library not loaded from CDN within timeout'));
+            return;
+          }
+
+          // Use requestAnimationFrame for better performance than setTimeout
+          requestAnimationFrame(checkVAD);
+        };
+
+        checkVAD();
+      });
 
       console.log('🔍 VAD global object available:', (window as any).vad);
       console.log('🔍 Available VAD methods:', Object.keys((window as any).vad));

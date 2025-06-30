@@ -1,5 +1,5 @@
 
-import { ref, shallowRef, onUnmounted, type Ref } from 'vue';
+import { ref, shallowRef, onUnmounted, nextTick, type Ref } from 'vue';
 import WaveSurfer from 'wavesurfer.js';
 import Spectrogram from 'wavesurfer.js/dist/plugins/spectrogram.esm.js';
 import { audioManager } from './useAudioManager';
@@ -179,12 +179,10 @@ export function useWaveform(
     if (!wavesurfer.value) {
       initWaveform();
       // Wait for initialization to complete using nextTick instead of arbitrary delay
-      import('vue').then(({ nextTick }) => {
-        nextTick(() => {
-          if (wavesurfer.value) {
-            loadAudioDirect(url);
-          }
-        });
+      nextTick(() => {
+        if (wavesurfer.value) {
+          loadAudioDirect(url);
+        }
       });
       return;
     }
@@ -210,14 +208,12 @@ export function useWaveform(
       // If loading fails, try recreating the instance
       destroyWaveform();
       // Use nextTick for proper Vue reactivity instead of arbitrary delays
-      import('vue').then(({ nextTick }) => {
+      nextTick(() => {
+        initWaveform();
         nextTick(() => {
-          initWaveform();
-          nextTick(() => {
-            if (wavesurfer.value) {
-              loadAudioDirect(url);
-            }
-          });
+          if (wavesurfer.value) {
+            loadAudioDirect(url);
+          }
         });
       });
     }
