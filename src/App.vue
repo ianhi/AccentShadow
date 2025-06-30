@@ -1,12 +1,31 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
+import { usePreloader } from './composables/usePreloader'
 
 const route = useRoute()
+const { preloadAll, preloadStatus } = usePreloader()
 
 // Show navigation only on main app routes, hide on mobile demos
 const showNavigation = computed(() => {
   return !route.path.startsWith('/mobile')
+})
+
+// Comprehensive background initialization - start immediately on app load
+onMounted(async () => {
+  console.log('🚀 Starting comprehensive background preloading...')
+  
+  // Start preloading without blocking UI rendering
+  preloadAll().then(() => {
+    console.log('🎉 Background preloading completed:', {
+      vad: preloadStatus.value.vad,
+      audioContext: preloadStatus.value.audioContext,
+      wavesurfer: preloadStatus.value.wavesurfer,
+      ready: preloadStatus.value.complete
+    })
+  }).catch((error) => {
+    console.log('⚠️ Some background preloading failed (fallbacks will handle):', error)
+  })
 })
 </script>
 

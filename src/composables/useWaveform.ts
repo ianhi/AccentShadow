@@ -3,6 +3,7 @@ import { ref, shallowRef, onUnmounted, nextTick, type Ref } from 'vue';
 import WaveSurfer from 'wavesurfer.js';
 import Spectrogram from 'wavesurfer.js/dist/plugins/spectrogram.esm.js';
 import { audioManager } from './useAudioManager';
+import { usePreloader } from './usePreloader';
 
 interface PlayerInfo {
   id: string;
@@ -28,6 +29,9 @@ export function useWaveform(
   const playerId = audioId || `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   let playerInfo: PlayerInfo | null = null;
 
+  // Get preloader for optimized initialization
+  const { getAudioContext, preloadStatus } = usePreloader();
+
   // Detect if we're on mobile device
   const isMobileDevice = () => {
     return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -51,6 +55,14 @@ export function useWaveform(
         });
         observer.observe(containerRef.value);
         return;
+      }
+
+      // Check preload status for optimization opportunities
+      const preloadReady = preloadStatus.value.complete;
+      if (preloadReady) {
+        console.log(`🚀 [${audioType.toUpperCase()}] Using preloaded components for faster initialization`);
+      } else {
+        console.log(`⏳ [${audioType.toUpperCase()}] Preload not complete, using standard initialization`);
       }
 
       // Get device-specific heights

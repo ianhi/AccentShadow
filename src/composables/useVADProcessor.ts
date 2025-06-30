@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { usePreloader } from './usePreloader';
 
 
 interface VADOptions {
@@ -35,6 +36,9 @@ interface TrimOptions {
 export function useVADProcessor() {
   const isProcessing = ref(false);
   const vadReady = ref(false);
+
+  // Get preloader for optimized AudioContext
+  const { getAudioContext } = usePreloader();
 
   // Initialize VAD model
   let vadInstance: any = null;
@@ -123,6 +127,7 @@ export function useVADProcessor() {
       isProcessing.value = true;
 
       if (!vadReady.value || !vadInstance) {
+        console.log('🔄 VAD not ready, attempting initialization...')
         await initVAD();
 
         // If VAD still not ready after init attempt, return original audio
@@ -130,7 +135,7 @@ export function useVADProcessor() {
           console.log('🔄 VAD not available - using original audio without trimming');
 
           // Return original audio boundaries (no trimming)
-          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const audioContext = getAudioContext();
           const arrayBuffer = await audioBlob.arrayBuffer();
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
@@ -151,12 +156,14 @@ export function useVADProcessor() {
             vadFailed: true  // Indicate VAD was not available
           };
         }
+      } else {
+        console.log('🚀 VAD already ready (likely from preload) - proceeding with analysis')
       }
 
       console.log('🔍 Analyzing audio with Silero VAD...');
 
-      // Convert audio blob to AudioBuffer
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Convert audio blob to AudioBuffer - use preloaded context if available
+      const audioContext = getAudioContext();
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
@@ -344,7 +351,7 @@ export function useVADProcessor() {
         console.warn('⚠️ No speech segments detected by VAD - using original audio without trimming');
 
         // Return original audio boundaries (no trimming)
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioContext = getAudioContext();
         const arrayBuffer = await audioBlob.arrayBuffer();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
@@ -402,7 +409,7 @@ export function useVADProcessor() {
 
       // Return original audio boundaries when VAD fails (no trimming)
       try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioContext = getAudioContext();
         const arrayBuffer = await audioBlob.arrayBuffer();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
@@ -536,7 +543,7 @@ export function useVADProcessor() {
       }
 
       // Process the actual audio trimming
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioContext = getAudioContext();
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
