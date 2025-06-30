@@ -466,8 +466,13 @@ const processUserAudio = async (blob) => {
             if (targetAudioProcessed.value) {
               console.log('🎧 [DEBUG] Using cached target processing')
               console.log('🎯 Using cached target audio processing (optimized - no reprocessing)')
-              // Use cached processing result directly - no need to reprocess
-              targetProcessed = targetAudioProcessed.value
+              // Use cached processing result but mark it as already normalized to prevent double-processing
+              targetProcessed = {
+                ...targetAudioProcessed.value,
+                alreadyNormalized: true,  // CRITICAL: Mark as already processed to prevent double trimming
+                audioBlob: targetAudioBlob.value  // Use the current processed blob, not the original
+              }
+              console.log('🎧 [DEBUG] FIXED: Target marked as alreadyNormalized=true to prevent double trimming')
             } else {
               console.log('🎧 [DEBUG] No cached target processing, processing original target...')
               console.log('🎯 No cached target processing - processing original target audio for alignment')

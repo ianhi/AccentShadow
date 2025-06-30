@@ -205,6 +205,11 @@ export function useSmartAudioAlignment() {
       
       // First normalize both audios to have consistent padding
       // Skip normalization if audio is already normalized (e.g., target audio that was already processed)
+      console.log('🔧 Alignment normalization check:', {
+        audio1AlreadyNormalized: !!audio1.alreadyNormalized,
+        audio2AlreadyNormalized: !!audio2.alreadyNormalized
+      });
+      
       const normalized1 = audio1.alreadyNormalized 
         ? audio1.audioBlob 
         : await normalizeAudioSilence(audio1.audioBlob, audio1.vadBoundaries, padding);
@@ -214,10 +219,14 @@ export function useSmartAudioAlignment() {
         : await normalizeAudioSilence(audio2.audioBlob, audio2.vadBoundaries, padding);
       
       if (audio1.alreadyNormalized) {
-        console.log('🎯 Skipped normalization for audio1 (already normalized)');
+        console.log('🎯 ✅ SKIP: Audio1 normalization skipped (already normalized - prevents double trimming)');
+      } else {
+        console.log('🎯 🔄 PROCESS: Audio1 being normalized');
       }
       if (audio2.alreadyNormalized) {
-        console.log('🎯 Skipped normalization for audio2 (already normalized)');
+        console.log('🎯 ✅ SKIP: Audio2 normalization skipped (already normalized - prevents double trimming)');
+      } else {
+        console.log('🎯 🔄 PROCESS: Audio2 being normalized');
       }
       
       // Get durations of normalized audios
