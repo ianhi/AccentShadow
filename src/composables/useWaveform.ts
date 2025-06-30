@@ -132,14 +132,13 @@ export function useWaveform(
         
         // If we have a ready-to-play callback, call it now that everything is set up
         if (onReadyToPlay) {
-          console.log('🎵 Audio ready event fired - calling auto-play callback')
           onReadyToPlay();
         }
       });
 
-      // Keep decode event for debugging but ready event should be sufficient
+      // Decode event listener
       wavesurfer.value?.on('decode', () => {
-        console.log('🎵 Audio decode event fired')
+        // Audio decoded and ready for use
       });
 
       wavesurfer.value?.on('error', (error: any) => {

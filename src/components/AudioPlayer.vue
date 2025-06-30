@@ -1,14 +1,14 @@
 <template>
   <div class="audio-player">
     <!-- Debug info display -->
-    <div class="debug-info" v-if="debugInfo">
-      <div class="debug-row">
-        <span class="debug-label">{{ props.audioType.toUpperCase() }}:</span>
-        <span class="debug-value">Raw: {{ debugInfo.rawDuration }}s</span>
-        <span class="debug-value">Final: {{ debugInfo.finalDuration }}s</span>
-        <span class="debug-value" v-if="debugInfo.trimmedAmount">Trimmed: {{ debugInfo.trimmedAmount }}s</span>
-      </div>
-    </div>
+    <!-- <div class="debug-info" v-if="debugInfo"> -->
+    <!--   <div class="debug-row"> -->
+    <!--     <span class="debug-label">{{ props.audioType.toUpperCase() }}:</span> -->
+    <!--     <span class="debug-value">Raw: {{ debugInfo.rawDuration }}s</span> -->
+    <!--     <span class="debug-value">Final: {{ debugInfo.finalDuration }}s</span> -->
+    <!--     <span class="debug-value" v-if="debugInfo.trimmedAmount">Trimmed: {{ debugInfo.trimmedAmount }}s</span> -->
+    <!--   </div> -->
+    <!-- </div> -->
     
     <div class="visualization-container" :style="{ width: visualizationWidth }">
       <!-- Background wrapper for consistent dark styling -->
@@ -82,34 +82,21 @@ const hasAutoPlayed = ref(false)
 
 // Auto-play callback for when audio is truly ready to play
 const handleReadyToPlay = () => {
-  console.log(`🎵 [${props.audioType.toUpperCase()}] Ready to play - autoPlayOnReady: ${props.autoPlayOnReady}, hasAutoPlayed: ${hasAutoPlayed.value}, suppressAutoPlay: ${props.suppressAutoPlay}`)
-  
   if (props.autoPlayOnReady && props.audioType === 'target' && !hasAutoPlayed.value && !props.suppressAutoPlay) {
-    console.log('🎵 Audio ready to play, starting auto-play')
     hasAutoPlayed.value = true // Prevent multiple auto-plays for same audio
     
     const playResult = play()
     if (playResult instanceof Promise) {
       playResult
         .then(() => {
-          console.log('🎵 Auto-play succeeded')
           emit('auto-played')
         })
         .catch(error => console.warn('🎵 Auto-play failed:', error))
     } else {
-      console.log('🎵 Auto-play result:', playResult)
       if (playResult) {
         emit('auto-played')
       }
     }
-  } else if (props.suppressAutoPlay) {
-    console.log('🎵 Auto-play suppressed (alignment in progress)')
-  } else if (props.audioType !== 'target') {
-    console.log(`🎵 Auto-play skipped - not target audio (type: ${props.audioType})`)
-  } else if (!props.autoPlayOnReady) {
-    console.log('🎵 Auto-play skipped - autoPlayOnReady is false')
-  } else if (hasAutoPlayed.value) {
-    console.log('🎵 Auto-play skipped - already played for this audio')
   }
 }
 
@@ -150,12 +137,10 @@ watch(() => props.audioUrl, async (newUrl, oldUrl) => {
     
     // Check if containers are available
     if (!waveformContainer.value || !spectrogramContainer.value) {
-      console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers not ready, waiting...`);
       // Wait a bit more and try again
       setTimeout(async () => {
         await nextTick();
         if (waveformContainer.value && spectrogramContainer.value) {
-          console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers ready after timeout, loading audio`);
           loadAudio(newUrl);
           // End update indicator
           setTimeout(() => { isUpdating.value = false; }, 200);
@@ -165,13 +150,11 @@ watch(() => props.audioUrl, async (newUrl, oldUrl) => {
         }
       }, 100);
     } else {
-      console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers ready, loading audio immediately`);
       loadAudio(newUrl);
       // End update indicator after WaveSurfer processes
       setTimeout(() => { isUpdating.value = false; }, 200);
     }
   } else if (!newUrl) {
-    console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: No URL provided, destroying waveform`);
     hasAutoPlayed.value = false; // Always reset flag when audio is removed
     destroyWaveform();
     // Reset duration when audio is removed
@@ -180,18 +163,11 @@ watch(() => props.audioUrl, async (newUrl, oldUrl) => {
     } else {
       setUserDuration(0);
     }
-  } else {
-    console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: URL unchanged, no action needed`);
   }
 }, { immediate: true });
 
 onMounted(async () => {
-  console.log('🎵 AudioPlayer mounted');
   await nextTick();
-  console.log('🎵 Containers after mount:', {
-    waveform: !!waveformContainer.value,
-    spectrogram: !!spectrogramContainer.value
-  });
 });
 
 onBeforeUnmount(() => {
@@ -209,26 +185,22 @@ const formatTime = (seconds) => {
   return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
 };
 
-// Expose methods for parent component with debugging
+// Expose methods for parent component
 const debugPlayPause = () => {
-  console.log('🎵 AudioPlayer playPause called, isReady:', isReady.value, 'isPlaying:', isPlaying.value);
   return playPause();
 };
 
 const debugPlay = () => {
-  console.log('🎵 AudioPlayer play called, isReady:', isReady.value);
   return play();
 };
 
 const debugStop = () => {
-  console.log('🎵 AudioPlayer stop called');
   return stop();
 };
 
 // Stop audio when starting a new recording
 watch(() => props.isRecording, (newRecording, oldRecording) => {
   if (newRecording && !oldRecording) {
-    console.log(`🎵 Recording started for ${props.audioType}, stopping audio`);
     audioManager.emergencyStop('Recording started');
   }
 });
@@ -238,7 +210,6 @@ watch(() => props.audioUrl, (newUrl) => {
   if (!newUrl) {
     // Audio removed completely, reset for next upload
     hasAutoPlayed.value = false;
-    console.log('🎵 Audio removed, auto-play flag reset');
   }
 });
 
@@ -275,13 +246,20 @@ defineExpose({
 .visualization-wrapper {
   background-color: #1a1a1a;
   width: 100%;
-  height: 260px; /* Total height for waveform + spectrogram */
+  height: 260px; /* Desktop: 60px waveform + 200px spectrogram */
   display: flex;
   flex-direction: column; /* Stack vertically */
   border-radius: 8px;
   overflow: hidden;
   transition: opacity 0.2s ease-in-out;
   position: relative; /* Required for absolute positioning of loading overlay */
+}
+
+/* Mobile responsive heights */
+@media (max-width: 768px) {
+  .visualization-wrapper {
+    height: 160px; /* Mobile: 40px waveform + 120px spectrogram */
+  }
 }
 
 .visualization-wrapper.updating {
@@ -333,6 +311,15 @@ defineExpose({
   border: 1px solid #60a5fa; /* Reduced border width */
   flex-shrink: 0; /* Don't shrink */
   box-sizing: border-box; /* Include border in height calculation */
+  display: flex;
+  align-items: center; /* Center waveform vertically */
+}
+
+/* Mobile waveform container height */
+@media (max-width: 768px) {
+  .waveform-container {
+    height: 40px;
+  }
 }
 
 /* Ensure WaveSurfer elements are properly styled */
@@ -363,6 +350,13 @@ defineExpose({
   width: 100%;
   height: 200px; /* Fixed height for spectrogram */
   flex-shrink: 0; /* Don't shrink */
+}
+
+/* Mobile spectrogram container height */
+@media (max-width: 768px) {
+  .spectrogram-container {
+    height: 120px;
+  }
 }
 
 /* Individual audio player controls removed - using unified control panel */
