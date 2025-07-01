@@ -1,0 +1,22 @@
+name = "accentshadow"
+main = "src/worker.ts"
+compatibility_date = "2025-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets configuration for Vue SPA
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+# Build configuration
+[build]
+command = "npm run build"
+
+# Environment variables (add as needed)
+[vars]
+# Add any environment variables here
+
+# Routes configuration for SPA (optional - for custom domains)
+# [[routes]]
+# pattern = "/*"
+# zone_name = "your-domain.com"
