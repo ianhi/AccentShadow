@@ -151,75 +151,137 @@ The application uses **18 specialized composables** following Vue 3 best practic
 
 ```
 src/
-├── components/ (33 Components - Component-Driven Architecture)
-│   ├── audio/
-│   │   ├── AudioVisualizationPanel.vue    # Main waveform/spectrogram display
-│   │   ├── AudioColumn.vue                # Individual audio player with visualization
-│   │   ├── CentralPlaybackControls.vue    # Unified recording/playback controls
-│   │   ├── AudioRecorder.vue              # Voice recording with device selection
-│   │   ├── SpeedControl.vue               # Playback speed adjustment (0.25x-2.0x)
-│   │   └── AudioPlayerWithWaveform.vue    # Legacy audio player component
-│   ├── mobile/
-│   │   ├── MobileLayout.vue               # Mobile-specific layout wrapper
-│   │   ├── MobileBottomNav.vue            # Tab-based mobile navigation
-│   │   └── MainHeader.vue                 # Responsive header component
-│   ├── recording-management/
-│   │   ├── RecordingSetSidebar.vue        # Recording set browser with search
-│   │   ├── RecordingSetsManager.vue       # Recording set creation/management
-│   │   ├── RecordingNavigation.vue        # Navigation between recordings
-│   │   ├── FolderUpload.vue               # Bulk folder import interface
-│   │   ├── FileUploadManager.vue          # Individual file upload handling
-│   │   └── SessionStats.vue               # Real-time session statistics
-│   ├── settings/
-│   │   ├── AppSettingsModal.vue           # Global application settings
-│   │   ├── VADSettingsModal.vue           # Voice Activity Detection config
-│   │   └── MicrophoneSelector.vue         # Audio input device selection
-│   └── ui/
-│       ├── LoadingSpinner.vue             # Loading state component
-│       ├── ErrorDisplay.vue               # Error handling component
-│       └── ProgressBar.vue                # Progress indication component
+├── components/ (35+ Components - Component-Driven Architecture)
+│   ├── AppSettingsModal.vue               # Global application settings
+│   ├── AudioColumn.vue                    # Individual audio player with visualization
+│   ├── AudioLoadingManager.vue            # Audio loading state management
+│   ├── AudioPlayer.vue                    # Core audio player component
+│   ├── AudioProcessingControls.vue        # Audio processing control interface
+│   ├── AudioProcessingHandler.vue         # Audio processing logic handler
+│   ├── AudioRecorder.vue                  # Voice recording with device selection
+│   ├── AudioVisualizationPanel.vue        # Main waveform/spectrogram display
+│   ├── CentralPlaybackControls.vue        # Unified recording/playback controls
+│   ├── FileUploadManager.vue              # Individual file upload handling
+│   ├── FolderUpload.vue                   # Bulk folder import interface
+│   ├── MainHeader.vue                     # Responsive header component
+│   ├── MicrophoneSelector.vue             # Audio input device selection
+│   ├── MobileBottomNav.vue                # Tab-based mobile navigation
+│   ├── MobileLayout.vue                   # Mobile-specific layout wrapper
+│   ├── ModalManager.vue                   # Modal state management
+│   ├── PlaybackButton.vue                 # Playback button component
+│   ├── PlaybackController.vue             # Playback control logic
+│   ├── PlaybackControls.vue               # Playback control interface
+│   ├── RecordingActions.vue               # Recording action buttons
+│   ├── RecordingList.vue                  # Recording list display
+│   ├── RecordingListItem.vue              # Individual recording item
+│   ├── RecordingManager.vue               # Recording management logic
+│   ├── RecordingNavigation.vue            # Navigation between recordings
+│   ├── RecordingSetSidebar.vue            # Recording set browser with search
+│   ├── RecordingSetsManager.vue           # Recording set creation/management
+│   ├── RecordingStateManager.vue          # Recording state management
+│   ├── SavedRecordingsSection.vue         # Saved recordings section
+│   ├── SessionStats.vue                   # Real-time session statistics
+│   ├── SpeedControl.vue                   # Playback speed adjustment (0.25x-2.0x)
+│   ├── TargetAudioControls.vue            # Target audio specific controls
+│   ├── UrlInputModal.vue                  # URL input modal dialog
+│   ├── VADSettingsModal.vue               # Voice Activity Detection config
+│   └── icons/                             # Icon components directory
 ├── composables/ (18 Composables - Separation of Concerns)
-│   ├── audio/
-│   │   ├── useWaveform.ts                 # WaveSurfer.js integration
-│   │   ├── useAudioManager.ts             # Centralized audio state management
-│   │   ├── useAudioRecorder.ts            # Recording functionality
-│   │   ├── useAudioProcessing.ts          # Speech processing and alignment
-│   │   ├── useVADProcessor.ts             # Voice activity detection
-│   │   ├── useAudioEffects.ts             # Audio effects (EQ, compression, gain)
-│   │   └── usePlaybackControls.ts         # Centralized playback logic
-│   ├── data/
-│   │   ├── useRecordingSets.ts            # Recording set management
-│   │   ├── useIndexedDB.ts                # Local storage and persistence
-│   │   └── useAppState.ts                 # Global application state
-│   ├── mobile/
-│   │   ├── useMobileLayout.ts             # Mobile-responsive layout
-│   │   ├── useViewport.ts                 # Viewport detection utilities
-│   │   └── useMicrophoneDevices.ts        # Microphone device management
-│   ├── performance/
-│   │   ├── usePreloader.ts                # Background resource initialization
-│   │   ├── useTimeSync.ts                 # Synchronized audio playback
-│   │   └── useSmartAudioAlignment.ts      # Intelligent alignment algorithms
-│   └── utils/
-│       ├── useUtils.ts                    # Common utility functions
-│       └── useErrorHandler.ts             # Centralized error handling
-├── views/ (5 Main Views)
-│   ├── PracticeView.vue                   # Main practice interface
-│   ├── MobileDemoIndex.vue                # Mobile-specific demo interface
-│   ├── TestVADTrimming.vue                # VAD processing testing
+│   ├── useAppState.ts                     # Global application state
+│   ├── useAppUtilities.ts                 # Common utility functions
+│   ├── useAudioEffects.ts                 # Audio effects (EQ, compression, gain)
+│   ├── useAudioManager.ts                 # Centralized audio state management
+│   ├── useAudioProcessing.ts              # Speech processing and alignment
+│   ├── useAudioRecorder.ts                # Recording functionality
+│   ├── useIndexedDB.ts                    # Local storage and persistence
+│   ├── useMicrophoneDevices.ts            # Microphone device management
+│   ├── useMobileLayout.ts                 # Mobile-responsive layout
+│   ├── usePlaybackControls.ts             # Centralized playback logic
+│   ├── usePreloader.ts                    # Background resource initialization
+│   ├── useRecordingSets.ts                # Recording set management
+│   ├── useSmartAudioAlignment.ts          # Intelligent alignment algorithms
+│   ├── useTimeSync.ts                     # Synchronized audio playback
+│   ├── useVADProcessor.ts                 # Voice activity detection
+│   ├── useViewport.ts                     # Viewport detection utilities
+│   └── useWaveform.ts                     # WaveSurfer.js integration
+├── views/ (6 Main Views)
 │   ├── AudioAlignmentTest.vue             # Audio alignment testing
-│   └── TestAudioVisualization.vue         # Audio visualization testing
+│   ├── MobileDemoIndex.vue                # Mobile-specific demo interface
+│   ├── PracticeView.vue                   # Main practice interface
+│   ├── TestAudioVisualization.vue         # Audio visualization testing
+│   ├── TestVADTrimming.vue                # VAD processing testing
+│   └── VADTestView.vue                    # Additional VAD testing
 ├── router/
+│   ├── index.d.ts                         # Router type definitions
 │   └── index.ts                           # Vue Router configuration
 ├── assets/
-│   ├── css/
-│   │   └── main.css                       # Base CSS with custom properties and theming
-│   └── audio/                             # Static audio assets
-├── tests/ (33 Test Files - Comprehensive Testing)
-│   ├── unit/                              # Unit tests for composables
-│   ├── components/                        # Component testing
-│   └── integration/                       # Integration tests
+│   ├── base.css                           # Base CSS styles
+│   ├── logo.svg                           # Application logo
+│   └── main.css                           # Main CSS with custom properties and theming
 ├── main.ts                                # Application entry point
-└── vite-env.d.ts                         # Vite TypeScript definitions
+└── shims-vue.d.ts                         # Vue TypeScript declarations
+```
+
+### Root Level Files & Testing
+
+```
+/
+├── tests/ (Comprehensive Testing Structure)
+│   ├── unit/                              # Unit tests for components & composables
+│   │   ├── AudioColumn.test.js
+│   │   ├── AudioProcessingControls.test.js
+│   │   ├── AudioVisualizationPanel.test.js
+│   │   ├── FolderUpload.test.js
+│   │   ├── MicrophoneSelector.test.js
+│   │   ├── PlaybackControls.test.js
+│   │   ├── SavedRecordingsSection.test.js
+│   │   ├── SpeedControl.test.js
+│   │   ├── TargetAudioControls.test.js
+│   │   ├── UrlInputModal.test.js
+│   │   ├── audio-processing-consistency.test.js
+│   │   ├── composables.test.js
+│   │   ├── usePlaybackControls.test.js
+│   │   └── vad-processing.test.js
+│   ├── integration/                       # Integration tests
+│   │   ├── audio-playback.test.js
+│   │   ├── folder-vs-single-upload.test.js
+│   │   └── vad-integration.test.js
+│   ├── e2e/                               # End-to-end tests
+│   │   └── folder-upload-playback.spec.js
+│   ├── folder-audio-processing.test.js
+│   ├── folder-watch-integration.test.js
+│   └── setup.js
+├── public/                                # Static assets & debug files
+│   ├── debug-patth.html
+│   ├── favicon.ico
+│   ├── path.mp3
+│   ├── patth.wav
+│   ├── simple-vad-test-backup.html
+│   ├── simple-vad-test-typescript-logic.html
+│   ├── simple-vad-test.html
+│   ├── test_said_three_words.wav
+│   ├── vad-bug-report.html
+│   ├── vad-diagnostic.html
+│   └── vad-test.html
+├── Configuration Files
+│   ├── package.json                       # Dependencies and scripts
+│   ├── vite.config.ts                     # Vite configuration
+│   ├── vitest.config.js                   # Vitest testing configuration
+│   ├── tsconfig.json                      # TypeScript configuration
+│   ├── tsconfig.app.json                  # App-specific TypeScript config
+│   ├── tsconfig.node.json                 # Node-specific TypeScript config
+│   └── env.d.ts                           # Environment type definitions
+└── Documentation Files
+    ├── CLAUDE.md                          # Main project documentation
+    ├── CLAUDE.local.md                    # Local development notes
+    ├── ARCHITECTURE.md                    # System architecture
+    ├── DESIGN.md                          # Design specifications
+    ├── DESIGN_ENHANCEMENTS.md             # Design improvements
+    ├── MOBILE_DESIGN_DOCUMENT.md          # Mobile design guide
+    ├── PROGRESS.md                        # Development progress
+    ├── README.md                          # Project overview
+    ├── ROADMAP.md                         # Future development plans
+    └── TATOEBA_API_RESEARCH.md            # API integration research
 ```
 
 ## Key Features Implemented

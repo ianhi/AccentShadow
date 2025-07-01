@@ -13,7 +13,19 @@ let recordPluginInstance: any = null; // To store the record plugin instance
 async function startRecording(waveformContainer?: HTMLElement | null, existingStream: MediaStream | null = null): Promise<void> {
   try {
     const stream = existingStream || await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
+    
+    // Configure MediaRecorder with WAV format for better speech quality and browser compatibility
+    const options = { mimeType: 'audio/wav' };
+    
+    // Fallback to webm if WAV is not supported
+    if (!MediaRecorder.isTypeSupported('audio/wav')) {
+      console.warn('🎙️ WAV not supported, falling back to WebM/Opus');
+      options.mimeType = 'audio/webm;codecs=opus';
+    } else {
+      console.log('🎙️ Using WAV format for high-quality speech recording');
+    }
+    
+    mediaRecorder = new MediaRecorder(stream, options);
     audioChunks = [];
 
     mediaRecorder.ondataavailable = (event: BlobEvent) => {
@@ -44,9 +56,9 @@ async function startRecording(waveformContainer?: HTMLElement | null, existingSt
           normalize: true,
         });
 
-        // Register the Record plugin explicitly
+        // Register the Record plugin with same format as MediaRecorder
         recordPluginInstance = wavesurferMic.value.registerPlugin(RecordPlugin.create({
-          mimeType: 'audio/webm;codecs=opus',
+          mimeType: options.mimeType,
           scrollingWaveform: true,
         }));
 
@@ -78,7 +90,8 @@ function stopRecording(): Promise<Blob | null> {
   return new Promise((resolve) => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+        // Use the same mimeType that was configured for MediaRecorder
+        const audioBlob = new Blob(audioChunks, { type: mediaRecorder?.mimeType || 'audio/wav' });
         isRecording.value = false;
         if (recordPluginInstance) {
           recordPluginInstance.stopRecording();

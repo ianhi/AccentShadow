@@ -1,7 +1,7 @@
 <template>
   <div class="audio-column">
     <div class="column-header">
-      <h3>{{ title }}</h3>
+      <h3 v-show="!(showTitleOnMobile === false && shouldUseMobileLayout)">{{ title }}</h3>
       <!-- Slot for type-specific controls (e.g., TargetAudioControls) -->
       <slot name="controls"></slot>
     </div>
@@ -30,6 +30,9 @@
 
 <script setup>
 import AudioPlayer from './AudioPlayer.vue'
+import { useMobileLayout } from '@/composables/useMobileLayout'
+
+const { shouldUseMobileLayout } = useMobileLayout()
 
 const props = defineProps({
   title: {
@@ -72,6 +75,10 @@ const props = defineProps({
   suppressAutoPlay: {
     type: Boolean,
     default: false
+  },
+  showTitleOnMobile: {
+    type: Boolean,
+    default: true
   }
 })
 

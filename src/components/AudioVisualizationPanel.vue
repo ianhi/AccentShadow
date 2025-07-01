@@ -190,12 +190,33 @@ const handleUserAudioPlayerRef = (ref) => {
   emit('user-audio-ref', ref)
 }
 
+// Fast duration calculation using AudioContext (no DOM loading needed)
+const getAudioDurationFast = async (audioBlob) => {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    const arrayBuffer = await audioBlob.arrayBuffer()
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+    audioContext.close()
+    return audioBuffer.duration
+  } catch (error) {
+    console.warn('⚠️ Fast duration calculation failed, using fallback:', error)
+    return 0
+  }
+}
+
 // Helper function to get audio duration with better error handling
 const getAudioDuration = async (audioBlob) => {
   return new Promise((resolve, reject) => {
+    console.log('🔍 [DURATION DEBUG] Starting duration detection for blob:', {
+      size: audioBlob.size,
+      type: audioBlob.type,
+      timestamp: Date.now()
+    })
+    
     const audio = new Audio()
     const url = URL.createObjectURL(audioBlob)
     let resolved = false
+    let eventsFired = []
     
     const cleanup = () => {
       if (!resolved) {
@@ -204,44 +225,100 @@ const getAudioDuration = async (audioBlob) => {
       }
     }
     
-    const handleDuration = (duration) => {
+    const handleDuration = (duration, eventSource) => {
+      console.log(`🔍 [DURATION DEBUG] Duration event from ${eventSource}:`, {
+        duration,
+        isFinite: isFinite(duration),
+        isPositive: duration > 0,
+        audioCurrentTime: audio.currentTime,
+        audioReadyState: audio.readyState,
+        resolved
+      })
+      
       if (!resolved && isFinite(duration) && duration > 0) {
+        console.log('✅ [DURATION DEBUG] Valid duration detected, resolving:', duration)
         cleanup()
         resolve(duration)
       }
     }
     
+    audio.addEventListener('loadstart', () => {
+      eventsFired.push('loadstart')
+      console.log('🔍 [DURATION DEBUG] loadstart event fired')
+    })
+    
     audio.addEventListener('loadedmetadata', () => {
-      handleDuration(audio.duration)
+      eventsFired.push('loadedmetadata')
+      console.log('🔍 [DURATION DEBUG] loadedmetadata event fired, duration:', audio.duration)
+      handleDuration(audio.duration, 'loadedmetadata')
     })
     
     // Fallback for when loadedmetadata gives invalid duration
     audio.addEventListener('canplay', () => {
-      handleDuration(audio.duration)
+      eventsFired.push('canplay')
+      console.log('🔍 [DURATION DEBUG] canplay event fired, duration:', audio.duration)
+      handleDuration(audio.duration, 'canplay')
     })
     
     // Additional fallback for stubborn audio files
     audio.addEventListener('loadeddata', () => {
-      handleDuration(audio.duration)
+      eventsFired.push('loadeddata')
+      console.log('🔍 [DURATION DEBUG] loadeddata event fired, duration:', audio.duration)
+      handleDuration(audio.duration, 'loadeddata')
+    })
+    
+    audio.addEventListener('canplaythrough', () => {
+      eventsFired.push('canplaythrough')
+      console.log('🔍 [DURATION DEBUG] canplaythrough event fired, duration:', audio.duration)
+      handleDuration(audio.duration, 'canplaythrough')
+    })
+    
+    audio.addEventListener('progress', () => {
+      console.log('🔍 [DURATION DEBUG] progress event fired, buffered:', audio.buffered.length)
     })
     
     audio.addEventListener('error', (error) => {
+      eventsFired.push('error')
+      console.error('❌ [DURATION DEBUG] Error event fired:', {
+        error: error.target?.error,
+        code: error.target?.error?.code,
+        message: error.target?.error?.message,
+        networkState: audio.networkState,
+        readyState: audio.readyState
+      })
+      
       if (!resolved) {
         cleanup()
-        console.error('❌ Error loading audio for duration:', error)
         reject(error)
       }
     })
     
-    // Timeout fallback - if we can't get duration in 5 seconds, give up
+    audio.addEventListener('stalled', () => {
+      eventsFired.push('stalled')
+      console.warn('⚠️ [DURATION DEBUG] stalled event fired')
+    })
+    
+    audio.addEventListener('suspend', () => {
+      eventsFired.push('suspend')
+      console.log('🔍 [DURATION DEBUG] suspend event fired')
+    })
+    
+    // Timeout fallback - if we can't get duration in 3 seconds, give up (reduced from 5s)
     setTimeout(() => {
       if (!resolved) {
+        console.warn('⚠️ [DURATION DEBUG] Timeout reached, events fired:', eventsFired)
+        console.warn('⚠️ [DURATION DEBUG] Final audio state:', {
+          duration: audio.duration,
+          readyState: audio.readyState,
+          networkState: audio.networkState,
+          src: audio.src.substring(0, 50) + '...'
+        })
         cleanup()
-        console.warn('⚠️ Audio duration detection timeout - using fallback of 0')
         resolve(0)
       }
-    }, 5000)
+    }, 3000) // Reduced timeout
     
+    console.log('🔍 [DURATION DEBUG] Setting audio src:', url.substring(0, 50) + '...')
     audio.src = url
   })
 }
@@ -282,16 +359,6 @@ const setTargetAudio = async (audioBlob, source = {}) => {
       console.log('🎯 New target audio - reset auto-play flag')
     }
     
-    // Get raw duration for debugging
-    const rawDuration = await getAudioDuration(audioBlob)
-    
-    // Initial debug info
-    targetDebugInfo.value = {
-      rawDuration: rawDuration.toFixed(3),
-      finalDuration: rawDuration.toFixed(3),
-      trimmedAmount: '0.000'
-    }
-    
     // Process target audio with VAD using exact aggressive settings from tuner
     const targetProcessed = await processAudio(audioBlob, {
       positiveSpeechThreshold: 0.3,  // Exact tuner setting
@@ -319,19 +386,20 @@ const setTargetAudio = async (audioBlob, source = {}) => {
         audioBlob: normalizedBlob
       }
       
-      // Update debug info with normalized duration
-      const finalDuration = await getAudioDuration(normalizedBlob)
+      // Update debug info using VAD-provided duration data
+      const vadRawEnd = targetProcessed.vadBoundaries.endTime || 0
+      const vadFinalEnd = targetProcessed.vadBoundaries.endTime || 0 // Already normalized by VAD
       targetDebugInfo.value = {
-        rawDuration: rawDuration.toFixed(3),
-        finalDuration: finalDuration.toFixed(3),
-        trimmedAmount: (rawDuration - finalDuration).toFixed(3)
+        rawDuration: vadRawEnd.toFixed(3),
+        finalDuration: vadFinalEnd.toFixed(3),
+        trimmedAmount: '0.000' // Already optimally trimmed by VAD
       }
       
       if (sourceType === 'folder') {
         console.log('✅ FOLDER AUDIO PROCESSING: Successfully completed VAD processing', {
-          rawDuration: rawDuration.toFixed(3) + 's',
-          finalDuration: finalDuration.toFixed(3) + 's',
-          trimmedAmount: (rawDuration - finalDuration).toFixed(3) + 's',
+          rawDuration: vadRawEnd.toFixed(3) + 's',
+          finalDuration: vadFinalEnd.toFixed(3) + 's',
+          trimmedAmount: '0.000s (VAD optimized)',
           fileName: source.fileName
         })
       }
@@ -345,10 +413,11 @@ const setTargetAudio = async (audioBlob, source = {}) => {
       // Clear cache since processing failed
       targetAudioProcessed.value = null
       
-      // Keep basic debug info
+      // Keep basic debug info (fallback when VAD fails)
+      const fallbackDuration = await getAudioDurationFast(audioBlob)
       targetDebugInfo.value = {
-        rawDuration: rawDuration.toFixed(3),
-        finalDuration: rawDuration.toFixed(3),
+        rawDuration: fallbackDuration.toFixed(3),
+        finalDuration: fallbackDuration.toFixed(3),
         trimmedAmount: '0.000'
       }
     }
@@ -379,7 +448,7 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     targetAudioProcessed.value = null
     
     try {
-      const rawDuration = await getAudioDuration(audioBlob)
+      const rawDuration = await getAudioDurationFast(audioBlob)
       targetDebugInfo.value = {
         rawDuration: rawDuration.toFixed(3),
         finalDuration: rawDuration.toFixed(3),
@@ -415,10 +484,10 @@ const processUserAudio = async (blob) => {
   // This prevents the intermediate display of raw audio before aligned version
   console.log('🎧 [DEBUG] SOLUTION: Deferring user audio display until after alignment')
   
-  // Store raw duration for debugging (but don't set audio URLs yet)
-  console.log('🎧 [DEBUG] Getting raw user audio duration...')
-  const rawUserDuration = await getAudioDuration(blob)
-  console.log('🎧 [DEBUG] Raw user audio duration:', rawUserDuration)
+  // Skip duration detection for user recordings to avoid webm compatibility delays
+  // The VAD processing below will give us accurate duration information
+  console.log('🎧 [DEBUG] Skipping duration detection for user recording (will get from VAD)')
+  const rawUserDuration = 0 // Will be calculated from VAD
   
   // Store blob temporarily for processing, but don't set URL for display yet
   let tempUserBlob = blob
@@ -521,27 +590,26 @@ const processUserAudio = async (blob) => {
               userAudioUrl.value = URL.createObjectURL(alignmentResult.audio2Aligned)
               console.log('🎧 [DEBUG] User audio set for first time with aligned version (no intermediate display)')
               
-              // Update debug info for user audio
-              console.log('🎧 [DEBUG] Getting final user audio duration...')
-              const finalUserDuration = await getAudioDuration(alignmentResult.audio2Aligned)
-              const trimmedUser = rawUserDuration - finalUserDuration
+              // Update debug info using VAD-provided duration data (no separate calculation needed)
+              console.log('🎧 [DEBUG] Using VAD-provided duration data for debug info...')
+              const userVadEnd = userProcessed.vadBoundaries?.endTime || 0
+              const userVadStart = userProcessed.vadBoundaries?.originalSpeechStart || 0
+              const userSpeechDuration = userProcessed.vadBoundaries?.originalSpeechEnd - userVadStart || 0
               userDebugInfo.value = {
-                rawDuration: rawUserDuration.toFixed(3),
-                finalDuration: finalUserDuration.toFixed(3),
-                trimmedAmount: isFinite(trimmedUser) ? trimmedUser.toFixed(3) : '0.000'
+                rawDuration: userVadEnd.toFixed(3),
+                finalDuration: userVadEnd.toFixed(3),
+                trimmedAmount: '0.000' // Already optimally trimmed by VAD
               }
-              console.log('🎧 [DEBUG] Updated user debug info')
+              console.log('🎧 [DEBUG] Updated user debug info using VAD data')
               
-              // Also update target debug info since it may have changed
-              console.log('🎧 [DEBUG] Getting final target audio duration...')
-              const finalTargetDuration = await getAudioDuration(alignmentResult.audio1Aligned)
-              if (targetDebugInfo.value) {
-                const targetRawDuration = parseFloat(targetDebugInfo.value.rawDuration)
-                const trimmedTarget = targetRawDuration - finalTargetDuration
-                targetDebugInfo.value.finalDuration = finalTargetDuration.toFixed(3)
-                targetDebugInfo.value.trimmedAmount = isFinite(trimmedTarget) ? trimmedTarget.toFixed(3) : '0.000'
+              // Update target debug info using cached VAD data
+              console.log('🎧 [DEBUG] Using cached target VAD data for debug info...')
+              if (targetDebugInfo.value && targetProcessed?.vadBoundaries) {
+                const targetVadEnd = targetProcessed.vadBoundaries.endTime || 0
+                targetDebugInfo.value.finalDuration = targetVadEnd.toFixed(3)
+                targetDebugInfo.value.trimmedAmount = '0.000' // Already optimally trimmed by VAD
               }
-              console.log('🎧 [DEBUG] Updated target debug info')
+              console.log('🎧 [DEBUG] Updated target debug info using VAD data')
               
               // Clean up old URLs
               if (oldUserUrl && oldUserUrl.startsWith('blob:')) {
@@ -612,7 +680,7 @@ const processUserAudio = async (blob) => {
           
           // Update debug info
           console.log('🎧 [DEBUG] Getting final normalized user audio duration...')
-          const finalUserDuration = await getAudioDuration(normalizedBlob)
+          const finalUserDuration = await getAudioDurationFast(normalizedBlob)
           userDebugInfo.value = {
             rawDuration: rawUserDuration.toFixed(3),
             finalDuration: finalUserDuration.toFixed(3),
@@ -810,8 +878,8 @@ const manualAlign = async () => {
       userAudioUrl.value = URL.createObjectURL(alignmentResult.audio2Aligned)
       
       // Update debug info
-      const finalUserDuration = await getAudioDuration(alignmentResult.audio2Aligned)
-      const finalTargetDuration = await getAudioDuration(alignmentResult.audio1Aligned)
+      const finalUserDuration = await getAudioDurationFast(alignmentResult.audio2Aligned)
+      const finalTargetDuration = await getAudioDurationFast(alignmentResult.audio1Aligned)
       
       if (userDebugInfo.value) {
         userDebugInfo.value.finalDuration = finalUserDuration.toFixed(3)

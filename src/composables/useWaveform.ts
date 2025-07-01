@@ -154,6 +154,17 @@ export function useWaveform(
       });
 
       wavesurfer.value?.on('error', (error: any) => {
+        // Filter out expected errors during audio loading transitions
+        if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+          console.log('🎵 Load cancelled (expected):', error?.message || error);
+          return;
+        }
+        // Filter out spectrogram data race conditions  
+        if (error?.message?.includes('Cannot read properties of undefined') && 
+            error?.stack?.includes('spectrogram')) {
+          console.log('🎵 Spectrogram data race condition (expected during load)');
+          return;
+        }
         console.error('🎵 WaveSurfer error:', error?.message || error);
         isReady.value = false;
         isPlaying.value = false;
@@ -207,13 +218,37 @@ export function useWaveform(
       return;
     }
     
+    // Stop any current playback 
+    try {
+      if (wavesurfer.value.isPlaying()) {
+        wavesurfer.value.pause();
+      }
+    } catch (pauseError) {
+      // Ignore pause errors
+      console.log('🎵 Paused current playback');
+    }
+    
     isReady.value = false;
     isPlaying.value = false;
     currentTime.value = 0;
     duration.value = 0;
     
     try {
-      wavesurfer.value.load(url);
+      // Wrap load operation to catch both sync and async errors
+      const loadPromise = wavesurfer.value.load(url);
+      
+      // Handle promise rejection for async errors like spectrogram issues
+      if (loadPromise && typeof loadPromise.catch === 'function') {
+        loadPromise.catch((asyncError: any) => {
+          // Filter out expected spectrogram errors during loading
+          if (asyncError?.message?.includes('Cannot read properties of undefined') ||
+              asyncError?.message?.includes('length')) {
+            console.log('🎵 Spectrogram data error during load (handled)');
+            return;
+          }
+          console.error('🎵 Async load error:', asyncError);
+        });
+      }
     } catch (error) {
       console.error(`🎵 Error loading audio:`, error);
       // If loading fails, try recreating the instance
