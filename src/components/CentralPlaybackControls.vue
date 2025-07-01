@@ -8,6 +8,7 @@
       <div class="mobile-combined-controls">
         <div class="mobile-recording">
           <AudioRecorder 
+            :selectedDeviceId="selectedDeviceId"
             @recorded="$emit('recorded', $event)" 
             @recording-started="$emit('recording-started')"
             @recording-stopped="$emit('recording-stopped')"
@@ -46,6 +47,7 @@
         <!-- Recording Controls -->
         <div class="recording-controls">
           <AudioRecorder 
+            :selectedDeviceId="selectedDeviceId"
             @recorded="$emit('recorded', $event)" 
             @recording-started="$emit('recording-started')"
             @recording-stopped="$emit('recording-stopped')"
@@ -85,6 +87,14 @@ import { useViewport } from '../composables/useViewport'
 const { hasTargetAudio, hasUserAudio, globalPlaybackSpeed } = useAppStateInject()
 const { shouldUseMobileLayout } = useViewport()
 
+// Props for microphone device
+const props = defineProps({
+  selectedDeviceId: {
+    type: String,
+    default: null
+  }
+})
+
 // Only emit events that still need to go to parent
 defineEmits([
   'recorded',
@@ -119,14 +129,14 @@ defineEmits([
 
 .main-controls-row {
   display: flex;
-  gap: 20px;
-  align-items: flex-start;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
 }
 
 .recording-controls {
-  flex: 1;
-  min-width: 200px;
+  flex: 0 0 auto;
 }
 
 /* Mobile compact layout */

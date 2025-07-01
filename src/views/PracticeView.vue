@@ -22,11 +22,13 @@
         @user-audio-ref="handleUserAudioPlayerRef"
         @audio-processed="handleAudioProcessed"
         @trigger-auto-play="playOverlapping"
+        @microphone-device-change="handleMicrophoneDeviceChange"
       />
 
       <!-- Central Playback Controls - Always visible, sticky on mobile -->
       <div class="playback-controls-container" :class="{ 'sticky-controls': shouldUseMobileLayout }">
         <CentralPlaybackControls
+          :selectedDeviceId="selectedDeviceId"
           @recorded="handleRecordedAudio"
           @recording-started="handleRecordingStarted"
           @recording-stopped="handleRecordingStopped"
@@ -463,6 +465,11 @@ const closeMobileModal = () => {
 
 const handleMicrophoneChange = (deviceId) => {
   setSelectedDevice(deviceId)
+}
+
+const handleMicrophoneDeviceChange = (deviceId) => {
+  console.log('🎙️ Microphone device changed from AudioVisualizationPanel:', deviceId);
+  setSelectedDevice(deviceId);
 }
 
 // Open VAD settings from the unified app settings modal

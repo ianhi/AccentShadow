@@ -51,7 +51,7 @@ defineEmits([
 <style scoped>
 .playback-buttons {
   display: flex;
-  gap: 12px;
+  gap: 6px;
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
@@ -71,7 +71,8 @@ defineEmits([
   font-weight: 600;
   transition: all 0.2s;
   min-height: 80px;
-  min-width: 120px;
+  min-width: 110px;
+  max-width: 130px;
   flex: 1 1 auto;
   white-space: nowrap;
   overflow: hidden;
@@ -172,18 +173,19 @@ defineEmits([
 /* Mobile responsive */
 @media (max-width: 768px) {
   .playback-buttons {
-    gap: 8px;
+    gap: 4px;
   }
   
   .playback-btn {
-    min-width: 100px;
+    min-width: 85px;
+    max-width: 95px;
     min-height: 60px;
-    padding: 12px 8px;
-    font-size: 12px;
+    padding: 12px 6px;
+    font-size: 11px;
   }
   
   .btn-icon {
-    font-size: 18px;
+    font-size: 16px;
   }
 }
 </style>

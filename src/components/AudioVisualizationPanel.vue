@@ -8,12 +8,21 @@
         @browse-file="$emit('browse-file')"
         @load-url="$emit('load-url')"
       />
+      
+      <!-- Microphone Selection - Hidden on mobile -->
+      <MicrophoneSelector 
+        v-if="!shouldUseMobileLayout"
+        :availableDevices="availableDevices"
+        :selectedDeviceId="selectedDeviceId"
+        :disabled="isRecording"
+        @device-change="handleDeviceChange"
+      />
     </div>
     
-    <div class="visualization-container" :class="{ 'mobile-stacked': shouldUseMobileLayout }">
-      <!-- Target Audio Column -->
+    <div class="visualization-container" :class="{ 'mobile-stacked': shouldUseMobileLayout, 'three-column': rawTargetAudioUrl && showRawAudio }">
+      <!-- Target Audio Column (Processed) -->
       <AudioColumn
-        title="Target Audio"
+        title="Target Audio (Processed)"
         :audioUrl="targetAudioUrl"
         audioType="target"
         :audioKey="targetAudioKey"
@@ -27,6 +36,24 @@
       >
         <template #placeholder>
           {{ currentRecording ? 'Select a recording from the set' : 'Please upload a target audio file or load from URL.' }}
+        </template>
+      </AudioColumn>
+      
+      <!-- Raw Target Audio Column (Debug) with VAD segments overlay -->
+      <AudioColumn
+        v-if="rawTargetAudioUrl && showRawAudio"
+        title="Target Audio (Raw)"
+        :audioUrl="rawTargetAudioUrl"
+        audioType="raw-target"
+        :audioKey="rawTargetAudioKey"
+        :debugInfo="rawTargetDebugInfo"
+        :vadSegments="currentVadSegments"
+        @audio-player-ref="handleRawTargetAudioPlayerRef"
+        :class="{ 'mobile-audio-column': shouldUseMobileLayout }"
+        :showTitleOnMobile="true"
+      >
+        <template #placeholder>
+          Raw audio not available
         </template>
       </AudioColumn>
       
@@ -58,10 +85,12 @@
 import { ref, watch, computed, nextTick } from 'vue'
 import AudioColumn from './AudioColumn.vue'
 import TargetAudioControls from './TargetAudioControls.vue'
+import MicrophoneSelector from './MicrophoneSelector.vue'
 import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment'
 import { useTimeSync } from '../composables/useTimeSync.ts'
 import { audioManager } from '../composables/useAudioManager.ts'
 import { useViewport } from '../composables/useViewport'
+import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts'
 
 const props = defineProps({
   currentRecording: {
@@ -88,6 +117,14 @@ const props = defineProps({
     default: () => ({
       autoPlayTargetOnUpload: true
     })
+  },
+  showVadSegments: {
+    type: Boolean,
+    default: false
+  },
+  showRawAudio: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -98,11 +135,22 @@ const emit = defineEmits([
   'target-audio-ref',
   'user-audio-ref',
   'audio-processed',
-  'trigger-auto-play'
+  'trigger-auto-play',
+  'vad-segments',
+  'microphone-device-change'
 ])
 
 // Mobile layout detection
 const { shouldUseMobileLayout } = useViewport()
+
+// Microphone device management
+const { availableDevices, selectedDeviceId, setSelectedDevice } = useMicrophoneDevices()
+
+const handleDeviceChange = (newDeviceId) => {
+  console.log('🎙️ Microphone device changed to:', newDeviceId);
+  setSelectedDevice(newDeviceId);
+  emit('microphone-device-change', newDeviceId);
+}
 
 // Audio state
 const targetAudioUrl = ref(null)
@@ -114,12 +162,20 @@ const currentAudioSource = ref('')
 // Store original target audio to prevent progressive trimming
 const originalTargetAudioBlob = ref(null)
 
+// Raw target audio for debugging (unprocessed)
+const rawTargetAudioUrl = ref(null)
+const rawTargetAudioBlob = ref(null)
+
 // Debug info for audio processing
 const targetDebugInfo = ref(null)
 const userDebugInfo = ref(null)
+const rawTargetDebugInfo = ref(null)
 
 // Cache for target audio VAD processing to avoid reprocessing on each recording
 const targetAudioProcessed = ref(null)
+
+// VAD segments for visualization
+const currentVadSegments = ref([])
 
 // Control state
 const autoPlayBoth = ref(true)
@@ -131,6 +187,7 @@ const hasTargetAutoPlayed = ref(false) // Track if target has auto-played for cu
 // Audio player refs
 const targetAudioPlayerRef = ref(null)
 const userAudioPlayerRef = ref(null)
+const rawTargetAudioPlayerRef = ref(null)
 
 // Composables
 const { 
@@ -173,6 +230,7 @@ const { syncEnabled } = useTimeSync()
 // Computed properties for audio keys (force re-render when audio changes)
 const targetAudioKey = computed(() => targetAudioUrl.value ? `target-${Date.now()}` : null)
 const userAudioKey = computed(() => userAudioUrl.value ? `user-${Date.now()}` : null)
+const rawTargetAudioKey = computed(() => rawTargetAudioUrl.value ? `raw-target-${Date.now()}` : null)
 
 // Handle AudioPlayer refs
 const handleTargetAudioPlayerRef = (ref) => {
@@ -188,6 +246,11 @@ const handleTargetAutoPlayed = () => {
 const handleUserAudioPlayerRef = (ref) => {
   userAudioPlayerRef.value = ref
   emit('user-audio-ref', ref)
+}
+
+const handleRawTargetAudioPlayerRef = (ref) => {
+  rawTargetAudioPlayerRef.value = ref
+  // Don't emit for raw target since it's just for debugging
 }
 
 // Fast duration calculation using AudioContext (no DOM loading needed)
@@ -329,16 +392,24 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     console.warn('🎯 setTargetAudio: No audio blob provided')
     // Clear everything
     const oldTargetUrl = targetAudioUrl.value
+    const oldRawTargetUrl = rawTargetAudioUrl.value
     targetDebugInfo.value = null
+    rawTargetDebugInfo.value = null
     targetAudioProcessed.value = null
     originalTargetAudioBlob.value = null // Clear original as well
     targetAudioUrl.value = null
     targetAudioBlob.value = null
+    rawTargetAudioUrl.value = null
+    rawTargetAudioBlob.value = null
     hasTargetAutoPlayed.value = false // Reset auto-play flag when target is cleared
+    currentVadSegments.value = [] // Clear VAD segments when target is cleared
     
-    // Cleanup old blob URL - will be handled by URL manager
+    // Cleanup old blob URLs
     if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
       scheduleUrlCleanup(oldTargetUrl)
+    }
+    if (oldRawTargetUrl && oldRawTargetUrl.startsWith('blob:')) {
+      scheduleUrlCleanup(oldRawTargetUrl)
     }
     return
   }
@@ -353,22 +424,75 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     originalTargetAudioBlob.value = audioBlob
     console.log('💾 Stored original target audio blob for future alignments')
     
+    // DEBUG: Set up raw audio visualization (unprocessed)
+    const oldRawTargetUrl = rawTargetAudioUrl.value
+    rawTargetAudioBlob.value = audioBlob
+    rawTargetAudioUrl.value = URL.createObjectURL(audioBlob)
+    
+    // Set raw audio debug info
+    const rawDuration = await getAudioDurationFast(audioBlob)
+    rawTargetDebugInfo.value = {
+      rawDuration: rawDuration.toFixed(3),
+      finalDuration: rawDuration.toFixed(3),
+      trimmedAmount: '0.000'
+    }
+    
+    // Cleanup old raw URL
+    if (oldRawTargetUrl && oldRawTargetUrl.startsWith('blob:')) {
+      scheduleUrlCleanup(oldRawTargetUrl)
+    }
+    
+    console.log('🔍 DEBUG: Raw audio visualization set up for comparison')
+    
     // Reset auto-play flag for new target audio (but not during alignment)
     if (!isAligning.value) {
       hasTargetAutoPlayed.value = false
       console.log('🎯 New target audio - reset auto-play flag')
     }
     
-    // Process target audio with VAD using exact aggressive settings from tuner
+    // Process target audio with VAD using dynamic settings from props
     const targetProcessed = await processAudio(audioBlob, {
-      positiveSpeechThreshold: 0.3,  // Exact tuner setting
-      negativeSpeechThreshold: 0.2,  // Exact tuner setting
-      minSpeechFrames: 3,            // Exact tuner setting
-      redemptionFrames: 32,          // Exact tuner setting
-      padding: 0.05                  // Exact tuner setting (50ms padding)
+      threshold: props.vadSettings.threshold,
+      minSpeechDuration: props.vadSettings.minSpeechDuration,
+      maxSilenceDuration: props.vadSettings.maxSilenceDuration,
+      padding: props.vadSettings.padding,
+      // Advanced VAD model settings
+      positiveSpeechThreshold: props.vadSettings.positiveSpeechThreshold,
+      negativeSpeechThreshold: props.vadSettings.negativeSpeechThreshold,
+      minSpeechFrames: props.vadSettings.minSpeechFrames,
+      redemptionFrames: props.vadSettings.redemptionFrames,
+      frameSamples: props.vadSettings.frameSamples,
+      preSpeechPadFrames: props.vadSettings.preSpeechPadFrames,
+      positiveSpeechPadFrames: props.vadSettings.positiveSpeechPadFrames
     })
     
     if (targetProcessed.processed && targetProcessed.vadBoundaries) {
+      // Emit VAD segments for visualization if requested
+      if (props.showVadSegments) {
+        // Extract individual speech segments from VAD boundaries for visualization
+        const vadSegments = []
+        if (targetProcessed.vadBoundaries.speechSegmentsList && 
+            targetProcessed.vadBoundaries.speechSegmentsList.length > 0) {
+          // Use individual segments detected by VAD
+          vadSegments.push(...targetProcessed.vadBoundaries.speechSegmentsList.map(segment => ({
+            startTime: segment.startTime,
+            endTime: segment.endTime,
+            type: 'speech'
+          })))
+        } else if (targetProcessed.vadBoundaries.originalSpeechStart !== undefined && 
+                   targetProcessed.vadBoundaries.originalSpeechEnd !== undefined) {
+          // Fallback to overall speech boundaries
+          vadSegments.push({
+            startTime: targetProcessed.vadBoundaries.originalSpeechStart,
+            endTime: targetProcessed.vadBoundaries.originalSpeechEnd,
+            type: 'speech'
+          })
+        }
+        console.log('🎯 Emitting VAD segments for visualization:', vadSegments)
+        currentVadSegments.value = vadSegments
+        emit('vad-segments', vadSegments)
+      }
+      
       // Normalize target audio to have consistent padding
       const normalizedBlob = await normalizeAudioSilence(
         targetProcessed.audioBlob,
@@ -376,9 +500,15 @@ const setTargetAudio = async (audioBlob, source = {}) => {
         props.vadSettings.padding * 1000 // Convert to milliseconds
       )
       
-      // Update state with processed audio
+      // CRITICAL FIX: Create blob URL first, then update both atomically
+      // This prevents race condition where waveform and spectrogram load different audio versions
+      const newUrl = URL.createObjectURL(normalizedBlob)
+      
+      // Update state with processed audio atomically
       targetAudioBlob.value = normalizedBlob
-      targetAudioUrl.value = URL.createObjectURL(normalizedBlob)
+      targetAudioUrl.value = newUrl
+      
+      console.log('🎯 TIMING FIX: Target audio blob and URL updated atomically')
       
       // Cache the processed target audio for future recordings
       targetAudioProcessed.value = {
@@ -406,9 +536,17 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     } else {
       console.log('📏 Target VAD processing failed - using original audio')
       
-      // Use original audio when VAD processing fails
+      // Clear VAD segments when processing fails
+      currentVadSegments.value = []
+      if (props.showVadSegments) {
+        emit('vad-segments', [])
+      }
+      
+      // CRITICAL FIX: Use original audio when VAD processing fails - create URL first then update atomically
+      const fallbackUrl = URL.createObjectURL(audioBlob)
       targetAudioBlob.value = audioBlob
-      targetAudioUrl.value = URL.createObjectURL(audioBlob)
+      targetAudioUrl.value = fallbackUrl
+      console.log('🎯 TIMING FIX: Fallback audio blob and URL updated atomically')
       
       // Clear cache since processing failed
       targetAudioProcessed.value = null
@@ -500,13 +638,13 @@ const processUserAudio = async (blob) => {
       console.log('🎧 Starting smart VAD-based audio processing...')
       
       // Process the recorded audio with VAD to get speech boundaries
-      // Use more lenient settings for user recordings (microphone audio)
-      console.log('🎧 [DEBUG] Calling processAudio for user recording...')
+      // Use VAD settings from props for user recordings
+      console.log('🎧 [DEBUG] Calling processAudio for user recording with props settings...')
       const userProcessed = await processAudio(tempUserBlob, {
-        threshold: 0.3,           // More sensitive for user recordings
-        minSpeechDuration: 30,    // Shorter minimum speech duration
-        maxSilenceDuration: 500,  // Allow longer silence gaps
-        padding: 0.1
+        threshold: props.vadSettings.threshold,
+        minSpeechDuration: props.vadSettings.minSpeechDuration,
+        maxSilenceDuration: props.vadSettings.maxSilenceDuration,
+        padding: props.vadSettings.padding
       })
       console.log('🎧 [DEBUG] User processAudio completed:', {
         processed: userProcessed.processed,
@@ -578,17 +716,22 @@ const processUserAudio = async (blob) => {
               const oldTargetUrl = targetAudioUrl.value
               console.log('🎧 [DEBUG] Stored old URLs for cleanup')
               
-              // Always update target audio with aligned result
+              // CRITICAL FIX: Create URLs first, then update atomically to prevent race conditions
+              const newTargetUrl = URL.createObjectURL(alignmentResult.audio1Aligned)
+              const newUserUrl = URL.createObjectURL(alignmentResult.audio2Aligned)
+              
+              // Always update target audio with aligned result atomically
               console.log('🎧 [DEBUG] Updating target audio with aligned result...')
               targetAudioBlob.value = alignmentResult.audio1Aligned
-              targetAudioUrl.value = URL.createObjectURL(alignmentResult.audio1Aligned)
+              targetAudioUrl.value = newTargetUrl
               console.log('🎧 [DEBUG] Target audio updated')
               
-              // Always update user audio with aligned result
+              // Always update user audio with aligned result atomically
               console.log('🎧 [DEBUG] Setting user audio for FIRST TIME with aligned result...')
               userAudioBlob.value = alignmentResult.audio2Aligned
-              userAudioUrl.value = URL.createObjectURL(alignmentResult.audio2Aligned)
+              userAudioUrl.value = newUserUrl
               console.log('🎧 [DEBUG] User audio set for first time with aligned version (no intermediate display)')
+              console.log('🎯 TIMING FIX: Aligned audio blobs and URLs updated atomically')
               
               // Update debug info using VAD-provided duration data (no separate calculation needed)
               console.log('🎧 [DEBUG] Using VAD-provided duration data for debug info...')
@@ -853,10 +996,10 @@ const manualAlign = async () => {
     }
     
     const userProcessed = await processAudio(userAudioBlob.value, {
-      threshold: 0.3,
-      minSpeechDuration: 30,
-      maxSilenceDuration: 500,
-      padding: 0.1
+      threshold: props.vadSettings.threshold,
+      minSpeechDuration: props.vadSettings.minSpeechDuration,
+      maxSilenceDuration: props.vadSettings.maxSilenceDuration,
+      padding: props.vadSettings.padding
     })
     
     if (targetProcessed?.processed && userProcessed.processed) {
@@ -870,12 +1013,18 @@ const manualAlign = async () => {
       const oldUserUrl = userAudioUrl.value
       const oldTargetUrl = targetAudioUrl.value
       
-      // Update both audios with aligned results
+      // CRITICAL FIX: Create URLs first, then update atomically
+      const manualTargetUrl = URL.createObjectURL(alignmentResult.audio1Aligned)
+      const manualUserUrl = URL.createObjectURL(alignmentResult.audio2Aligned)
+      
+      // Update both audios with aligned results atomically
       targetAudioBlob.value = alignmentResult.audio1Aligned
-      targetAudioUrl.value = URL.createObjectURL(alignmentResult.audio1Aligned)
+      targetAudioUrl.value = manualTargetUrl
       
       userAudioBlob.value = alignmentResult.audio2Aligned
-      userAudioUrl.value = URL.createObjectURL(alignmentResult.audio2Aligned)
+      userAudioUrl.value = manualUserUrl
+      
+      console.log('🎯 TIMING FIX: Manual alignment blobs and URLs updated atomically')
       
       // Update debug info
       const finalUserDuration = await getAudioDurationFast(alignmentResult.audio2Aligned)
@@ -935,8 +1084,10 @@ defineExpose({
   getOriginalTargetBlob: () => originalTargetAudioBlob.value,
   getTargetUrl: () => targetAudioUrl.value,
   getUserUrl: () => userAudioUrl.value,
+  getRawTargetUrl: () => rawTargetAudioUrl.value,
   getTargetPlayerRef: () => targetAudioPlayerRef.value,
   getUserPlayerRef: () => userAudioPlayerRef.value,
+  getRawTargetPlayerRef: () => rawTargetAudioPlayerRef.value,
   autoPlayBoth,
   sequentialDelay
 })
@@ -972,6 +1123,10 @@ defineExpose({
   min-height: 350px;
 }
 
+.visualization-container.three-column {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
 .recording-indicator-text {
   color: rgba(255, 100, 100, 0.9);
   font-weight: 600;
@@ -979,12 +1134,12 @@ defineExpose({
 
 /* Mobile layout styles */
 .mobile-layout {
-  gap: 12px;
+  gap: 8px;
 }
 
 .mobile-controls {
   padding: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .mobile-controls h3 {
@@ -996,6 +1151,10 @@ defineExpose({
   grid-template-columns: 1fr !important;
   gap: 16px;
   min-height: auto;
+}
+
+.mobile-stacked.three-column {
+  grid-template-columns: 1fr !important;
 }
 
 .mobile-audio-column {
@@ -1028,15 +1187,15 @@ defineExpose({
 /* Portrait orientation optimization */
 @media (max-width: 768px) and (orientation: portrait) {
   .mobile-layout {
-    gap: 8px;
+    gap: 6px;
   }
   
   .mobile-controls {
-    padding: 8px 12px;
+    padding: 6px 8px;
   }
   
   .mobile-stacked {
-    gap: 8px;
+    gap: 4px;
   }
   
   .mobile-audio-column {

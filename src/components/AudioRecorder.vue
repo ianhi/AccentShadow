@@ -3,22 +3,14 @@
     <div class="recorder-controls">
       <button @click="toggleRecording" :class="{ 'recording': isRecording, 'compact': shouldUseMobileLayout }" class="record-btn">
         <span class="btn-icon">{{ isRecording ? '⏹' : '🎤' }}</span>
-        <span v-if="!shouldUseMobileLayout">{{ isRecording ? 'Stop Recording' : 'Start Recording' }}</span>
+        <span v-if="!shouldUseMobileLayout && !isRecording">Start Recording</span>
+        <span v-if="!shouldUseMobileLayout && isRecording" class="recording-time-on-button">
+          <span class="recording-indicator"></span>
+          {{ formatTime(recordingTime) }}
+        </span>
       </button>
-      <div class="recording-status" :class="{ 'visible': isRecording, 'compact': shouldUseMobileLayout }">
-        <span class="recording-indicator"></span>
-        <span class="recording-time">{{ formatTime(recordingTime) }}</span>
-      </div>
     </div>
     
-    <!-- Microphone Selection - Hidden on mobile -->
-    <MicrophoneSelector 
-      v-if="!shouldUseMobileLayout"
-      :availableDevices="availableDevices"
-      :selectedDeviceId="selectedDeviceId"
-      :disabled="isRecording"
-      @device-change="onDeviceChange"
-    />
   </div>
 </template>
 
@@ -26,16 +18,23 @@
 import { ref, onUnmounted } from 'vue';
 import { useAudioRecorder } from '../composables/useAudioRecorder';
 import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts';
-import MicrophoneSelector from './MicrophoneSelector.vue';
 import { useViewport } from '../composables/useViewport';
 
 const emit = defineEmits(['recorded', 'recording-started', 'recording-stopped']);
 
 const { isRecording, recordingTime, startRecording, stopRecording } = useAudioRecorder();
-const { availableDevices, selectedDeviceId, setSelectedDevice, getMediaStream } = useMicrophoneDevices();
+const { getMediaStream } = useMicrophoneDevices();
 const { shouldUseMobileLayout } = useViewport();
 
 let timer = null;
+
+// Props for microphone device management
+const props = defineProps({
+  selectedDeviceId: {
+    type: String,
+    default: null
+  }
+});
 
 const toggleRecording = async () => {
   console.log('🎤 AudioRecorder toggleRecording called, isRecording:', isRecording.value);
@@ -48,10 +47,10 @@ const toggleRecording = async () => {
     clearInterval(timer);
     console.log('🎤 Recording stopped, blob size:', audioBlob?.size);
   } else {
-    console.log('🎤 Starting recording with device:', selectedDeviceId.value);
+    console.log('🎤 Starting recording with device:', props.selectedDeviceId);
     try {
       // Get media stream with selected device
-      const stream = await getMediaStream(selectedDeviceId.value);
+      const stream = await getMediaStream(props.selectedDeviceId);
       await startRecording(null, stream); // Pass the stream to the recorder
       emit('recording-started');
       timer = setInterval(() => {
@@ -63,11 +62,6 @@ const toggleRecording = async () => {
       alert('Failed to start recording with selected microphone. Please try a different microphone.');
     }
   }
-};
-
-const onDeviceChange = (newDeviceId) => {
-  console.log('🎤 Microphone device changed to:', newDeviceId);
-  setSelectedDevice(newDeviceId);
 };
 
 onUnmounted(() => {
@@ -91,25 +85,7 @@ const formatTime = (seconds) => {
 .recorder-controls {
   display: flex;
   align-items: center;
-  gap: 15px;
-  flex-wrap: wrap;
-}
-
-.recording-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  opacity: 0;
-  visibility: hidden;
-  height: 0;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.recording-status.visible {
-  opacity: 1;
-  visibility: visible;
-  height: 24px;
+  justify-content: center;
 }
 
 .record-btn {
@@ -126,7 +102,7 @@ const formatTime = (seconds) => {
   font-weight: 600;
   transition: all 0.2s;
   min-height: 80px;
-  min-width: 120px;
+  min-width: 130px;
   white-space: nowrap;
   overflow: hidden;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -157,10 +133,18 @@ const formatTime = (seconds) => {
   font-size: 20px;
 }
 
+.recording-time-on-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .recording-indicator {
-  width: 15px;
-  height: 15px;
-  background-color: #EF4444;
+  width: 8px;
+  height: 8px;
+  background-color: #ffffff;
   border-radius: 50%;
   animation: pulse 1.5s infinite;
 }
@@ -171,14 +155,6 @@ const formatTime = (seconds) => {
   100% { transform: scale(0.9); opacity: 0.7; }
 }
 
-.recording-time {
-  font-weight: 600;
-  color: white;
-  font-size: 14px;
-  white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
 /* Compact mode styles */
 .audio-recorder.compact {
   width: auto;
@@ -186,7 +162,6 @@ const formatTime = (seconds) => {
 
 .audio-recorder.compact .recorder-controls {
   flex-direction: row;
-  gap: 6px;
   align-items: center;
   width: auto;
 }
@@ -206,25 +181,6 @@ const formatTime = (seconds) => {
   font-size: 16px;
 }
 
-.recording-status.compact {
-  font-size: 10px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  position: absolute;
-  bottom: -20px;
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-.recording-status.compact.visible {
-  opacity: 1;
-}
-
-.recording-status.compact .recording-indicator {
-  width: 6px;
-  height: 6px;
-}
 
 /* Microphone selector styles moved to MicrophoneSelector component */
 
