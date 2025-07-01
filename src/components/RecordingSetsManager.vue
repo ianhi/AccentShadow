@@ -11,6 +11,9 @@
       
       <!-- Action Buttons -->
       <div class="action-buttons">
+        <button @click="loadDemoData" :disabled="isLoadingDemo" class="action-btn demo-btn">
+          {{ isLoadingDemo ? '⏳' : '🎯' }} {{ isLoadingDemo ? 'Loading...' : 'Load Demo' }}
+        </button>
         <button @click="showFolderUpload = true" class="action-btn upload-btn">
           📁 Upload Folder
         </button>
@@ -82,7 +85,7 @@
       <div v-else-if="recordingSets.length === 0" class="empty-state">
         <div class="empty-icon">📂</div>
         <p>No recording sets yet.</p>
-        <p class="empty-hint">Use "📁 Upload Folder" to get started with your pronunciation practice!</p>
+        <p class="empty-hint">Try "🎯 Load Demo" for sample recordings, or use "📁 Upload Folder" with your own audio files!</p>
       </div>
 
       <!-- No Search Results -->
@@ -114,6 +117,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
+import { useDemoData } from '../composables/useDemoData';
 import FolderUpload from './FolderUpload.vue';
 
 const {
@@ -125,6 +129,11 @@ const {
   deleteRecordingSet,
   getSetStatistics
 } = useRecordingSets();
+
+const {
+  isLoadingDemo,
+  loadDemoData: loadDemo
+} = useDemoData();
 
 // Component state
 const searchQuery = ref('');
@@ -173,6 +182,13 @@ const handleFolderImported = (recordingSet) => {
   setActiveSet(recordingSet.id);
 };
 
+const loadDemoData = async () => {
+  const success = await loadDemo();
+  if (success) {
+    console.log('✅ Demo data loaded from RecordingSetsManager');
+  }
+};
+
 const getLanguageName = (code) => {
   const languages = {
     'en': 'English',
@@ -195,6 +211,7 @@ const getSourceIcon = (source) => {
   const icons = {
     'manual': '✋',
     'upload': '📁',
+    'demo': '🎯',
     'tatoeba': '📝',
     'forvo': '🔊',
     'rhinospike': '🦏'
@@ -305,6 +322,23 @@ const getSourceIcon = (source) => {
   background: rgba(5, 150, 105, 0.9);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.demo-btn {
+  background: rgba(168, 85, 247, 0.9);
+  color: white;
+}
+
+.demo-btn:hover:not(:disabled) {
+  background: rgba(147, 51, 234, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+}
+
+.demo-btn:disabled {
+  background: rgba(168, 85, 247, 0.5);
+  cursor: not-allowed;
+  transform: none;
 }
 
 .search-filter {

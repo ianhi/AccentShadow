@@ -2,9 +2,12 @@
 import { useRoute } from 'vue-router'
 import { computed, onMounted } from 'vue'
 import { usePreloader } from './composables/usePreloader'
+import { useDemoData } from './composables/useDemoData'
+import DemoDataPrompt from './components/DemoDataPrompt.vue'
 
 const route = useRoute()
 const { preloadAll, preloadStatus } = usePreloader()
+const { initializeFirstVisitDetection } = useDemoData()
 
 // Show navigation only on main app routes, hide on mobile demos
 const showNavigation = computed(() => {
@@ -14,6 +17,9 @@ const showNavigation = computed(() => {
 // Comprehensive background initialization - start immediately on app load
 onMounted(async () => {
   console.log('🚀 Starting comprehensive background preloading...')
+
+  // Initialize demo data detection
+  initializeFirstVisitDetection()
 
   // Start preloading without blocking UI rendering
   preloadAll().then(() => {
@@ -47,6 +53,9 @@ onMounted(async () => {
         ← Back to Mobile Demo
       </router-link>
     </div>
+
+    <!-- Demo data prompt for first-time users -->
+    <DemoDataPrompt />
 
     <!-- Router view for all pages -->
     <router-view />
