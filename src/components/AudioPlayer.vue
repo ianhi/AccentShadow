@@ -45,7 +45,7 @@ const props = defineProps({
   audioUrl: String,
   audioType: {
     type: String,
-    default: 'user', // 'target' or 'user'
+    default: 'user', // 'target', 'user', or 'raw-target'
   },
   isRecording: {
     type: Boolean,
@@ -62,6 +62,10 @@ const props = defineProps({
   suppressAutoPlay: {
     type: Boolean,
     default: false,
+  },
+  vadSegments: {
+    type: Array,
+    default: () => [],
   },
 });
 
@@ -107,7 +111,14 @@ const handleReadyToPlay = () => {
   }
 }
 
-const { wavesurfer, isReady, isPlaying, currentTime, duration, volume, playbackRate, playerId, playerInfo, initWaveform, playPause, play, stop, setVolume, setPlaybackRate, loadAudio, destroyWaveform } = useWaveform(waveformContainer, spectrogramContainer, `${props.audioType}_player`, props.audioType, handleReadyToPlay);
+const vadSegmentsRef = ref(props.vadSegments || []);
+const { wavesurfer, isReady, isPlaying, currentTime, duration, volume, playbackRate, playerId, playerInfo, initWaveform, playPause, play, stop, setVolume, setPlaybackRate, loadAudio, destroyWaveform, addVadSegments, clearVadSegments } = useWaveform(waveformContainer, spectrogramContainer, `${props.audioType}_player`, props.audioType, handleReadyToPlay, vadSegmentsRef);
+
+// Watch for VAD segments changes from props
+watch(() => props.vadSegments, (newSegments) => {
+  vadSegmentsRef.value = newSegments || [];
+  console.log(`🎯 [${props.audioType.toUpperCase()}]: VAD segments prop updated:`, newSegments);
+}, { deep: true });
 
 // Smooth transition state
 const isUpdating = ref(false);
@@ -122,13 +133,15 @@ watch(duration, (newDuration) => {
   if (newDuration > 0) {
     if (props.audioType === 'target') {
       setTargetDuration(newDuration);
-    } else {
+    } else if (props.audioType === 'user') {
       setUserDuration(newDuration);
     }
+    // raw-target doesn't need time sync
   }
 });
 
 
+// Reactive pattern to handle audio URL changes with proper container readiness
 watch(() => props.audioUrl, async (newUrl, oldUrl) => {
   if (newUrl && newUrl !== oldUrl) {
     // Reset auto-play flag for new audio, but NOT during alignment operations
@@ -142,32 +155,37 @@ watch(() => props.audioUrl, async (newUrl, oldUrl) => {
     // Wait for next tick to ensure DOM is ready
     await nextTick();
     
-    // Check if containers are available
-    if (!waveformContainer.value || !spectrogramContainer.value) {
-      // Wait for next tick and try again
-      await nextTick();
-      if (waveformContainer.value && spectrogramContainer.value) {
-        loadAudio(newUrl);
-        isUpdating.value = false;
-      } else {
-        console.error(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers still not available after nextTick`);
-        isUpdating.value = false;
-      }
-    } else {
+    // Load audio if containers are ready, otherwise the container watcher will handle it
+    if (waveformContainer.value && spectrogramContainer.value) {
       loadAudio(newUrl);
       isUpdating.value = false;
+    } else {
+      console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Waiting for containers to be ready...`);
+      // Keep isUpdating true - it will be cleared by the container watcher
     }
   } else if (!newUrl) {
     hasAutoPlayed.value = false; // Always reset flag when audio is removed
     destroyWaveform();
+    isUpdating.value = false;
     // Reset duration when audio is removed
     if (props.audioType === 'target') {
       setTargetDuration(0);
-    } else {
+    } else if (props.audioType === 'user') {
       setUserDuration(0);
     }
+    // raw-target doesn't need time sync reset
   }
 }, { immediate: true });
+
+// Reactive pattern to watch for container readiness and load pending audio
+watch([waveformContainer, spectrogramContainer], async ([waveformEl, spectrogramEl]) => {
+  if (waveformEl && spectrogramEl && props.audioUrl && isUpdating.value) {
+    console.log(`🎵 AUDIOPLAYER [${props.audioType.toUpperCase()}]: Containers now ready, loading audio reactively`);
+    await nextTick();
+    loadAudio(props.audioUrl);
+    isUpdating.value = false;
+  }
+}, { immediate: false });
 
 onMounted(async () => {
   await nextTick();

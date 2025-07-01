@@ -456,84 +456,93 @@ const importRecordings = async () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
+  backdrop-filter: blur(5px);
 }
 
 .folder-upload > div {
-  background: white;
+  background: rgba(26, 26, 26, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
-  padding: 20px;
-  max-width: 600px;
-  max-height: 70vh;
+  backdrop-filter: blur(10px);
+  padding: 16px;
+  max-width: 650px;
+  max-height: 90vh;
   overflow-y: auto;
-  width: 90%;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  width: 95%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   margin: 10px;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
 }
 
 .upload-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .upload-header h3 {
   margin: 0;
-  color: #1f2937;
-  font-size: 20px;
+  color: #60a5fa;
+  font-size: 22px;
+  font-weight: 600;
 }
 
 .close-btn {
-  background: none;
-  border: none;
-  font-size: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 18px;
   cursor: pointer;
-  color: #6b7280;
-  padding: 4px;
-  border-radius: 4px;
+  color: #ffffff;
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
 }
 
 .close-btn:hover {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .drop-zone {
-  border: 3px dashed #d1d5db;
+  border: 3px dashed rgba(255, 255, 255, 0.4);
   border-radius: 12px;
-  padding: 30px 20px;
+  padding: 30px 16px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  background-color: #f9fafb;
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .drop-zone:hover,
 .drop-zone.drag-over {
-  border-color: #3b82f6;
-  background-color: #eff6ff;
+  border-color: #60a5fa;
+  background-color: rgba(96, 165, 250, 0.1);
 }
 
 .drop-icon {
-  font-size: 32px;
-  margin-bottom: 8px;
+  font-size: 40px;
+  margin-bottom: 12px;
 }
 
 .drop-text p {
   margin: 8px 0;
-  color: #374151;
+  color: #ffffff;
+  font-weight: 500;
 }
 
 .drop-subtext {
   font-size: 14px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .preview-header {
@@ -545,29 +554,32 @@ const importRecordings = async () => {
 
 .preview-header h4 {
   margin: 0;
-  color: #1f2937;
+  color: #ffffff;
   font-size: 18px;
 }
 
 .reset-btn {
   padding: 6px 12px;
-  background-color: #f3f4f6;
-  border: 1px solid #d1d5db;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  color: #374151;
+  color: #ffffff;
+  transition: all 0.2s;
 }
 
 .reset-btn:hover {
-  background-color: #e5e7eb;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .preview-options {
-  margin-bottom: 15px;
-  padding: 12px;
-  background-color: #f8fafc;
+  margin-bottom: 12px;
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .option-checkbox {
@@ -576,7 +588,7 @@ const importRecordings = async () => {
   gap: 8px;
   margin-bottom: 8px;
   font-size: 14px;
-  color: #374151;
+  color: #ffffff;
   cursor: pointer;
 }
 
@@ -585,25 +597,25 @@ const importRecordings = async () => {
 }
 
 .file-preview {
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .file-preview h5 {
   margin: 0 0 12px 0;
-  color: #1f2937;
+  color: #ffffff;
   font-size: 16px;
 }
 
 .categories {
   max-height: 120px;
   overflow-y: auto;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
-  background-color: white;
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .category {
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .category:last-child {
@@ -615,14 +627,14 @@ const importRecordings = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background-color: #f8fafc;
+  background-color: rgba(255, 255, 255, 0.1);
   font-weight: 600;
-  color: #374151;
+  color: #ffffff;
 }
 
 .category-count {
   font-size: 12px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.7);
   font-weight: normal;
 }
 
@@ -633,13 +645,13 @@ const importRecordings = async () => {
 .file-item {
   padding: 4px 0;
   font-size: 14px;
-  color: #4b5563;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .more-files {
   padding: 4px 0;
   font-size: 12px;
-  color: #9ca3af;
+  color: rgba(255, 255, 255, 0.6);
   font-style: italic;
 }
 
@@ -647,7 +659,7 @@ const importRecordings = async () => {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .set-name label,
@@ -655,7 +667,7 @@ const importRecordings = async () => {
   display: block;
   margin-bottom: 6px;
   font-weight: 600;
-  color: #374151;
+  color: #ffffff;
   font-size: 14px;
 }
 
@@ -663,16 +675,28 @@ const importRecordings = async () => {
 .language-dropdown {
   width: 100%;
   padding: 8px 12px;
-  border: 2px solid #d1d5db;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 6px;
   font-size: 14px;
-  color: #374151;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  box-sizing: border-box;
 }
 
 .name-input:focus,
 .language-dropdown:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+.name-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.language-dropdown option {
+  background: #1a1a1a;
+  color: #ffffff;
 }
 
 .import-actions {
@@ -692,27 +716,28 @@ const importRecordings = async () => {
 }
 
 .import-btn {
-  background-color: #3b82f6;
+  background-color: #60a5fa;
   color: white;
 }
 
 .import-btn:hover:not(:disabled) {
-  background-color: #2563eb;
+  background-color: #3b82f6;
 }
 
 .import-btn:disabled {
-  background-color: #9ca3af;
+  background-color: rgba(255, 255, 255, 0.2);
   cursor: not-allowed;
 }
 
 .cancel-btn {
-  background-color: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .cancel-btn:hover {
-  background-color: #e5e7eb;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .importing-overlay {
@@ -758,7 +783,7 @@ const importRecordings = async () => {
 .upload-divider {
   display: flex;
   align-items: center;
-  margin: 24px 0;
+  margin: 16px 0;
   text-align: center;
 }
 
@@ -767,26 +792,26 @@ const importRecordings = async () => {
   content: '';
   flex: 1;
   height: 1px;
-  background: #d1d5db;
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .upload-divider span {
   padding: 0 16px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 14px;
   font-weight: 500;
 }
 
 .url-import {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
-  padding: 20px;
+  padding: 16px;
 }
 
 .url-import h4 {
   margin: 0 0 12px 0;
-  color: #374151;
+  color: #ffffff;
   font-size: 16px;
   font-weight: 600;
 }
@@ -800,21 +825,27 @@ const importRecordings = async () => {
 .url-input {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 6px;
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
 .url-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+.url-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .url-import-btn {
   padding: 8px 16px;
-  background: #3b82f6;
+  background: #60a5fa;
   color: white;
   border: none;
   border-radius: 6px;
@@ -826,7 +857,7 @@ const importRecordings = async () => {
 }
 
 .url-import-btn:hover:not(:disabled) {
-  background: #2563eb;
+  background: #3b82f6;
   transform: translateY(-1px);
 }
 
@@ -838,20 +869,20 @@ const importRecordings = async () => {
 
 .url-help {
   font-size: 12px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.6);
   margin: 0;
   line-height: 1.4;
 }
 
 /* CSV Info Styles */
 .csv-info {
-  background: #f0f9ff;
-  border: 1px solid #0ea5e9;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid #60a5fa;
   border-radius: 6px;
   padding: 8px 12px;
   margin-top: 12px;
   font-size: 14px;
-  color: #0369a1;
+  color: #60a5fa;
 }
 
 @media (max-width: 768px) {

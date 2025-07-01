@@ -1,6 +1,11 @@
 <template>
   <div class="main-header">
-    <h1>{{ title }}</h1>
+    <div class="title-section">
+      <h1>{{ title }}</h1>
+      <p class="subtitle">
+        <a href="https://github.com/ianhi/AccentShadow" target="_blank" rel="noopener noreferrer" class="github-link">OPEN SOURCE</a> - ALWAYS FREE
+      </p>
+    </div>
     <button @click="openSettings" class="settings-btn desktop-only" title="Settings">
       ⚙️ Settings
     </button>
@@ -31,6 +36,13 @@ const openSettings = () => {
   margin-bottom: 24px;
 }
 
+.title-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .main-header h1 {
   font-size: 2.5rem;
   font-weight: 700;
@@ -39,6 +51,30 @@ const openSettings = () => {
   -webkit-text-fill-color: transparent;
   text-shadow: none;
   margin: 0;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.github-link {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+
+.github-link:hover {
+  color: #00d2ff;
+  border-bottom-color: #00d2ff;
+  text-shadow: 0 0 8px rgba(0, 210, 255, 0.3);
 }
 
 .settings-btn {
@@ -67,6 +103,11 @@ const openSettings = () => {
 @media (max-width: 768px) {
   .main-header h1 {
     font-size: 2rem;
+  }
+  
+  .subtitle {
+    font-size: 0.7rem;
+    letter-spacing: 1.2px;
   }
   
   .desktop-only {

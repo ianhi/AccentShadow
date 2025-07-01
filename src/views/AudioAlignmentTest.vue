@@ -2,171 +2,342 @@
   <div class="alignment-test-container">
     <h1>🎯 Smart Audio Alignment Test</h1>
     <p class="description">
-      Test the new simplified VAD-based audio alignment system. 
-      Audio is automatically processed with VAD, normalized to 200ms padding, and aligned by length.
+      Test the VAD-based audio alignment system with raw audio comparison. 
+      The center column shows raw unprocessed audio for debugging VAD trimming issues.
     </p>
     
     <div class="vad-status">
       <p><strong>VAD Status:</strong> <span :class="vadStatusClass">{{ vadStatus }}</span></p>
-      <p><strong>Padding:</strong> {{ paddingMs }}ms</p>
+      <p><strong>Padding:</strong> {{ vadSettings.padding * 1000 }}ms</p>
     </div>
 
-    <!-- Settings -->
+    <!-- VAD Settings -->
     <div class="settings-section">
-      <h2>⚙️ Settings</h2>
-      <div class="setting-group">
-        <label for="padding-input">Silence Padding (ms):</label>
-        <input 
-          id="padding-input"
-          type="number" 
-          v-model="paddingMs" 
-          min="50" 
-          max="1000" 
-          step="50"
-          @change="onPaddingChange"
-        />
+      <h2>⚙️ VAD Settings</h2>
+      
+      <!-- All Settings in Compact Grid -->
+      <div class="settings-grid compact-grid">
+        <div class="setting-group">
+          <label for="padding-input">Padding (ms)</label>
+          <input 
+            id="padding-input"
+            type="number" 
+            :value="vadSettings.padding * 1000"
+            min="50" 
+            max="1000" 
+            step="50"
+            @input="updatePadding"
+            aria-describedby="padding-help"
+          />
+          <small id="padding-help" class="help-text">Silence padding around speech</small>
+        </div>
+        <div class="setting-group">
+          <label for="threshold-input">VAD Threshold</label>
+          <input 
+            id="threshold-input"
+            type="number" 
+            v-model.number="vadSettings.threshold"
+            min="0.1" 
+            max="0.9" 
+            step="0.05"
+            @input="onSettingsChange"
+            aria-describedby="threshold-help"
+          />
+          <small id="threshold-help" class="help-text">Speech detection sensitivity</small>
+        </div>
+        <div class="setting-group">
+          <label for="min-speech-input">Min Speech (ms)</label>
+          <input 
+            id="min-speech-input"
+            type="number" 
+            v-model.number="vadSettings.minSpeechDuration"
+            min="10" 
+            max="200" 
+            step="10"
+            @input="onSettingsChange"
+            aria-describedby="min-speech-help"
+          />
+          <small id="min-speech-help" class="help-text">Minimum speech duration</small>
+        </div>
+        <div class="setting-group">
+          <label for="max-silence-input">Max Silence (ms)</label>
+          <input 
+            id="max-silence-input"
+            type="number" 
+            v-model.number="vadSettings.maxSilenceDuration"
+            min="100" 
+            max="2000" 
+            step="100"
+            @input="onSettingsChange"
+            aria-describedby="max-silence-help"
+          />
+          <small id="max-silence-help" class="help-text">Maximum silence gap</small>
+        </div>
+        <div class="setting-group">
+          <label for="max-trim-start-input">Max Trim Start (s)</label>
+          <input 
+            id="max-trim-start-input"
+            type="number" 
+            v-model.number="vadSettings.maxTrimStart"
+            min="0.5" 
+            max="10" 
+            step="0.5"
+            @input="onSettingsChange"
+            aria-describedby="trim-start-help"
+          />
+          <small id="trim-start-help" class="help-text">Maximum trim from start</small>
+        </div>
+        <div class="setting-group">
+          <label for="max-trim-end-input">Max Trim End (s)</label>
+          <input 
+            id="max-trim-end-input"
+            type="number" 
+            v-model.number="vadSettings.maxTrimEnd"
+            min="0.5" 
+            max="10" 
+            step="0.5"
+            @input="onSettingsChange"
+            aria-describedby="trim-end-help"
+          />
+          <small id="trim-end-help" class="help-text">Maximum trim from end</small>
+        </div>
       </div>
       
-      <div class="vad-test-controls">
-        <h3>🎤 VAD Testing Controls</h3>
-        <div class="vad-buttons">
-          <button @click="testUserAudioWithSettings('conservative')" class="btn-test" :disabled="isProcessing">
-            Test Conservative VAD (0.5 threshold)
-          </button>
-          <button @click="testUserAudioWithSettings('lenient')" class="btn-test" :disabled="isProcessing">
-            Test Lenient VAD (0.3 threshold)
-          </button>
-          <button @click="testUserAudioWithSettings('very-sensitive')" class="btn-test" :disabled="isProcessing">
-            Test Very Sensitive VAD (0.2 threshold)
-          </button>
-        </div>
-        <div class="vad-results" v-if="vadTestResults.length > 0">
-          <h4>VAD Test Results:</h4>
-          <div v-for="(result, index) in vadTestResults" :key="index" class="vad-result">
-            <strong>{{ result.name }}:</strong> 
-            <span v-if="result.processed">
-              Speech: {{ result.speechStart }}s - {{ result.speechEnd }}s 
-              ({{ (result.speechEnd - result.speechStart).toFixed(3) }}s detected)
-            </span>
-            <span v-else class="error">VAD Failed</span>
+      <!-- Advanced Settings - Collapsible -->
+      <details class="advanced-settings">
+        <summary class="advanced-toggle">🔬 Advanced VAD Model Settings</summary>
+        <div class="settings-grid compact-grid">
+          <div class="setting-group">
+            <label for="pos-speech-threshold-input">Pos Speech Threshold</label>
+            <input 
+              id="pos-speech-threshold-input"
+              type="number" 
+              v-model.number="vadSettings.positiveSpeechThreshold"
+              min="0.1" 
+              max="0.9" 
+              step="0.05"
+              @input="onSettingsChange"
+              aria-describedby="pos-threshold-help"
+            />
+            <small id="pos-threshold-help" class="help-text">Positive speech detection</small>
           </div>
+          <div class="setting-group">
+            <label for="neg-speech-threshold-input">Neg Speech Threshold</label>
+            <input 
+              id="neg-speech-threshold-input"
+              type="number" 
+              v-model.number="vadSettings.negativeSpeechThreshold"
+              min="0.1" 
+              max="0.9" 
+              step="0.05"
+              @input="onSettingsChange"
+              aria-describedby="neg-threshold-help"
+            />
+            <small id="neg-threshold-help" class="help-text">Negative speech detection</small>
+          </div>
+          <div class="setting-group">
+            <label for="min-speech-frames-input">Min Speech Frames</label>
+            <input 
+              id="min-speech-frames-input"
+              type="number" 
+              v-model.number="vadSettings.minSpeechFrames"
+              min="1" 
+              max="20" 
+              step="1"
+              @input="onSettingsChange"
+              aria-describedby="min-frames-help"
+            />
+            <small id="min-frames-help" class="help-text">Minimum frames for speech</small>
+          </div>
+          <div class="setting-group">
+            <label for="redemption-frames-input">Redemption Frames</label>
+            <input 
+              id="redemption-frames-input"
+              type="number" 
+              v-model.number="vadSettings.redemptionFrames"
+              min="8" 
+              max="64" 
+              step="8"
+              @input="onSettingsChange"
+              aria-describedby="redemption-help"
+            />
+            <small id="redemption-help" class="help-text">Recovery from silence</small>
+          </div>
+          <div class="setting-group">
+            <label for="frame-samples-input">Frame Samples</label>
+            <input 
+              id="frame-samples-input"
+              type="number" 
+              v-model.number="vadSettings.frameSamples"
+              min="256" 
+              max="2048" 
+              step="256"
+              @input="onSettingsChange"
+              aria-describedby="frame-samples-help"
+            />
+            <small id="frame-samples-help" class="help-text">VAD model frame size</small>
+          </div>
+          <div class="setting-group">
+            <label for="pre-speech-pad-input">Pre-Speech Frames</label>
+            <input 
+              id="pre-speech-pad-input"
+              type="number" 
+              v-model.number="vadSettings.preSpeechPadFrames"
+              min="1" 
+              max="16" 
+              step="1"
+              @input="onSettingsChange"
+              aria-describedby="pre-pad-help"
+            />
+            <small id="pre-pad-help" class="help-text">Padding before speech</small>
+          </div>
+          <div class="setting-group">
+            <label for="pos-speech-pad-input">Post-Speech Frames</label>
+            <input 
+              id="pos-speech-pad-input"
+              type="number" 
+              v-model.number="vadSettings.positiveSpeechPadFrames"
+              min="1" 
+              max="16" 
+              step="1"
+              @input="onSettingsChange"
+              aria-describedby="post-pad-help"
+            />
+            <small id="post-pad-help" class="help-text">Padding after speech</small>
+          </div>
+        </div>
+      </details>
+      
+      <div class="vad-presets">
+        <h3>🎛️ VAD Presets</h3>
+        <div class="preset-buttons">
+          <button @click="applyPreset('conservative')" class="btn-preset">
+            Conservative (0.5 threshold)
+          </button>
+          <button @click="applyPreset('default')" class="btn-preset">
+            Default (0.3 threshold)
+          </button>
+          <button @click="applyPreset('sensitive')" class="btn-preset">
+            Sensitive (0.2 threshold)
+          </button>
+          <button @click="applyPreset('very-sensitive')" class="btn-preset">
+            Very Sensitive (0.1 threshold)
+          </button>
         </div>
       </div>
     </div>
     
-    <!-- Audio Processing Section -->
-    <div class="audio-section">
-      <div class="audio-panel">
-        <h2>🎯 Target Audio</h2>
-        <div class="audio-info">
-          <p><strong>File:</strong> {{ targetFile }}</p>
-          <p><strong>Status:</strong> 
-            <span :class="targetStatusClass">{{ targetStatus }}</span>
-          </p>
-          <div class="vad-info" v-if="targetProcessed.vadBoundaries">
-            <p><strong>Speech:</strong> {{ formatTime(targetProcessed.vadBoundaries.startTime) }} - {{ formatTime(targetProcessed.vadBoundaries.endTime) }}</p>
-            <p><strong>Duration:</strong> {{ formatDuration(targetProcessed.vadBoundaries.endTime - targetProcessed.vadBoundaries.startTime) }}</p>
-          </div>
-        </div>
-        <div class="audio-controls">
-          <button @click="loadTargetAudio" class="btn-primary" :disabled="isProcessing">
-            {{ targetProcessed.processed ? '🔄 Reload' : '📁 Load' }} Target Audio
-          </button>
-          <button 
-            @click="normalizeTargetAudio" 
-            class="btn-secondary" 
-            :disabled="!targetProcessed.processed || isProcessing"
-          >
-            🎚️ Normalize Padding
-          </button>
-        </div>
-        <div ref="targetWaveformContainer" class="waveform-container"></div>
-        <div ref="targetSpectrogramContainer" class="spectrogram-container"></div>
+    <!-- Audio File Selection -->
+    <div class="file-section">
+      <h2>📁 Test Files</h2>
+      <div class="file-controls">
+        <button @click="loadTestFile('/path.mp3')" class="btn-file">
+          Load path.mp3
+        </button>
+        <button @click="loadTestFile('/test_said_three_words.wav')" class="btn-file">
+          Load test_said_three_words.wav
+        </button>
+        <button @click="browseFile" class="btn-file">
+          📁 Browse Files
+        </button>
+        <input 
+          ref="fileInput" 
+          type="file" 
+          accept="audio/*" 
+          style="display: none" 
+          @change="handleFileUpload"
+        />
       </div>
-      
-      <div class="audio-panel">
-        <h2>🎤 User Recording</h2>
-        <div class="audio-info">
-          <p><strong>File:</strong> {{ userFile }}</p>
-          <p><strong>Status:</strong> 
-            <span :class="userStatusClass">{{ userStatus }}</span>
-          </p>
-          <div class="vad-info" v-if="userProcessed.vadBoundaries">
-            <p><strong>Speech:</strong> {{ formatTime(userProcessed.vadBoundaries.startTime) }} - {{ formatTime(userProcessed.vadBoundaries.endTime) }}</p>
-            <p><strong>Duration:</strong> {{ formatDuration(userProcessed.vadBoundaries.endTime - userProcessed.vadBoundaries.startTime) }}</p>
-          </div>
-        </div>
-        <div class="audio-controls">
-          <button @click="loadUserAudio" class="btn-primary" :disabled="isProcessing">
-            {{ userProcessed.processed ? '🔄 Reload' : '📁 Load' }} User Audio
-          </button>
-          <button 
-            @click="toggleRecording" 
-            :class="{ 'recording': isRecording }" 
-            class="btn-record" 
-            :disabled="isProcessing"
-          >
-            {{ isRecording ? '⏹ Stop Recording' : '🎤 Record Audio' }}
-          </button>
-          <button 
-            @click="normalizeUserAudio" 
-            class="btn-secondary" 
-            :disabled="!userProcessed.processed || isProcessing"
-          >
-            🎚️ Normalize Padding
-          </button>
-        </div>
-        <div ref="userWaveformContainer" class="waveform-container"></div>
-        <div ref="userSpectrogramContainer" class="spectrogram-container"></div>
+      <p v-if="currentFile" class="current-file">
+        <strong>Current File:</strong> {{ currentFile }}
+      </p>
+    </div>
+    
+    <!-- Audio Visualization with Raw Comparison -->
+    <AudioVisualizationPanel
+      ref="audioVisualizationRef"
+      :vadSettings="vadSettings"
+      :appSettings="{ autoPlayTargetOnUpload: false }"
+      :showVadSegments="true"
+      :showRawAudio="true"
+      @target-audio-ref="handleTargetAudioRef"
+      @user-audio-ref="handleUserAudioRef"
+      @vad-segments="handleVadSegments"
+    />
+
+    <!-- Central Playback Controls -->
+    <div class="playback-section">
+      <h2>🎵 Audio Playback</h2>
+      <div class="playback-controls">
+        <button 
+          @click="playTarget" 
+          :disabled="!hasTargetAudio"
+          class="btn-play"
+          :aria-label="'Play target audio'"
+        >
+          🎯 Play Target
+        </button>
+        <button 
+          @click="playRawTarget" 
+          :disabled="!hasRawTargetAudio"
+          class="btn-play"
+          :aria-label="'Play raw target audio'"
+        >
+          📊 Play Raw Target
+        </button>
+        <button 
+          @click="playUserRecording" 
+          :disabled="!hasUserRecording"
+          class="btn-play"
+          :aria-label="'Play user recording'"
+        >
+          🎤 Play Recording
+        </button>
+        <button 
+          @click="stopAllPlayback" 
+          class="btn-stop"
+          aria-label="Stop all audio playback"
+        >
+          ⏹ Stop All
+        </button>
+      </div>
+    </div>
+
+    <!-- Test Recording Controls -->
+    <div class="recording-section">
+      <h2>🎤 Test Recording</h2>
+      <div class="recording-controls">
+        <button 
+          @click="toggleRecording" 
+          :class="{ 'recording': isRecording }" 
+          class="btn-record" 
+          :disabled="isProcessing"
+        >
+          {{ isRecording ? '⏹ Stop Recording' : '🎤 Record Test Audio' }}
+        </button>
+        <p class="recording-info">
+          Record audio to test how VAD processing affects your speech
+        </p>
       </div>
     </div>
 
     <!-- Alignment Controls -->
     <div class="alignment-section">
-      <h2>🔄 Audio Alignment</h2>
+      <h2>🔄 Manual Alignment Test</h2>
       <div class="alignment-controls">
         <button 
-          @click="alignBothAudios" 
+          @click="manualAlign" 
           class="btn-align" 
           :disabled="!canAlign || isProcessing"
         >
-          ⚡ Align Both Audios
+          ⚡ Test Manual Alignment
         </button>
         <button 
-          @click="resetToOriginal" 
-          class="btn-reset" 
-          :disabled="isProcessing"
+          @click="reprocessAudio" 
+          class="btn-secondary" 
+          :disabled="!hasTargetAudio || isProcessing"
         >
-          🔄 Reset to Original
-        </button>
-      </div>
-      
-      <div class="alignment-info" v-if="alignmentResult">
-        <h3>📊 Alignment Results</h3>
-        <div class="result-details">
-          <p><strong>Method:</strong> {{ alignmentResult.method }}</p>
-          <p><strong>Final Duration:</strong> {{ formatDuration(alignmentResult.finalDuration) }}</p>
-          <p><strong>Padding Added:</strong> {{ formatDuration(alignmentResult.paddingAdded) }}</p>
-          <p><strong>Processing Time:</strong> {{ processingTime }}ms</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Playback Controls -->
-    <div class="playback-section">
-      <h2>🎵 Playback Controls</h2>
-      <div class="playback-controls">
-        <button @click="playTarget" class="btn-play" :disabled="!hasTargetAudio">
-          ▶️ Play Target
-        </button>
-        <button @click="playUser" class="btn-play" :disabled="!hasUserAudio">
-          ▶️ Play User
-        </button>
-        <button @click="playBoth" class="btn-play" :disabled="!hasTargetAudio || !hasUserAudio">
-          🔄 Play Both
-        </button>
-        <button @click="stopAll" class="btn-stop">
-          ⏹️ Stop All
+          🔄 Reprocess with Current Settings
         </button>
       </div>
     </div>
@@ -175,14 +346,25 @@
     <div class="debug-section" v-if="showDebug">
       <h2>🔧 Debug Information</h2>
       <div class="debug-info">
-        <h3>Target Audio Debug</h3>
-        <pre>{{ JSON.stringify(targetProcessed, null, 2) }}</pre>
+        <h3>Current VAD Settings</h3>
+        <pre>{{ JSON.stringify(vadSettings, null, 2) }}</pre>
         
-        <h3>User Audio Debug</h3>
-        <pre>{{ JSON.stringify(userProcessed, null, 2) }}</pre>
+        <h3>Audio Player References</h3>
+        <p><strong>Target Player Ready:</strong> {{ targetPlayerRef?.isReady || false }}</p>
+        <p><strong>User Player Ready:</strong> {{ userPlayerRef?.isReady || false }}</p>
         
-        <h3>Alignment Debug</h3>
-        <pre>{{ JSON.stringify(alignmentResult, null, 2) }}</pre>
+        <h3>VAD Segments</h3>
+        <div v-if="vadSegments.length > 0" class="vad-segments-display">
+          <p><strong>Detected Segments:</strong> {{ vadSegments.length }}</p>
+          <div v-for="(segment, index) in vadSegments" :key="index" class="vad-segment-item">
+            <strong>Segment {{ index + 1 }}:</strong> 
+            {{ (segment.startTime * 1000).toFixed(0) }}ms - {{ (segment.endTime * 1000).toFixed(0) }}ms 
+            ({{ ((segment.endTime - segment.startTime) * 1000).toFixed(0) }}ms duration)
+          </div>
+        </div>
+        <div v-else class="vad-segments-empty">
+          <p><strong>VAD Segments:</strong> None detected</p>
+        </div>
       </div>
     </div>
     
@@ -195,66 +377,53 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useWaveform } from '@/composables/useWaveform'
+import { ref, computed, onMounted } from 'vue'
+import AudioVisualizationPanel from '@/components/AudioVisualizationPanel.vue'
 import { useSmartAudioAlignment } from '@/composables/useSmartAudioAlignment'
 import { useAudioRecorder } from '@/composables/useAudioRecorder'
-
-// Test files
-const targetFile = ref('/path.mp3')
-const userFile = ref('/test_said_three_words.wav')
-
-// DOM refs
-const targetWaveformContainer = ref(null)
-const userWaveformContainer = ref(null)
-const targetSpectrogramContainer = ref(null)
-const userSpectrogramContainer = ref(null)
-
-// Waveform composables
-let targetWaveformComposable = null
-let userWaveformComposable = null
-
-// Audio context
-let audioContext = null
 
 // Smart alignment composable
 const { 
   isProcessing,
-  defaultPaddingMs,
   vadReady,
-  initVAD,
-  processAudio,
-  normalizeAudioSilence,
-  alignTwoAudios
+  initVAD
 } = useSmartAudioAlignment()
 
 // Recording functionality
 const { isRecording, startRecording, stopRecording } = useAudioRecorder()
 
+// Component refs
+const audioVisualizationRef = ref(null)
+const fileInput = ref(null)
+
+// Audio player refs (from AudioVisualizationPanel)
+const targetPlayerRef = ref(null)
+const userPlayerRef = ref(null)
+
 // Reactive state
-const paddingMs = ref(200)
 const showDebug = ref(false)
-const processingTime = ref(0)
-const vadTestResults = ref([])
+const currentFile = ref(null)
+const vadSegments = ref([])
 
-// Audio processing results
-const targetProcessed = ref({
-  audioBlob: null,
-  vadBoundaries: null,
-  processed: false
+// VAD Settings - comprehensive settings that get passed to AudioVisualizationPanel
+const vadSettings = ref({
+  // Basic VAD settings
+  padding: 0.2,           // 200ms default
+  threshold: 0.25,        // Default threshold (simplified)
+  minSpeechDuration: 50,  // 50ms minimum speech
+  maxSilenceDuration: 500, // 500ms max silence
+  maxTrimStart: 3.0,      // Max trim from start
+  maxTrimEnd: 2.0,        // Max trim from end
+  
+  // Advanced VAD settings (from useVADProcessor)
+  positiveSpeechThreshold: 0.3,  // From VAD model
+  negativeSpeechThreshold: 0.2,  // From VAD model
+  minSpeechFrames: 3,           // Minimum frames for speech detection
+  redemptionFrames: 32,         // Frames to recover from silence
+  frameSamples: 512,           // Frame size for VAD model
+  preSpeechPadFrames: 4,       // Padding before speech
+  positiveSpeechPadFrames: 4   // Padding after speech
 })
-
-const userProcessed = ref({
-  audioBlob: null,
-  vadBoundaries: null,
-  processed: false
-})
-
-const alignmentResult = ref(null)
-
-// Current audio URLs for waveform display
-const currentTargetUrl = ref(null)
-const currentUserUrl = ref(null)
 
 // Computed properties
 const vadStatus = computed(() => {
@@ -267,374 +436,175 @@ const vadStatusClass = computed(() => {
   return vadReady.value ? 'status-ready' : 'status-warning'
 })
 
-const targetStatus = computed(() => {
-  if (!targetProcessed.value.audioBlob) return 'Not loaded'
-  if (!targetProcessed.value.processed) return 'VAD failed ⚠️'
-  return 'Processed ✅'
-})
-
-const targetStatusClass = computed(() => {
-  if (!targetProcessed.value.audioBlob) return 'status-none'
-  if (!targetProcessed.value.processed) return 'status-warning'
-  return 'status-ready'
-})
-
-const userStatus = computed(() => {
-  if (!userProcessed.value.audioBlob) return 'Not loaded'
-  if (!userProcessed.value.processed) return 'VAD failed ⚠️'
-  return 'Processed ✅'
-})
-
-const userStatusClass = computed(() => {
-  if (!userProcessed.value.audioBlob) return 'status-none'
-  if (!userProcessed.value.processed) return 'status-warning'
-  return 'status-ready'
-})
-
 const canAlign = computed(() => {
-  return targetProcessed.value.processed && userProcessed.value.processed
+  return targetPlayerRef.value?.isReady && userPlayerRef.value?.isReady
 })
 
-const hasTargetAudio = computed(() => !!currentTargetUrl.value)
-const hasUserAudio = computed(() => !!currentUserUrl.value)
+const hasTargetAudio = computed(() => {
+  return audioVisualizationRef.value?.getTargetUrl() != null
+})
 
-// Utility functions
-const formatTime = (seconds) => {
-  if (typeof seconds !== 'number') return 'N/A'
-  return seconds.toFixed(3) + 's'
-}
+const hasRawTargetAudio = computed(() => {
+  return audioVisualizationRef.value?.getRawTargetUrl() != null
+})
 
-const formatDuration = (seconds) => {
-  if (typeof seconds !== 'number') return 'N/A'
-  return seconds.toFixed(3) + 's'
-}
+const hasUserRecording = computed(() => {
+  return audioVisualizationRef.value?.getUserUrl() != null
+})
 
-const createBlobUrl = (blob) => {
-  return URL.createObjectURL(blob)
-}
-
-// Settings
-const onPaddingChange = () => {
-  defaultPaddingMs.value = paddingMs.value
-  console.log('🎚️ Padding changed to:', paddingMs.value + 'ms')
-}
-
-// Initialize waveform composables early to avoid lifecycle issues
-const initTargetWaveform = () => {
-  if (targetWaveformComposable) targetWaveformComposable.destroyWaveform()
-  targetWaveformComposable = useWaveform(
-    targetWaveformContainer, 
-    targetSpectrogramContainer,
-    'target-audio',
-    'target'
-  )
-  targetWaveformComposable.initWaveform()
-}
-
-const initUserWaveform = () => {
-  if (userWaveformComposable) userWaveformComposable.destroyWaveform()
-  userWaveformComposable = useWaveform(
-    userWaveformContainer, 
-    userSpectrogramContainer,
-    'user-audio',
-    'user'
-  )
-  userWaveformComposable.initWaveform()
-}
-
-// Audio loading functions
-const loadTargetAudio = async () => {
-  console.log('📁 Loading target audio...')
+// Settings handlers
+const updatePadding = (event) => {
+  const newPadding = parseFloat(event.target.value) / 1000 // Convert ms to seconds
+  vadSettings.value.padding = newPadding
+  console.log('🎚️ Padding changed to:', event.target.value + 'ms')
   
+  // Auto-reprocess with new padding
+  if (audioVisualizationRef.value && hasTargetAudio.value) {
+    console.log('🔄 Auto-reprocessing with new padding...')
+    reprocessAudio()
+  }
+}
+
+const onSettingsChange = () => {
+  console.log('🎛️ VAD settings changed:', vadSettings.value)
+  // Auto-reprocess if we have audio loaded
+  if (audioVisualizationRef.value && hasTargetAudio.value) {
+    console.log('🔄 Auto-reprocessing with new VAD settings...')
+    reprocessAudio()
+  }
+}
+
+// VAD Presets
+const applyPreset = (presetName) => {
+  const presets = {
+    conservative: {
+      padding: 0.2,
+      threshold: 0.5,
+      minSpeechDuration: 50,
+      maxSilenceDuration: 300,
+      maxTrimStart: 2.0,
+      maxTrimEnd: 1.5
+    },
+    default: {
+      padding: 0.2,
+      threshold: 0.3,
+      minSpeechDuration: 50,
+      maxSilenceDuration: 500,
+      maxTrimStart: 3.0,
+      maxTrimEnd: 2.0
+    },
+    sensitive: {
+      padding: 0.15,
+      threshold: 0.2,
+      minSpeechDuration: 30,
+      maxSilenceDuration: 800,
+      maxTrimStart: 3.0,
+      maxTrimEnd: 2.0
+    },
+    'very-sensitive': {
+      padding: 0.1,
+      threshold: 0.1,
+      minSpeechDuration: 20,
+      maxSilenceDuration: 1000,
+      maxTrimStart: 4.0,
+      maxTrimEnd: 3.0
+    }
+  }
+  
+  vadSettings.value = { ...presets[presetName] }
+  console.log(`🎛️ Applied ${presetName} preset:`, vadSettings.value)
+  
+  // Auto-reprocess with new preset
+  if (audioVisualizationRef.value && hasTargetAudio.value) {
+    console.log('🔄 Auto-reprocessing with preset settings...')
+    reprocessAudio()
+  }
+}
+
+// Audio player ref handlers
+const handleTargetAudioRef = (ref) => {
+  targetPlayerRef.value = ref
+  console.log('🎯 Target audio player ref received')
+}
+
+const handleUserAudioRef = (ref) => {
+  userPlayerRef.value = ref
+  console.log('🎤 User audio player ref received')
+}
+
+// VAD segments handler
+const handleVadSegments = (segments) => {
+  vadSegments.value = segments
+  console.log('🎯 VAD segments received for visualization:', segments)
+}
+
+// File handling
+const loadTestFile = async (filePath) => {
   try {
-    // Load raw audio file
-    const response = await fetch(targetFile.value)
+    currentFile.value = filePath
+    const response = await fetch(filePath)
     const arrayBuffer = await response.arrayBuffer()
     
     // Create blob with proper MIME type
-    const mimeType = targetFile.value.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav'
+    const mimeType = filePath.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav'
     const audioBlob = new Blob([arrayBuffer], { type: mimeType })
     
-    // Process with VAD using lenient settings for target audio
-    const result = await processAudio(audioBlob, {
-      threshold: 0.2,           // Very sensitive for target audio
-      minSpeechDuration: 20,    // Very short minimum speech duration
-      maxSilenceDuration: 800,  // Allow very long silence gaps
-      padding: 0.1
-    })
-    targetProcessed.value = result
-    
-    // Initialize waveform if needed
-    if (!targetWaveformComposable) {
-      initTargetWaveform()
+    // Use AudioVisualizationPanel to set target audio
+    if (audioVisualizationRef.value) {
+      await audioVisualizationRef.value.setTargetAudio(audioBlob, {
+        fileName: filePath.split('/').pop(),
+        source: 'test'
+      })
+      console.log('✅ Test file loaded:', filePath)
     }
-    
-    if (currentTargetUrl.value) URL.revokeObjectURL(currentTargetUrl.value)
-    currentTargetUrl.value = createBlobUrl(audioBlob)
-    await targetWaveformComposable.loadAudio(currentTargetUrl.value)
-    
-    console.log('✅ Target audio loaded and processed')
-    
   } catch (error) {
-    console.error('❌ Error loading target audio:', error)
-    alert('Failed to load target audio: ' + error.message)
+    console.error('❌ Error loading test file:', error)
+    alert('Failed to load test file: ' + error.message)
   }
 }
 
-const loadUserAudio = async () => {
-  console.log('📁 Loading user audio...')
+const browseFile = () => {
+  fileInput.value?.click()
+}
+
+const handleFileUpload = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
   
   try {
-    // Load raw audio file
-    const response = await fetch(userFile.value)
-    const arrayBuffer = await response.arrayBuffer()
+    currentFile.value = file.name
+    console.log('📁 Test page file upload started:', file.name)
     
-    // Create blob with proper MIME type  
-    const mimeType = userFile.value.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav'
-    const audioBlob = new Blob([arrayBuffer], { type: mimeType })
-    
-    // Process with VAD using very lenient settings for user audio
-    console.log('🎤 Processing user audio with very lenient VAD settings for microphone audio')
-    const result = await processAudio(audioBlob, {
-      threshold: 0.2,           // Very sensitive for user recordings
-      minSpeechDuration: 20,    // Very short minimum speech duration
-      maxSilenceDuration: 800,  // Allow very long silence gaps
-      padding: 0.1
-    })
-    userProcessed.value = result
-    
-    console.log('🎯 User audio VAD results:', {
-      processed: result.processed,
-      speechStart: result.vadBoundaries?.originalSpeechStart?.toFixed(3) + 's',
-      speechEnd: result.vadBoundaries?.originalSpeechEnd?.toFixed(3) + 's',
-      paddedStart: result.vadBoundaries?.startTime?.toFixed(3) + 's',
-      paddedEnd: result.vadBoundaries?.endTime?.toFixed(3) + 's'
-    })
-    
-    // Initialize waveform if needed
-    if (!userWaveformComposable) {
-      initUserWaveform()
+    // Use AudioVisualizationPanel to set target audio
+    if (audioVisualizationRef.value) {
+      await audioVisualizationRef.value.setTargetAudio(file, {
+        fileName: file.name,
+        source: 'upload'
+      })
+      console.log('✅ Test page file uploaded successfully:', file.name)
+    } else {
+      console.error('❌ AudioVisualizationPanel ref not available')
     }
-    
-    if (currentUserUrl.value) URL.revokeObjectURL(currentUserUrl.value)
-    currentUserUrl.value = createBlobUrl(audioBlob)
-    await userWaveformComposable.loadAudio(currentUserUrl.value)
-    
-    console.log('✅ User audio loaded and processed')
-    
   } catch (error) {
-    console.error('❌ Error loading user audio:', error)
-    alert('Failed to load user audio: ' + error.message)
-  }
-}
-
-// VAD testing function
-const testUserAudioWithSettings = async (settingsType) => {
-  console.log(`🧪 Testing VAD with ${settingsType} settings...`)
-  
-  try {
-    // Load the audio file
-    const response = await fetch(userFile.value)
-    const arrayBuffer = await response.arrayBuffer()
-    const mimeType = userFile.value.endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav'
-    const audioBlob = new Blob([arrayBuffer], { type: mimeType })
-    
-    // Define different VAD settings
-    const vadSettings = {
-      conservative: {
-        threshold: 0.5,
-        minSpeechDuration: 50,
-        maxSilenceDuration: 300,
-        padding: 0.1
-      },
-      lenient: {
-        threshold: 0.3,
-        minSpeechDuration: 30,
-        maxSilenceDuration: 500,
-        padding: 0.1
-      },
-      'very-sensitive': {
-        threshold: 0.2,
-        minSpeechDuration: 20,
-        maxSilenceDuration: 800,
-        padding: 0.15
-      }
-    }
-    
-    const settings = vadSettings[settingsType]
-    console.log(`🎚️ Using ${settingsType} VAD settings:`, settings)
-    
-    // Process with specific settings
-    const result = await processAudio(audioBlob, settings)
-    
-    // Add to results
-    const testResult = {
-      name: `${settingsType.charAt(0).toUpperCase() + settingsType.slice(1)} (threshold: ${settings.threshold})`,
-      processed: result.processed,
-      speechStart: result.vadBoundaries?.originalSpeechStart || 0,
-      speechEnd: result.vadBoundaries?.originalSpeechEnd || 0,
-      settings: settings
-    }
-    
-    // Update results (keep only last 5 results)
-    vadTestResults.value.unshift(testResult)
-    if (vadTestResults.value.length > 5) {
-      vadTestResults.value.pop()
-    }
-    
-    console.log(`✅ ${settingsType} VAD test complete:`, testResult)
-    
-  } catch (error) {
-    console.error(`❌ VAD test ${settingsType} failed:`, error)
-  }
-}
-
-// Audio processing functions
-const normalizeTargetAudio = async () => {
-  if (!targetProcessed.value.processed) return
-  
-  console.log('🎚️ Normalizing target audio...')
-  const startTime = performance.now()
-  
-  try {
-    const normalizedBlob = await normalizeAudioSilence(
-      targetProcessed.value.audioBlob,
-      targetProcessed.value.vadBoundaries,
-      paddingMs.value
-    )
-    
-    // Update waveform visualization
-    if (currentTargetUrl.value) URL.revokeObjectURL(currentTargetUrl.value)
-    currentTargetUrl.value = createBlobUrl(normalizedBlob)
-    
-    if (targetWaveformComposable) {
-      await targetWaveformComposable.loadAudio(currentTargetUrl.value)
-    }
-    
-    processingTime.value = Math.round(performance.now() - startTime)
-    console.log('✅ Target audio normalized')
-    
-  } catch (error) {
-    console.error('❌ Error normalizing target audio:', error)
-    alert('Failed to normalize target audio: ' + error.message)
-  }
-}
-
-const normalizeUserAudio = async () => {
-  if (!userProcessed.value.processed) return
-  
-  console.log('🎚️ Normalizing user audio...')
-  const startTime = performance.now()
-  
-  try {
-    const normalizedBlob = await normalizeAudioSilence(
-      userProcessed.value.audioBlob,
-      userProcessed.value.vadBoundaries,
-      paddingMs.value
-    )
-    
-    // Update waveform visualization
-    if (currentUserUrl.value) URL.revokeObjectURL(currentUserUrl.value)
-    currentUserUrl.value = createBlobUrl(normalizedBlob)
-    
-    if (userWaveformComposable) {
-      await userWaveformComposable.loadAudio(currentUserUrl.value)
-    }
-    
-    processingTime.value = Math.round(performance.now() - startTime)
-    console.log('✅ User audio normalized')
-    
-  } catch (error) {
-    console.error('❌ Error normalizing user audio:', error)
-    alert('Failed to normalize user audio: ' + error.message)
-  }
-}
-
-const alignBothAudios = async () => {
-  if (!canAlign.value) return
-  
-  console.log('⚡ Aligning both audios...')
-  const startTime = performance.now()
-  
-  try {
-    const result = await alignTwoAudios(
-      targetProcessed.value,
-      userProcessed.value,
-      paddingMs.value
-    )
-    
-    // Store old URLs to revoke after loading
-    const oldTargetUrl = currentTargetUrl.value
-    const oldUserUrl = currentUserUrl.value
-    
-    // Create new URLs
-    currentTargetUrl.value = createBlobUrl(result.audio1Aligned)
-    currentUserUrl.value = createBlobUrl(result.audio2Aligned)
-    
-    // Load new audio
-    if (targetWaveformComposable) {
-      await targetWaveformComposable.loadAudio(currentTargetUrl.value)
-    }
-    if (userWaveformComposable) {
-      await userWaveformComposable.loadAudio(currentUserUrl.value)
-    }
-    
-    // Revoke old URLs after loading is complete
-    if (oldTargetUrl) URL.revokeObjectURL(oldTargetUrl)
-    if (oldUserUrl) URL.revokeObjectURL(oldUserUrl)
-    
-    alignmentResult.value = result.alignmentInfo
-    processingTime.value = Math.round(performance.now() - startTime)
-    
-    console.log('✅ Both audios aligned successfully')
-    
-  } catch (error) {
-    console.error('❌ Error aligning audios:', error)
-    alert('Failed to align audios: ' + error.message)
-  }
-}
-
-const resetToOriginal = async () => {
-  console.log('🔄 Resetting to original audios...')
-  
-  alignmentResult.value = null
-  
-  // Reload original audios
-  if (targetProcessed.value.audioBlob) {
-    if (currentTargetUrl.value) URL.revokeObjectURL(currentTargetUrl.value)
-    currentTargetUrl.value = createBlobUrl(targetProcessed.value.audioBlob)
-    if (targetWaveformComposable) {
-      await targetWaveformComposable.loadAudio(currentTargetUrl.value)
-    }
+    console.error('❌ Error processing uploaded file:', error)
+    alert('Failed to process uploaded file: ' + error.message)
   }
   
-  if (userProcessed.value.audioBlob) {
-    if (currentUserUrl.value) URL.revokeObjectURL(currentUserUrl.value)
-    currentUserUrl.value = createBlobUrl(userProcessed.value.audioBlob)
-    if (userWaveformComposable) {
-      await userWaveformComposable.loadAudio(currentUserUrl.value)
-    }
+  // Clear the file input so the same file can be selected again if needed
+  if (fileInput.value) {
+    fileInput.value.value = ''
   }
-  
-  console.log('✅ Reset to original audios')
 }
 
 // Recording functions
 const toggleRecording = async () => {
-  console.log('🎤 Toggle recording, isRecording:', isRecording.value)
-  
   if (isRecording.value) {
     console.log('🎤 Stopping recording...')
     const audioBlob = await stopRecording()
     
-    if (audioBlob) {
-      console.log('🎤 Recording complete, blob size:', audioBlob.size)
-      console.log('🎤 Recording blob type:', audioBlob.type)
-      
-      // Process the recorded audio
-      await processRecordedAudio(audioBlob)
-    } else {
-      console.error('❌ No audio blob received from recording')
+    if (audioBlob && audioVisualizationRef.value) {
+      console.log('🎤 Recording complete, processing...')
+      await audioVisualizationRef.value.processUserAudio(audioBlob)
     }
   } else {
     console.log('🎤 Starting recording...')
@@ -648,193 +618,147 @@ const toggleRecording = async () => {
   }
 }
 
-const processRecordedAudio = async (audioBlob) => {
-  console.log('🔄 Processing recorded audio...')
+// Manual alignment using AudioVisualizationPanel
+const manualAlign = async () => {
+  if (audioVisualizationRef.value) {
+    try {
+      await audioVisualizationRef.value.manualAlign()
+      console.log('✅ Manual alignment complete')
+    } catch (error) {
+      console.error('❌ Manual alignment failed:', error)
+      alert('Manual alignment failed: ' + error.message)
+    }
+  }
+}
+
+// Reprocess with current VAD settings
+const reprocessAudio = async () => {
+  if (!audioVisualizationRef.value) return
   
   try {
-    // First, let's examine the raw audio properties
-    const arrayBuffer = await audioBlob.arrayBuffer()
-    console.log('📊 Raw recorded audio properties:', {
-      blobSize: audioBlob.size,
-      blobType: audioBlob.type,
-      arrayBufferLength: arrayBuffer.byteLength
-    })
-    
-    // Try to decode the audio to get duration and sample rate
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-    try {
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice())
-      console.log('🎵 Decoded audio properties:', {
-        duration: audioBuffer.duration.toFixed(3) + 's',
-        sampleRate: audioBuffer.sampleRate + 'Hz',
-        numberOfChannels: audioBuffer.numberOfChannels,
-        length: audioBuffer.length + ' samples'
+    // Get the original target blob and reprocess with current settings
+    const originalBlob = audioVisualizationRef.value.getOriginalTargetBlob()
+    if (originalBlob) {
+      console.log('🔄 Reprocessing with VAD settings:', vadSettings.value)
+      await audioVisualizationRef.value.setTargetAudio(originalBlob, {
+        fileName: currentFile.value || 'reprocessed',
+        source: 'reprocess'
       })
-      
-      // Check if audio has actual content
-      const channelData = audioBuffer.getChannelData(0)
-      let maxAmplitude = 0
-      let nonZeroSamples = 0
-      for (let i = 0; i < channelData.length; i++) {
-        const amplitude = Math.abs(channelData[i])
-        if (amplitude > 0.001) nonZeroSamples++
-        if (amplitude > maxAmplitude) maxAmplitude = amplitude
-      }
-      
-      console.log('🔊 Audio content analysis:', {
-        maxAmplitude: maxAmplitude.toFixed(6),
-        nonZeroSamples: nonZeroSamples,
-        percentageNonZero: ((nonZeroSamples / channelData.length) * 100).toFixed(2) + '%',
-        isEmpty: maxAmplitude < 0.001
-      })
-      
-    } catch (decodeError) {
-      console.error('❌ Failed to decode recorded audio:', decodeError)
+      console.log('✅ Audio reprocessed with current VAD settings')
+    } else {
+      console.warn('⚠️ No original blob available for reprocessing')
     }
-    
-    // Process with VAD
-    console.log('🎯 Starting VAD processing on recorded audio...')
-    const result = await processAudio(audioBlob)
-    
-    console.log('🎯 VAD processing result:', {
-      processed: result.processed,
-      vadBoundaries: result.vadBoundaries,
-      audioBlob: !!result.audioBlob
-    })
-    
-    if (result.vadBoundaries) {
-      console.log('📏 VAD boundaries detail:', {
-        startTime: result.vadBoundaries.startTime?.toFixed(3) + 's',
-        endTime: result.vadBoundaries.endTime?.toFixed(3) + 's',
-        originalSpeechStart: result.vadBoundaries.originalSpeechStart?.toFixed(3) + 's',
-        originalSpeechEnd: result.vadBoundaries.originalSpeechEnd?.toFixed(3) + 's',
-        silenceStart: result.vadBoundaries.silenceStart?.toFixed(3) + 's',
-        silenceEnd: result.vadBoundaries.silenceEnd?.toFixed(3) + 's',
-        confidenceScore: result.vadBoundaries.confidenceScore
-      })
-    }
-    
-    userProcessed.value = result
-    
-    // Initialize waveform if needed
-    if (!userWaveformComposable) {
-      initUserWaveform()
-    }
-    
-    if (currentUserUrl.value) URL.revokeObjectURL(currentUserUrl.value)
-    currentUserUrl.value = createBlobUrl(audioBlob)
-    await userWaveformComposable.loadAudio(currentUserUrl.value)
-    
-    console.log('✅ Recorded audio loaded and processed')
-    
   } catch (error) {
-    console.error('❌ Error processing recorded audio:', error)
-    alert('Failed to process recorded audio: ' + error.message)
+    console.error('❌ Error reprocessing audio:', error)
+    alert('Failed to reprocess audio: ' + error.message)
   }
 }
 
 // Playback functions
 const playTarget = () => {
-  if (targetWaveformComposable && hasTargetAudio.value) {
-    targetWaveformComposable.play()
+  if (targetPlayerRef.value?.play) {
+    console.log('🎯 Playing target audio')
+    targetPlayerRef.value.play()
   }
 }
 
-const playUser = () => {
-  if (userWaveformComposable && hasUserAudio.value) {
-    userWaveformComposable.play()
+const playRawTarget = () => {
+  // We need to get the raw target player ref from AudioVisualizationPanel
+  const rawTargetPlayer = audioVisualizationRef.value?.getRawTargetPlayerRef()
+  if (rawTargetPlayer?.play) {
+    console.log('📊 Playing raw target audio')
+    rawTargetPlayer.play()
   }
 }
 
-const playBoth = async () => {
-  if (hasTargetAudio.value && hasUserAudio.value) {
-    // Stop any current playback
-    stopAll()
-    
-    // Start both simultaneously
-    setTimeout(() => {
-      if (targetWaveformComposable) targetWaveformComposable.play()
-      if (userWaveformComposable) userWaveformComposable.play()
-    }, 100)
+const playUserRecording = () => {
+  if (userPlayerRef.value?.play) {
+    console.log('🎤 Playing user recording')
+    userPlayerRef.value.play()
   }
 }
 
-const stopAll = () => {
-  if (targetWaveformComposable) targetWaveformComposable.stop()
-  if (userWaveformComposable) userWaveformComposable.stop()
+const stopAllPlayback = () => {
+  console.log('⏹ Stopping all audio playback')
+  
+  if (targetPlayerRef.value?.stop) {
+    targetPlayerRef.value.stop()
+  }
+  
+  if (userPlayerRef.value?.stop) {
+    userPlayerRef.value.stop()
+  }
+  
+  const rawTargetPlayer = audioVisualizationRef.value?.getRawTargetPlayerRef()
+  if (rawTargetPlayer?.stop) {
+    rawTargetPlayer.stop()
+  }
 }
 
 // Lifecycle
 onMounted(async () => {
-  audioContext = new (window.AudioContext || window.webkitAudioContext)()
-  
   // Initialize VAD
-  console.log('🎙️ Initializing Smart Audio Alignment...')
+  console.log('🎙️ Initializing Smart Audio Alignment Test...')
   await initVAD()
   
-  // Auto-load test files
-  await loadTargetAudio()
-  await loadUserAudio()
+  // Auto-load test file
+  await loadTestFile('/path.mp3')
 })
 
-onUnmounted(() => {
-  if (targetWaveformComposable) targetWaveformComposable.destroyWaveform()
-  if (userWaveformComposable) userWaveformComposable.destroyWaveform()
-  if (audioContext) audioContext.close()
-  if (currentTargetUrl.value) URL.revokeObjectURL(currentTargetUrl.value)
-  if (currentUserUrl.value) URL.revokeObjectURL(currentUserUrl.value)
-})
 </script>
 
 <style scoped>
 .alignment-test-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 15px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 h1 {
   text-align: center;
   color: #2c3e50;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+  font-size: 1.8rem;
 }
 
 .description {
   text-align: center;
-  color: #7f8c8d;
-  margin-bottom: 30px;
-  line-height: 1.6;
+  color: #2c3e50; /* Improved contrast - was #7f8c8d */
+  margin-bottom: 20px;
+  line-height: 1.4;
+  font-size: 0.95rem;
 }
 
 .vad-status {
   background: #f8f9fa;
   border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 15px;
 }
 
 .vad-status p {
   margin: 5px 0;
 }
 
-.status-ready { color: #27ae60; font-weight: bold; }
-.status-warning { color: #f39c12; font-weight: bold; }
-.status-loading { color: #3498db; font-weight: bold; }
-.status-none { color: #95a5a6; }
+.status-ready { color: #1e7e34; font-weight: bold; } /* Darker green for better contrast */
+.status-warning { color: #d39e00; font-weight: bold; } /* Darker yellow for better contrast */
+.status-loading { color: #0066cc; font-weight: bold; } /* Darker blue for better contrast */
+.status-none { color: #495057; } /* Much darker gray for better contrast */
 
 .settings-section {
   background: #f8f9fa;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 30px;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 20px;
 }
 
 .settings-section h2 {
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
   color: #2c3e50;
+  font-size: 1.3rem;
 }
 
 .setting-group {
@@ -879,6 +803,7 @@ h1 {
 .audio-info p {
   margin: 8px 0;
   font-size: 14px;
+  color: #212529; /* Ensure good contrast */
 }
 
 .vad-info {
@@ -891,7 +816,7 @@ h1 {
 .vad-info p {
   margin: 4px 0;
   font-size: 12px;
-  color: #6c757d;
+  color: #495057; /* Improved contrast - was #6c757d */
 }
 
 .audio-controls {
@@ -916,14 +841,16 @@ h1 {
 
 .alignment-section {
   background: #e8f5e8;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 30px;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 15px;
 }
 
 .alignment-section h2 {
   margin-top: 0;
+  margin-bottom: 10px;
   color: #2c3e50;
+  font-size: 1.2rem;
 }
 
 .alignment-controls {
@@ -952,31 +879,42 @@ h1 {
 
 .playback-section {
   background: #f0f8ff;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 30px;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 15px;
 }
 
 .playback-section h2 {
   margin-top: 0;
+  margin-bottom: 10px;
   color: #2c3e50;
+  font-size: 1.2rem;
 }
 
 .playback-controls {
   display: flex;
-  gap: 15px;
+  gap: 10px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .debug-section {
   background: #f8f9fa;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 15px;
 }
 
 .debug-section h2, .debug-section h3 {
   color: #2c3e50;
+  margin-top: 0;
+}
+
+.debug-section h3 {
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 4px;
 }
 
 .debug-info pre {
@@ -1011,9 +949,11 @@ h1 {
 }
 
 .btn-primary:disabled {
-  background: #bdc3c7;
+  background: #6c757d; /* Better contrast for disabled state */
+  color: #ffffff;
   cursor: not-allowed;
   transform: none;
+  opacity: 0.65;
 }
 
 .btn-secondary {
@@ -1033,10 +973,11 @@ h1 {
 }
 
 .btn-secondary:disabled {
-  background: #ecf0f1;
-  color: #bdc3c7;
+  background: #6c757d; /* Better contrast */
+  color: #ffffff;
   cursor: not-allowed;
   transform: none;
+  opacity: 0.65;
 }
 
 .btn-align {
@@ -1058,10 +999,12 @@ h1 {
 }
 
 .btn-align:disabled {
-  background: #bdc3c7;
+  background: #6c757d; /* Better contrast */
+  color: #ffffff;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+  opacity: 0.65;
 }
 
 .btn-reset {
@@ -1097,9 +1040,11 @@ h1 {
 }
 
 .btn-play:disabled {
-  background: #bdc3c7;
+  background: #6c757d; /* Better contrast */
+  color: #ffffff;
   cursor: not-allowed;
   transform: none;
+  opacity: 0.65;
 }
 
 .btn-stop {
@@ -1158,9 +1103,11 @@ h1 {
 }
 
 .btn-record:disabled {
-  background: #bdc3c7;
+  background: #6c757d; /* Better contrast */
+  color: #ffffff;
   cursor: not-allowed;
   transform: none;
+  opacity: 0.65;
 }
 
 @keyframes pulse {
@@ -1190,30 +1137,111 @@ h1 {
   }
 }
 
-/* VAD Testing Controls */
-.vad-test-controls {
-  margin-top: 20px;
-  padding-top: 20px;
+/* New Settings Grid Layout */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.compact-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.settings-grid .setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.help-text {
+  color: #6c757d;
+  font-size: 11px;
+  line-height: 1.2;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.settings-grid .setting-group label {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 13px;
+}
+
+.settings-grid .setting-group input {
+  padding: 5px 8px;
+  border: 2px solid #e9ecef;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: border-color 0.2s ease;
+}
+
+.settings-grid .setting-group input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+/* Advanced Settings Collapsible */
+.advanced-settings {
+  margin-top: 15px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.advanced-toggle {
+  background: #f8f9fa;
+  padding: 10px 15px;
+  margin: 0;
+  cursor: pointer;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 1px solid #dee2e6;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.advanced-toggle:hover {
+  background: #e9ecef;
+}
+
+.advanced-settings[open] .advanced-toggle {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.advanced-settings .settings-grid {
+  padding: 15px;
+  margin-bottom: 0;
+}
+
+/* VAD Presets */
+.vad-presets {
+  margin-top: 15px;
+  padding-top: 15px;
   border-top: 1px solid #e9ecef;
 }
 
-.vad-test-controls h3 {
-  margin-bottom: 15px;
+.vad-presets h3 {
+  margin-bottom: 10px;
   color: #2c3e50;
+  font-size: 1.1rem;
 }
 
-.vad-buttons {
+.preset-buttons {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
 }
 
-.btn-test {
-  background: #e74c3c;
+.btn-preset {
+  background: #8e44ad;
   color: white;
   border: none;
-  padding: 8px 12px;
+  padding: 10px 16px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
@@ -1221,43 +1249,119 @@ h1 {
   transition: all 0.2s ease;
 }
 
-.btn-test:hover:not(:disabled) {
-  background: #c0392b;
+.btn-preset:hover {
+  background: #7d3c98;
   transform: translateY(-1px);
 }
 
-.btn-test:disabled {
-  background: #95a5a6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.vad-results {
-  background: #ffffff;
-  border: 1px solid #e9ecef;
+/* File Section */
+.file-section {
+  background: #f8f9fa;
   border-radius: 6px;
-  padding: 15px;
+  padding: 12px;
+  margin-bottom: 15px;
 }
 
-.vad-results h4 {
+.file-section h2 {
   margin-top: 0;
   margin-bottom: 10px;
   color: #2c3e50;
+  font-size: 1.2rem;
 }
 
-.vad-result {
-  padding: 8px 0;
-  border-bottom: 1px solid #f8f9fa;
-  font-family: monospace;
+.file-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+.btn-file {
+  background: #17a2b8;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-file:hover {
+  background: #138496;
+  transform: translateY(-1px);
+}
+
+.current-file {
+  color: #495057;
   font-size: 14px;
+  margin: 0;
 }
 
-.vad-result:last-child {
-  border-bottom: none;
+/* Recording Section */
+.recording-section {
+  background: #fff3cd;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: 1px solid #ffeaa7;
 }
 
-.vad-result .error {
-  color: #e74c3c;
-  font-weight: bold;
+.recording-section h2 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #856404;
+  font-size: 1.2rem;
+}
+
+.recording-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.recording-info {
+  color: #856404;
+  font-size: 14px;
+  margin: 0;
+  font-style: italic;
+}
+
+/* VAD Segments Display */
+.vad-segments-display {
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 10px 0;
+}
+
+.vad-segment-item {
+  background: #e3f2fd;
+  border: 1px solid #2196f3;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  color: #1565c0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.vad-segment-item strong {
+  color: #0d47a1;
+  margin-right: 8px;
+}
+
+.vad-segments-empty {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 10px 0;
+  color: #6c757d;
+  text-align: center;
+  font-style: italic;
 }
 </style>

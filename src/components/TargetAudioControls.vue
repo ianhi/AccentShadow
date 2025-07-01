@@ -110,16 +110,25 @@ defineEmits([
 
 /* Mobile responsive */
 @media (max-width: 768px) {
+  .target-controls {
+    margin-top: 4px;
+  }
+  
   .control-row {
-    gap: 8px;
+    gap: 6px;
   }
   
   .audio-display {
     min-width: auto;
+    padding: 6px 8px;
+    font-size: 12px;
+    min-height: 16px;
   }
   
   .action-btn {
     order: 2;
+    padding: 6px 10px;
+    font-size: 11px;
   }
 }
 </style>

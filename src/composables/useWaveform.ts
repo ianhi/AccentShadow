@@ -13,12 +13,12 @@ interface PlayerInfo {
 }
 
 export function useWaveform(
-  containerRef: Ref<HTMLElement | null>, 
-  spectrogramContainerRef: Ref<HTMLElement | null>, 
-  audioId: string | null = null, 
+  containerRef: Ref<HTMLElement | null>,
+  spectrogramContainerRef: Ref<HTMLElement | null>,
+  audioId: string | null = null,
   audioType: string = 'unknown',
   onReadyToPlay?: () => void,
-  vadSegments: Ref<Array<{startTime: number, endTime: number, type: string}>> = ref([])
+  vadSegments: Ref<Array<{ startTime: number, endTime: number, type: string }>> = ref([])
 ) {
   const wavesurfer = shallowRef<WaveSurfer | null>(null);
   const isReady = ref(false);
@@ -43,7 +43,7 @@ export function useWaveform(
     if (wavesurfer.value) {
       destroyWaveform();
     }
-    
+
     if (containerRef.value && spectrogramContainerRef.value) {
       // Check if containers have proper dimensions
       if (containerRef.value.offsetWidth === 0 || containerRef.value.offsetHeight === 0) {
@@ -69,8 +69,8 @@ export function useWaveform(
       // Get device-specific heights
       const isMobile = isMobileDevice();
       const waveformHeight = isMobile ? 40 : 60;
-      const spectrogramHeight = isMobile ? 120 : 200;
-      
+      const spectrogramHeight = isMobile ? 180 : 200;
+
       const instance = WaveSurfer.create({
         container: containerRef.value,
         waveColor: 'rgba(96, 165, 250, 0.8)', // Original semi-transparent blue
@@ -79,18 +79,18 @@ export function useWaveform(
         cursorWidth: 2, // 2px width for the progress cursor
         height: waveformHeight,
         normalize: true,
-        barWidth: 2,
-        barRadius: 3, // Original setting
+        // barWidth: 2,
+        // barRadius: 3, // Original setting
         interact: true, // Original setting
         fillParent: true, // Original setting
         // Remove backend specification to avoid media element issues
         mediaControls: false
       });
-      
+
       wavesurfer.value = instance;
-      
+
       // Regions plugin disabled for WaveSurfer 7.x compatibility
-      
+
       // Create spectrogram plugin
       try {
         const spectrogramPlugin = Spectrogram.create({
@@ -101,7 +101,7 @@ export function useWaveform(
           fftSamples: 512,
           windowFunc: 'hann'
         });
-        
+
         wavesurfer.value.registerPlugin(spectrogramPlugin);
       } catch (error) {
         console.error(`🎵 Error creating spectrogram:`, error);
@@ -111,12 +111,12 @@ export function useWaveform(
       wavesurfer.value?.on('loading', (progress: number) => {
         // Could emit loading progress here if needed
       });
-      
+
       wavesurfer.value?.on('ready', () => {
         if (!wavesurfer.value) return;
-        
+
         const audioDuration = wavesurfer.value.getDuration();
-        
+
         // DEBUG: Check WaveSurfer's perception of audio timing
         console.log(`🎼 WaveSurfer ready [${audioType.toUpperCase()}]:`, {
           duration: audioDuration.toFixed(3) + 's',
@@ -124,14 +124,14 @@ export function useWaveform(
           audioContextSampleRate: getAudioContext().sampleRate + 'Hz',
           browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Firefox/Other'
         });
-        
+
         // Register with audio manager
         playerInfo = audioManager.registerPlayer(playerId, audioType, wavesurfer.value);
-        
+
         isReady.value = true;
         duration.value = audioDuration;
         wavesurfer.value.setVolume(volume.value);
-        
+
         // Force manual resize and render for WaveSurfer v7+
         if (wavesurfer.value && (wavesurfer.value as any).renderer) {
           try {
@@ -139,7 +139,7 @@ export function useWaveform(
             if (container) {
               const width = container.offsetWidth;
               const height = container.offsetHeight;
-              
+
               // Try gentle redraw methods
               if ((wavesurfer.value as any).redraw) {
                 (wavesurfer.value as any).redraw();
@@ -152,12 +152,12 @@ export function useWaveform(
             // Silent handling of render errors
           }
         }
-        
+
         // If we have a ready-to-play callback, call it now that everything is set up
         if (onReadyToPlay) {
           onReadyToPlay();
         }
-        
+
         // Add initial VAD segments if available
         if (vadSegments.value.length > 0) {
           addVadSegments(vadSegments.value);
@@ -176,8 +176,8 @@ export function useWaveform(
           return;
         }
         // Filter out spectrogram data race conditions  
-        if (error?.message?.includes('Cannot read properties of undefined') && 
-            error?.stack?.includes('spectrogram')) {
+        if (error?.message?.includes('Cannot read properties of undefined') &&
+          error?.stack?.includes('spectrogram')) {
           console.log('🎵 Spectrogram data race condition (expected during load)');
           return;
         }
@@ -212,7 +212,7 @@ export function useWaveform(
     if (!url) {
       return;
     }
-    
+
     // If WaveSurfer doesn't exist, create it first
     if (!wavesurfer.value) {
       initWaveform();
@@ -224,54 +224,54 @@ export function useWaveform(
       });
       return;
     }
-    
+
     loadAudioDirect(url);
   };
-  
+
   // Separate function for direct audio loading (no recreation)
   const loadAudioDirect = (url: string): void => {
     if (!url) {
       return;
     }
-    
+
     // CRITICAL FIX: Always recreate WaveSurfer instance to ensure spectrogram and waveform sync
     // This prevents any caching issues where spectrogram might show old audio data
     console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Destroying and recreating WaveSurfer to ensure audio sync`);
     console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Loading URL: ${url.substring(0, 50)}...`);
-    
+
     // Always destroy and recreate to prevent any plugin caching issues
     destroyWaveform();
-    
+
     // Reset state
     isReady.value = false;
     isPlaying.value = false;
     currentTime.value = 0;
     duration.value = 0;
-    
+
     // CRITICAL FIX: Use reactive pattern to ensure both containers are ready
     if (!containerRef.value || !spectrogramContainerRef.value) {
       console.log('🎵 SYNC FIX: Containers not ready, deferring load...');
       return; // Simply return - the audio will load when containers become available
     }
-    
+
     // Recreate WaveSurfer instance with fresh spectrogram plugin
     try {
       console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Initializing fresh WaveSurfer instance`);
       initWaveform();
-      
+
       // Wait for initialization to complete before loading audio
       nextTick(() => {
         if (wavesurfer.value) {
           console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Loading audio into fresh instance`);
-          
+
           const loadPromise = wavesurfer.value.load(url);
-          
+
           // Handle promise rejection for async errors
           if (loadPromise && typeof loadPromise.catch === 'function') {
             loadPromise.catch((asyncError: any) => {
               // Filter out expected spectrogram errors during loading
               if (asyncError?.message?.includes('Cannot read properties of undefined') ||
-                  asyncError?.message?.includes('length')) {
+                asyncError?.message?.includes('length')) {
                 console.log('🎵 Spectrogram data error during load (handled)');
                 return;
               }
@@ -296,14 +296,14 @@ export function useWaveform(
       }
     }
   };
-  
+
   const play = () => {
     if (wavesurfer.value && playerInfo) {
       return audioManager.play(playerInfo);
     }
     return false;
   };
-  
+
   const stop = () => {
     if (wavesurfer.value && wavesurfer.value.isPlaying()) {
       wavesurfer.value.pause();
@@ -351,17 +351,17 @@ export function useWaveform(
   };
 
   // VAD segments visualization functions
-  const addVadSegments = (segments: Array<{startTime: number, endTime: number, type: string}>) => {
+  const addVadSegments = (segments: Array<{ startTime: number, endTime: number, type: string }>) => {
     console.log(`🎯 [${audioType.toUpperCase()}]: VAD segments visualization disabled (regions plugin API incompatible)`);
     // Regions plugin API incompatible with WaveSurfer 7.x - disabling for now
     return;
   };
-  
+
   const clearVadSegments = () => {
     // Regions plugin API disabled for WaveSurfer 7.x compatibility
     return;
   };
-  
+
   // Watch for VAD segments changes
   watch(vadSegments, (newSegments) => {
     if (newSegments && newSegments.length > 0 && isReady.value) {

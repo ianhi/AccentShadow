@@ -43,19 +43,6 @@
 
       <!-- Desktop-only components -->
       <template v-if="!shouldUseMobileLayout">
-        <!-- Audio Processing Controls -->
-        <AudioProcessingControls
-          :autoPlayBoth="audioVisualizationPanel?.autoPlayBoth || false"
-          :autoAlignEnabled="audioVisualizationPanel?.autoAlignEnabled || false"
-          :vadReady="audioVisualizationPanel?.vadReady || false"
-          :isProcessing="audioVisualizationPanel?.isProcessing || false"
-          :sequentialDelay="audioVisualizationPanel?.sequentialDelay || 0"
-          @toggle-auto-play="toggleAutoPlay"
-          @toggle-auto-align="toggleAutoAlign"
-          @manual-align="manualAlign"
-          @update-sequential-delay="updateSequentialDelay"
-        />
-
         <!-- Recording Actions -->
         <RecordingActions
           :currentRecording="currentRecording"
@@ -172,6 +159,7 @@
       @save="handleAppSettingsSave"
       @save-effects="handleAppEffectsSave"
       @open-vad-settings="openVadSettingsFromApp"
+      @manual-trim="manualAlign"
     />
   </div>
 </template>
@@ -184,7 +172,6 @@ import RecordingSetsManager from '../components/RecordingSetsManager.vue';
 import AudioVisualizationPanel from '../components/AudioVisualizationPanel.vue';
 import MainHeader from '../components/MainHeader.vue';
 import CentralPlaybackControls from '../components/CentralPlaybackControls.vue';
-import AudioProcessingControls from '../components/AudioProcessingControls.vue';
 import RecordingActions from '../components/RecordingActions.vue';
 import SavedRecordingsSection from '../components/SavedRecordingsSection.vue';
 import RecordingManager from '../components/RecordingManager.vue';
@@ -405,11 +392,8 @@ const handleSpeedChange = (newSpeed) => {
   updatePlaybackSpeedDirect(newSpeed)
 }
 
-// Audio Processing Handler event handlers
-const toggleAutoPlay = (event) => audioProcessingHandler.value?.toggleAutoPlay(event)
-const toggleAutoAlign = (event) => audioProcessingHandler.value?.toggleAutoAlign(event)
+// Manual align function - keep this as it's still needed for the "Trim Now" button
 const manualAlign = () => audioProcessingHandler.value?.manualAlign()
-const updateSequentialDelay = (event) => audioProcessingHandler.value?.updateSequentialDelay(event)
 
 // Recording Manager event handlers that are still needed for components
 const handleRecordingSaved = () => console.log('Recording saved successfully')

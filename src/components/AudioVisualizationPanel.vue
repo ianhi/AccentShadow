@@ -91,6 +91,7 @@ import { useTimeSync } from '../composables/useTimeSync.ts'
 import { audioManager } from '../composables/useAudioManager.ts'
 import { useViewport } from '../composables/useViewport'
 import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts'
+import { useAppStateInject } from '../composables/useAppState'
 
 const props = defineProps({
   currentRecording: {
@@ -146,6 +147,9 @@ const { shouldUseMobileLayout } = useViewport()
 // Microphone device management
 const { availableDevices, selectedDeviceId, setSelectedDevice } = useMicrophoneDevices()
 
+// App state access for shared settings
+const { appSettings } = useAppStateInject()
+
 const handleDeviceChange = (newDeviceId) => {
   console.log('🎙️ Microphone device changed to:', newDeviceId);
   setSelectedDevice(newDeviceId);
@@ -177,10 +181,11 @@ const targetAudioProcessed = ref(null)
 // VAD segments for visualization
 const currentVadSegments = ref([])
 
-// Control state
-const autoPlayBoth = ref(true)
-const autoAlignEnabled = ref(true)
-const sequentialDelay = ref(0)
+// Control state - now using shared app settings
+// These computed properties reference the global app settings
+const autoPlayBoth = computed(() => appSettings.value.autoPlayBothAfterRecording)
+const autoAlignEnabled = computed(() => appSettings.value.autoAlignEnabled)
+const sequentialDelay = computed(() => appSettings.value.sequentialDelay)
 const isAligning = ref(false) // Track alignment operations to suppress auto-play
 const hasTargetAutoPlayed = ref(false) // Track if target has auto-played for current upload
 

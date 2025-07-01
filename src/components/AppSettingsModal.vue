@@ -26,6 +26,51 @@
               </span>
             </label>
           </div>
+
+          <div class="setting-group">
+            <label class="toggle-label">
+              <input 
+                type="checkbox" 
+                v-model="localSettings.autoPlayBothAfterRecording"
+                class="toggle-input"
+              />
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">
+                <strong>Auto-play both after recording</strong>
+                <span class="setting-description">Automatically plays overlapping audio after completing a recording</span>
+              </span>
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <label class="toggle-label">
+              <input 
+                type="checkbox" 
+                v-model="localSettings.autoAlignEnabled"
+                class="toggle-input"
+              />
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">
+                <strong>Auto-trim silence</strong>
+                <span class="setting-description">Automatically removes silence from recordings using Voice Activity Detection</span>
+              </span>
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <label class="slider-label">
+              Sequential delay: {{ localSettings.sequentialDelay }}ms
+              <input 
+                type="range" 
+                v-model="localSettings.sequentialDelay"
+                min="0" 
+                max="2000" 
+                step="100"
+                class="slider"
+              />
+              <span class="setting-description">Delay between target and user audio when playing sequentially</span>
+            </label>
+          </div>
         </div>
 
         <!-- Audio Effects Section -->
@@ -310,6 +355,13 @@
             </button>
             <p class="setting-description">Adjust threshold, padding, and other VAD parameters for better audio trimming</p>
           </div>
+
+          <div class="setting-group">
+            <button @click="triggerManualTrim" class="manual-trim-btn" :disabled="!hasAudioToTrim">
+              ✂️ Trim Silence Now
+            </button>
+            <p class="setting-description">Manually trigger silence trimming for current audio recordings</p>
+          </div>
         </div>
       </div>
       
@@ -324,6 +376,7 @@
 <script setup>
 import { ref, watch, computed, onMounted } from 'vue'
 import { useAudioEffects } from '../composables/useAudioEffects'
+import { useAppStateInject } from '../composables/useAppState'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -333,7 +386,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'save', 'open-vad-settings', 'save-effects'])
+const emit = defineEmits(['close', 'save', 'open-vad-settings', 'save-effects', 'manual-trim'])
 
 // Initialize audio effects composable
 const { 
@@ -342,6 +395,9 @@ const {
   resetToDefaults: resetEffectsDefaults,
   detectCapabilities 
 } = useAudioEffects()
+
+// App state for checking audio availability
+const { hasTargetAudio, hasUserAudio } = useAppStateInject()
 
 // Local settings for the modal
 const localSettings = ref({ ...props.settings })
@@ -353,6 +409,11 @@ const capabilities = ref(null)
 // Browser detection
 const isSafari = computed(() => {
   return /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
+})
+
+// Check if we have audio to trim
+const hasAudioToTrim = computed(() => {
+  return hasTargetAudio.value && hasUserAudio.value
 })
 
 // Watch for changes to props.settings to update local state
@@ -400,6 +461,10 @@ const onGainSliderChange = () => {
     localEffectsConfig.value.postProcessing.gain.enabled = true
     console.log('🎚️ Auto-enabled gain effect when user moved slider')
   }
+}
+
+const triggerManualTrim = () => {
+  emit('manual-trim')
 }
 </script>
 
@@ -849,5 +914,32 @@ const onGainSliderChange = () => {
   font-style: italic;
   margin-top: 4px;
   margin-bottom: 0;
+}
+
+.manual-trim-btn {
+  padding: 12px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+  backdrop-filter: blur(10px);
+  margin-bottom: 8px;
+  width: 100%;
+  font-size: 14px;
+}
+
+.manual-trim-btn:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(74, 222, 128, 0.4);
+  transform: translateY(-1px);
+}
+
+.manual-trim-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 </style>

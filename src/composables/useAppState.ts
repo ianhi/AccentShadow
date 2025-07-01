@@ -3,6 +3,9 @@ import { ref, provide, inject, computed, type Ref, type ComputedRef, type Inject
 // Types
 export interface AppSettings {
   autoPlayTargetOnUpload: boolean;
+  autoPlayBothAfterRecording: boolean;
+  autoAlignEnabled: boolean;
+  sequentialDelay: number;
 }
 
 export interface VADSettings {
@@ -69,7 +72,10 @@ export function useAppState(): AppState {
   
   // General app settings
   const appSettings = ref<AppSettings>({
-    autoPlayTargetOnUpload: true  // Play target audio immediately after upload
+    autoPlayTargetOnUpload: true,  // Play target audio immediately after upload
+    autoPlayBothAfterRecording: true,  // Play both audios after recording
+    autoAlignEnabled: true,  // Automatic silence trimming with VAD
+    sequentialDelay: 0  // Delay between sequential audio playback (ms)
   })
   
   const vadSettings = ref<VADSettings>({

@@ -15,6 +15,7 @@
       :debugInfo="debugInfo"
       :autoPlayOnReady="autoPlayOnReady"
       :suppressAutoPlay="suppressAutoPlay"
+      :vadSegments="vadSegments"
       :key="audioKey"
       @auto-played="$emit('auto-played')"
     />
@@ -46,7 +47,7 @@ const props = defineProps({
   audioType: {
     type: String,
     required: true,
-    validator: (value) => ['target', 'user'].includes(value)
+    validator: (value) => ['target', 'user', 'raw-target'].includes(value)
   },
   audioKey: {
     type: String,
@@ -79,6 +80,10 @@ const props = defineProps({
   showTitleOnMobile: {
     type: Boolean,
     default: true
+  },
+  vadSegments: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -160,8 +165,9 @@ const setAudioPlayerRef = (ref) => {
 /* Mobile responsive */
 @media (max-width: 768px) {
   .audio-column {
-    padding: 16px;
-    min-height: 250px;
+    padding: 8px;
+    min-height: 280px;
+    gap: 8px;
   }
   
   .column-header h3 {
@@ -171,7 +177,7 @@ const setAudioPlayerRef = (ref) => {
   .placeholder {
     min-height: 150px;
     font-size: 14px;
-    padding: 16px;
+    padding: 12px;
   }
 }
 </style>
