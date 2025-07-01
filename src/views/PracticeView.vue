@@ -2,9 +2,6 @@
   <div class="practice-view" :class="{ 'mobile-layout': shouldUseMobileLayout }">
     <div class="main-content">
       <MainHeader @open-settings="openAppSettingsModal" />
-
-      <!-- Session Stats - Hidden on mobile unless toggled -->
-      <SessionStats v-if="!shouldUseMobileLayout || showStatsOnMobile" />
       
       <!-- Recording Navigation - Hidden on mobile -->
       <RecordingNavigation v-if="!shouldUseMobileLayout" />
@@ -40,6 +37,9 @@
           @speed-change="handleSpeedChange"
         />
       </div>
+
+      <!-- Session Stats - Hidden on mobile unless toggled -->
+      <SessionStats v-if="!shouldUseMobileLayout || showStatsOnMobile" />
 
       <!-- Desktop-only components -->
       <template v-if="!shouldUseMobileLayout">
@@ -377,6 +377,13 @@ const openVadSettingsFromApp = () => {
 watch(currentRecording, async (newRecording, oldRecording) => {
   if (newRecording && newRecording !== oldRecording && newRecording.audioBlob && audioVisualizationPanel.value) {
     try {
+      // Add delay for demo recordings to give user time to orient
+      const isDemo = newRecording.metadata?.isDemo === true
+      if (isDemo) {
+        console.log('🎯 Demo recording detected, adding 500ms delay before loading')
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+      
       await audioVisualizationPanel.value.setTargetAudio(newRecording.audioBlob, {
         name: newRecording.name,
         fileName: newRecording.metadata?.fileName,
