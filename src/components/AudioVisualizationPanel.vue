@@ -2,7 +2,7 @@
   <div class="audio-visualization-panel" :class="{ 'mobile-layout': shouldUseMobileLayout }">
     <!-- Target Audio Controls Section - Show on mobile too -->
     <div class="target-controls-section" :class="{ 'mobile-controls': shouldUseMobileLayout }">
-      <h3>📁 Load Target Audio</h3>
+      <h2>📁 Load Target Audio</h2>
       <TargetAudioControls 
         :currentAudioSource="currentAudioSource"
         @browse-file="$emit('browse-file')"

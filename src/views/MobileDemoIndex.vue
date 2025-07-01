@@ -1,9 +1,9 @@
 <template>
   <div class="mobile-demo-index">
-    <header class="demo-header">
+    <div class="demo-header">
       <h1>📱 AccentShadow Mobile UI Concepts</h1>
       <p>Explore different approaches to mobile pronunciation practice</p>
-    </header>
+    </div>
 
     <div class="concept-grid">
       <!-- Concept A: Vertical Stack -->
@@ -32,7 +32,7 @@
           </div>
           <div class="concept-pros-cons">
             <div class="pros">
-              <h4>✅ Pros</h4>
+              <h3>✅ Pros</h3>
               <ul>
                 <li>Complete overview at all times</li>
                 <li>Follows desktop layout closely</li>
@@ -40,7 +40,7 @@
               </ul>
             </div>
             <div class="cons">
-              <h4>⚠️ Cons</h4>
+              <h3>⚠️ Cons</h3>
               <ul>
                 <li>Requires significant scrolling</li>
                 <li>Can feel overwhelming on small screens</li>
@@ -82,7 +82,7 @@
           </div>
           <div class="concept-pros-cons">
             <div class="pros">
-              <h4>✅ Pros</h4>
+              <h3>✅ Pros</h3>
               <ul>
                 <li>Beautiful, modern interface</li>
                 <li>Sectioned content is digestible</li>
@@ -90,7 +90,7 @@
               </ul>
             </div>
             <div class="cons">
-              <h4>⚠️ Cons</h4>
+              <h3>⚠️ Cons</h3>
               <ul>
                 <li>Still requires some scrolling</li>
                 <li>More complex interaction patterns</li>
@@ -135,7 +135,7 @@
           </div>
           <div class="concept-pros-cons">
             <div class="pros">
-              <h4>✅ Pros</h4>
+              <h3>✅ Pros</h3>
               <ul>
                 <li>No scrolling within screens</li>
                 <li>Clear progression through steps</li>
@@ -143,7 +143,7 @@
               </ul>
             </div>
             <div class="cons">
-              <h4>⚠️ Cons</h4>
+              <h3>⚠️ Cons</h3>
               <ul>
                 <li>Context switching between tabs</li>
                 <li>Can't see multiple sections at once</li>
@@ -189,7 +189,7 @@
           </div>
           <div class="concept-pros-cons">
             <div class="pros">
-              <h4>✅ Pros</h4>
+              <h3>✅ Pros</h3>
               <ul>
                 <li>Adapts interface to current task</li>
                 <li>Combines benefits of all concepts</li>
@@ -198,7 +198,7 @@
               </ul>
             </div>
             <div class="cons">
-              <h4>⚠️ Cons</h4>
+              <h3>⚠️ Cons</h3>
               <ul>
                 <li>More complex to implement</li>
                 <li>Requires user behavior learning</li>
@@ -334,10 +334,10 @@
       </div>
     </section>
 
-    <footer class="demo-footer">
+    <div class="demo-footer">
       <p>🎨 Created as part of EchoLingo mobile design exploration</p>
       <p>📋 See <code>MOBILE_DESIGN_DOCUMENT.md</code> for complete design specifications</p>
-    </footer>
+    </div>
   </div>
 </template>
 
@@ -702,17 +702,17 @@ onMounted(() => {
   border: 1px solid #fed7aa;
 }
 
-.pros h4, .cons h4 {
+.pros h3, .cons h3 {
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 8px 0;
 }
 
-.pros h4 {
+.pros h3 {
   color: #166534;
 }
 
-.cons h4 {
+.cons h3 {
   color: #92400e;
 }
 

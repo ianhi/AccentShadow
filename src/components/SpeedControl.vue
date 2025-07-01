@@ -1,9 +1,24 @@
 <template>
   <div class="speed-control-section" :class="{ 'compact': compact }">
     <div class="speed-control">
-      <span class="speed-label" :class="{ 'disabled': !enabled }" v-if="!compact">⚡ Playback Speed:</span>
-      <span class="speed-label compact-label" :class="{ 'disabled': !enabled }" v-if="compact">⚡</span>
+      <label 
+        :for="sliderId" 
+        class="speed-label" 
+        :class="{ 'disabled': !enabled }" 
+        v-if="!compact"
+      >
+        ⚡ Playback Speed:
+      </label>
+      <label 
+        :for="sliderId" 
+        class="speed-label compact-label" 
+        :class="{ 'disabled': !enabled }" 
+        v-if="compact"
+      >
+        ⚡
+      </label>
       <input 
+        :id="sliderId"
         type="range" 
         min="0.25" 
         max="2" 
@@ -12,13 +27,24 @@
         :disabled="!enabled"
         @input="handleSpeedChange"
         class="speed-slider"
+        :aria-label="compact ? 'Playback speed control' : undefined"
+        :aria-describedby="speedDisplayId"
       />
-      <span class="speed-display" :class="{ 'disabled': !enabled }">{{ speed }}x</span>
+      <span 
+        :id="speedDisplayId" 
+        class="speed-display" 
+        :class="{ 'disabled': !enabled }"
+        aria-live="polite"
+      >
+        {{ speed }}x
+      </span>
     </div>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 const props = defineProps({
   speed: {
     type: Number,
@@ -35,6 +61,10 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['speed-change'])
+
+// Generate unique IDs for accessibility
+const sliderId = computed(() => `speed-slider-${Math.random().toString(36).substr(2, 9)}`)
+const speedDisplayId = computed(() => `speed-display-${Math.random().toString(36).substr(2, 9)}`)
 
 const handleSpeedChange = (event) => {
   // Only emit if the control is enabled
