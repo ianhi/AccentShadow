@@ -89,7 +89,7 @@ export function useVADProcessor() {
         positiveSpeechThreshold: 0.3,   // Aggressive default from tuner
         negativeSpeechThreshold: 0.2,   // Aggressive default from tuner
         redemptionFrames: 32,            // Standard gap allowance
-        frameSamples: 1536,              // Default frame size for v4 model
+        frameSamples: 512,              // Default frame size for v4 model
         minSpeechFrames: 3,              // Aggressive default from tuner
         preSpeechPadFrames: 4,           // Balanced context
         positiveSpeechPadFrames: 4       // Balanced context
@@ -553,7 +553,7 @@ export function useVADProcessor() {
       // Apply padding to raw boundaries before converting to samples
       const paddedStartTime = Math.max(0, boundaries.startTime - padding);
       const paddedEndTime = Math.min(audioBuffer.duration, boundaries.endTime + padding);
-      
+
       // Convert padded times to samples
       const adjustedStartSample = Math.floor(paddedStartTime * sampleRate);
       const adjustedEndSample = Math.floor(paddedEndTime * sampleRate);

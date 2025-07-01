@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, readonly } from 'vue'
 import { useVADProcessor } from './useVADProcessor'
 
 interface PreloadStatus {
@@ -232,7 +232,3 @@ export function usePreloader() {
   }
 }
 
-// Create readonly refs to prevent external mutation
-function readonly<T>(ref: any): T {
-  return ref
-}

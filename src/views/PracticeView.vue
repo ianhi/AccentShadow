@@ -168,6 +168,7 @@
       :settings="appSettings"
       @close="closeAppSettingsModal"
       @save="handleAppSettingsSave"
+      @save-effects="handleAppEffectsSave"
       @open-vad-settings="openVadSettingsFromApp"
     />
   </div>
@@ -197,6 +198,7 @@ import { useAppUtilities } from '../composables/useAppUtilities';
 import { usePlaybackControls } from '../composables/usePlaybackControls';
 import { useViewport } from '../composables/useViewport';
 import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts';
+import { useAudioEffects } from '../composables/useAudioEffects';
 
 // IMPORTANT: Initialize global app state FIRST to provide it to all child components
 const {
@@ -223,6 +225,7 @@ const {
 // Core composables
 const { initDB } = useIndexedDB()
 const { currentRecording, updateUserRecording } = useRecordingSets()
+const { updateConfig: updateEffectsConfig } = useAudioEffects()
 
 // Mobile layout detection
 const { shouldUseMobileLayout } = useViewport()
@@ -322,6 +325,12 @@ const showVADSettings = () => openVadModal()
 const handleVADSettingsSave = (newSettings) => {
   handleVadSettingsSaveUtil(newSettings)
 }
+
+const handleAppEffectsSave = (newEffectsConfig) => {
+  console.log('🎚️ Saving audio effects configuration:', newEffectsConfig)
+  updateEffectsConfig(newEffectsConfig)
+}
+
 
 // Recording Manager event handlers - simplified using utilities
 const handleSaveRecording = async () => {

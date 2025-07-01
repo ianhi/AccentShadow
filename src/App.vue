@@ -14,7 +14,7 @@ const showNavigation = computed(() => {
 // Comprehensive background initialization - start immediately on app load
 onMounted(async () => {
   console.log('🚀 Starting comprehensive background preloading...')
-  
+
   // Start preloading without blocking UI rendering
   preloadAll().then(() => {
     console.log('🎉 Background preloading completed:', {
@@ -36,24 +36,18 @@ onMounted(async () => {
       <router-link to="/" class="nav-btn" :class="{ active: route.path === '/' }">
         Main App
       </router-link>
-      <router-link to="/test-vad" class="nav-btn" :class="{ active: route.path === '/test-vad' }">
-        VAD Debug
-      </router-link>
       <router-link to="/alignment-test" class="nav-btn" :class="{ active: route.path === '/alignment-test' }">
         Alignment Test
       </router-link>
-      <router-link to="/mobile-demo" class="nav-btn mobile-demo-btn" :class="{ active: route.path.startsWith('/mobile') }">
-        📱 Mobile Demo
-      </router-link>
     </div>
-    
+
     <!-- Back button for mobile views -->
     <div v-if="!showNavigation && route.path !== '/mobile-demo'" class="mobile-back">
       <router-link to="/mobile-demo" class="back-btn">
         ← Back to Mobile Demo
       </router-link>
     </div>
-    
+
     <!-- Router view for all pages -->
     <router-view />
   </div>
@@ -134,7 +128,7 @@ onMounted(async () => {
   .view-switcher {
     display: none;
   }
-  
+
   .mobile-back {
     position: static;
     padding: 10px;

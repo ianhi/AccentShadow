@@ -1,4 +1,5 @@
 import { ref, onMounted } from 'vue';
+import { useAudioEffects } from './useAudioEffects';
 
 interface MicrophoneDevice {
   deviceId: string;
@@ -56,17 +57,37 @@ export function useMicrophoneDevices() {
     }
   };
 
-  // Get media stream with selected device
+  // Get media stream with selected device and audio effects recording constraints
   const getMediaStream = async (deviceId: string | null = null): Promise<MediaStream> => {
     try {
-      const constraints = {
-        audio: deviceId ? { deviceId: { exact: deviceId } } : true
+      // Get recording constraints from audio effects configuration
+      const { getRecordingConstraints } = useAudioEffects();
+      const effectsConstraints = getRecordingConstraints();
+      
+      // Build audio constraints combining device selection with effects settings
+      const audioConstraints: MediaTrackConstraints = {
+        ...(deviceId && { deviceId: { exact: deviceId } }),
+        ...effectsConstraints
       };
       
+      const constraints = { audio: audioConstraints };
+      
+      console.log('🎤 Using enhanced recording constraints:', constraints);
       return await navigator.mediaDevices.getUserMedia(constraints);
     } catch (err) {
       console.error('Error getting media stream:', err);
-      throw new Error('Could not access the selected microphone');
+      
+      // Fallback to basic constraints if enhanced constraints fail
+      try {
+        console.log('🎤 Falling back to basic recording constraints...');
+        const basicConstraints = {
+          audio: deviceId ? { deviceId: { exact: deviceId } } : true
+        };
+        return await navigator.mediaDevices.getUserMedia(basicConstraints);
+      } catch (fallbackErr) {
+        console.error('Fallback recording constraints also failed:', fallbackErr);
+        throw new Error('Could not access the selected microphone');
+      }
     }
   };
 
