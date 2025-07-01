@@ -273,7 +273,14 @@ export function useVADProcessor() {
       try {
         // Following the documentation: myvad.run(audioFileData, nativeSampleRate)
         // Returns: {audio, start, end} where start/end are in MILLISECONDS
-        console.log("NATIVE RATE", nativeSampleRate)
+        console.log("🔍 CRITICAL DEBUG - SAMPLE RATE INFO:", {
+          nativeSampleRate,
+          audioBufferSampleRate: audioBuffer.sampleRate,
+          audioContextSampleRate: getAudioContext().sampleRate,
+          browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Firefox',
+          audioDataLength: audioData.length,
+          expectedDuration: audioData.length / nativeSampleRate
+        });
         const vadIterator = runtimeVADInstance.run(audioData, nativeSampleRate);
 
         for await (const { audio, start, end } of vadIterator) {
@@ -333,7 +340,10 @@ export function useVADProcessor() {
           speechEnd: overallEnd.toFixed(3) + 's',
           speechDuration: (overallEnd - overallStart).toFixed(3) + 's',
           browserType: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Firefox/Other',
-          audioContextSampleRate: audioBuffer.sampleRate + 'Hz'
+          audioContextSampleRate: audioBuffer.sampleRate + 'Hz',
+          rawStartMs: (rawStart * 1000).toFixed(1) + 'ms',
+          rawEndMs: (rawEnd * 1000).toFixed(1) + 'ms',
+          totalAudioDuration: audioBuffer.duration.toFixed(3) + 's'
         });
 
         console.log(`🔍 VAD SEGMENTS ANALYSIS:`, {

@@ -2,7 +2,6 @@
 import { ref, shallowRef, onUnmounted, nextTick, watch, type Ref } from 'vue';
 import WaveSurfer from 'wavesurfer.js';
 import Spectrogram from 'wavesurfer.js/dist/plugins/spectrogram.esm.js';
-import Regions from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import { audioManager } from './useAudioManager';
 import { usePreloader } from './usePreloader';
 
@@ -90,15 +89,7 @@ export function useWaveform(
       
       wavesurfer.value = instance;
       
-      // Create regions plugin for VAD segment visualization
-      let regionsPlugin = null;
-      try {
-        regionsPlugin = Regions.create();
-        wavesurfer.value.registerPlugin(regionsPlugin);
-        console.log(`🎯 [${audioType.toUpperCase()}]: Regions plugin registered for VAD visualization`);
-      } catch (error) {
-        console.error(`🎵 Error creating regions plugin:`, error);
-      }
+      // Regions plugin disabled for WaveSurfer 7.x compatibility
       
       // Create spectrogram plugin
       try {
@@ -361,51 +352,14 @@ export function useWaveform(
 
   // VAD segments visualization functions
   const addVadSegments = (segments: Array<{startTime: number, endTime: number, type: string}>) => {
-    if (!wavesurfer.value || !isReady.value) {
-      console.log(`🎯 [${audioType.toUpperCase()}]: Cannot add VAD segments - waveform not ready`);
-      return;
-    }
-    
-    try {
-      // Clear existing regions first
-      const regionsPlugin = (wavesurfer.value as any).getPlugin('regions');
-      if (regionsPlugin) {
-        regionsPlugin.clearRegions();
-        
-        segments.forEach((segment, index) => {
-          const region = regionsPlugin.addRegion({
-            start: segment.startTime,
-            end: segment.endTime,
-            color: 'rgba(255, 0, 0, 0.1)', // Semi-transparent red for speech segments
-            drag: false,
-            resize: false,
-            id: `vad-segment-${index}`
-          });
-          
-          console.log(`🎯 [${audioType.toUpperCase()}]: Added VAD segment ${index + 1}: ${segment.startTime.toFixed(3)}s - ${segment.endTime.toFixed(3)}s`);
-        });
-        
-        console.log(`🎯 [${audioType.toUpperCase()}]: Added ${segments.length} VAD segments to waveform`);
-      } else {
-        console.warn(`🎯 [${audioType.toUpperCase()}]: Regions plugin not available for VAD segments`);
-      }
-    } catch (error) {
-      console.error(`🎯 [${audioType.toUpperCase()}]: Error adding VAD segments:`, error);
-    }
+    console.log(`🎯 [${audioType.toUpperCase()}]: VAD segments visualization disabled (regions plugin API incompatible)`);
+    // Regions plugin API incompatible with WaveSurfer 7.x - disabling for now
+    return;
   };
   
   const clearVadSegments = () => {
-    if (!wavesurfer.value) return;
-    
-    try {
-      const regionsPlugin = (wavesurfer.value as any).getPlugin('regions');
-      if (regionsPlugin) {
-        regionsPlugin.clearRegions();
-        console.log(`🎯 [${audioType.toUpperCase()}]: Cleared VAD segments`);
-      }
-    } catch (error) {
-      console.error(`🎯 [${audioType.toUpperCase()}]: Error clearing VAD segments:`, error);
-    }
+    // Regions plugin API disabled for WaveSurfer 7.x compatibility
+    return;
   };
   
   // Watch for VAD segments changes
