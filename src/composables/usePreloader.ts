@@ -25,14 +25,17 @@ let globalAudioContext: AudioContext | null = null
  */
 export function usePreloader() {
   
-  // Pre-initialize AudioContext to avoid suspension delays
+  // Pre-initialize AudioContext only after user gesture to avoid browser warnings
   const initAudioContext = async (): Promise<AudioContext> => {
     if (globalAudioContext) {
       return globalAudioContext
     }
     
     try {
-      console.log('🎵 Pre-initializing AudioContext...')
+      console.log('🎵 Pre-initializing AudioContext (deferred until user interaction)...')
+      
+      // Don't create AudioContext immediately - browsers require user gesture
+      // This will be called lazily when actually needed by audio components
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
       
       // Resume context if suspended (common on mobile)
@@ -172,18 +175,17 @@ export function usePreloader() {
         console.warn('⚠️ VAD preload failed:', error)
       })
       
-      // Initialize AudioContext (fast but important)
-      const audioContextPromise = initAudioContext().catch((error) => {
-        console.warn('⚠️ AudioContext preload failed:', error)
-      })
+      // Skip AudioContext preload - will be initialized on first user interaction
+      // This prevents browser warnings about auto-playing audio contexts
+      console.log('⏭️ Skipping AudioContext preload (will initialize on user interaction)')
       
       // Pre-load WaveSurfer modules
       const modulesPromise = preloadWaveSurferModules().catch((error) => {
         console.warn('⚠️ WaveSurfer modules preload failed:', error)
       })
       
-      // Wait for critical components
-      await Promise.allSettled([vadPromise, audioContextPromise, modulesPromise])
+      // Wait for critical components (excluding AudioContext which requires user gesture)
+      await Promise.allSettled([vadPromise, modulesPromise])
       
       // Warm up WaveSurfer (non-critical, run after modules loaded)
       if (preloadStatus.value.wavesurfer) {
@@ -192,8 +194,8 @@ export function usePreloader() {
         })
       }
       
-      // Check completion status
-      const completed = preloadStatus.value.vad && preloadStatus.value.audioContext && preloadStatus.value.wavesurfer
+      // Check completion status (AudioContext will be marked ready when first accessed)
+      const completed = preloadStatus.value.vad && preloadStatus.value.wavesurfer
       preloadStatus.value.complete = completed
       
       console.log('🎉 Background preloading completed:', {
@@ -210,15 +212,16 @@ export function usePreloader() {
     }
   }
   
-  // Get pre-initialized AudioContext (or create if not available)
+  // Get AudioContext (created on-demand with user gesture)
   const getAudioContext = (): AudioContext => {
     if (globalAudioContext) {
       return globalAudioContext
     }
     
-    // Fallback: create new context if preload failed
-    console.log('🔄 Creating new AudioContext (preload may have failed)')
+    // Create AudioContext on first use (after user interaction)
+    console.log('🔄 Creating AudioContext on first use (user interaction detected)')
     globalAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    preloadStatus.value.audioContext = true
     return globalAudioContext
   }
   
