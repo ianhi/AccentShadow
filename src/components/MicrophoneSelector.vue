@@ -1,5 +1,5 @@
 <template>
-  <div class="microphone-selection" v-if="availableDevices.length > 1 && !disabled">
+  <div class="microphone-selection" v-if="availableDevices.length > 1">
     <div class="mic-dropdown-container">
       <label class="mic-label">🎙️ Microphone:</label>
       <select 
@@ -90,6 +90,7 @@ const handleDeviceChange = (event) => {
 .mic-dropdown:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .mic-dropdown option {
