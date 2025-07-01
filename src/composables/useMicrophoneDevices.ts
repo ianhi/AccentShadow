@@ -13,25 +13,62 @@ const globalMicrophoneState = {
   selectedDeviceId: ref<string | null>(null),
   isLoading: ref(false),
   error: ref<string | null>(null),
-  isInitialized: ref(false)
+  isInitialized: ref(false),
+  hasPermission: ref(false),
+  permissionRequested: ref(false)
 };
 
 export function useMicrophoneDevices() {
   // Return the shared global state instead of creating new instances
-  const { availableDevices, selectedDeviceId, isLoading, error, isInitialized } = globalMicrophoneState;
+  const { availableDevices, selectedDeviceId, isLoading, error, isInitialized, hasPermission, permissionRequested } = globalMicrophoneState;
 
-  // Get list of available microphone devices
-  const getAvailableDevices = async () => {
+  // Request microphone permission (must be called from user interaction)
+  const requestMicrophonePermission = async (): Promise<boolean> => {
     try {
       isLoading.value = true;
       error.value = null;
+      permissionRequested.value = true;
 
-      // Request permission first to get device labels
-      await navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-          // Stop the stream immediately, we just needed permission
-          stream.getTracks().forEach(track => track.stop());
-        });
+      console.log('🎤 Requesting microphone permission (user interaction)');
+      
+      // Request permission to get device labels
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Stop the stream immediately, we just needed permission
+      stream.getTracks().forEach(track => track.stop());
+      
+      hasPermission.value = true;
+      console.log('✅ Microphone permission granted');
+      
+      // Now get the available devices
+      await getAvailableDevices();
+      
+      return true;
+    } catch (err) {
+      console.error('❌ Microphone permission denied:', err);
+      hasPermission.value = false;
+      
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        error.value = 'Microphone access denied. Please allow microphone access to record audio.';
+      } else if (err instanceof Error && err.name === 'NotFoundError') {
+        error.value = 'No microphone found. Please connect a microphone and try again.';
+      } else {
+        error.value = 'Could not access microphone. Please check your browser settings.';
+      }
+      
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
+  // Get list of available microphone devices (only call after permission granted)
+  const getAvailableDevices = async () => {
+    try {
+      if (!hasPermission.value) {
+        console.log('🎤 No permission yet, skipping device enumeration');
+        return;
+      }
 
       const devices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = devices.filter(device => device.kind === 'audioinput');
@@ -47,13 +84,11 @@ export function useMicrophoneDevices() {
         selectedDeviceId.value = audioInputs[0].deviceId;
       }
 
-      console.log('🎤 Available microphones (initialized once):', availableDevices.value);
+      console.log('🎤 Available microphones:', availableDevices.value);
       
     } catch (err) {
-      console.error('Error getting microphone devices:', err);
-      error.value = 'Could not access microphone devices. Please ensure microphone permissions are granted.';
-    } finally {
-      isLoading.value = false;
+      console.error('Error enumerating microphone devices:', err);
+      error.value = 'Could not list microphone devices.';
     }
   };
 
@@ -113,12 +148,14 @@ export function useMicrophoneDevices() {
   onMounted(() => {
     // Only initialize once globally
     if (!isInitialized.value && typeof navigator.mediaDevices?.enumerateDevices === 'function') {
-      console.log('🎤 Initializing microphone devices (first time)');
+      console.log('🎤 Initializing microphone system (permission-aware)');
       isInitialized.value = true;
-      getAvailableDevices();
       setupDeviceChangeListener();
+      
+      // Don't request permission automatically - wait for user interaction
+      console.log('🎤 Microphone system ready, waiting for user permission request');
     } else if (isInitialized.value) {
-      console.log('🎤 Microphone devices already initialized, skipping');
+      console.log('🎤 Microphone system already initialized, skipping');
     } else if (!navigator.mediaDevices?.enumerateDevices) {
       error.value = 'Device enumeration not supported in this browser';
     }
@@ -129,6 +166,9 @@ export function useMicrophoneDevices() {
     selectedDeviceId,
     isLoading,
     error,
+    hasPermission,
+    permissionRequested,
+    requestMicrophonePermission,
     getAvailableDevices,
     getMediaStream,
     setSelectedDevice,

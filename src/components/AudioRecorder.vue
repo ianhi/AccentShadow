@@ -24,9 +24,9 @@ import { useErrorModal } from '../composables/useErrorModal';
 const emit = defineEmits(['recorded', 'recording-started', 'recording-stopped']);
 
 const { isRecording, recordingTime, startRecording, stopRecording } = useAudioRecorder();
-const { getMediaStream, getSelectedDevice } = useMicrophoneDevices();
+const { getMediaStream, getSelectedDevice, hasPermission, requestMicrophonePermission } = useMicrophoneDevices();
 const { shouldUseMobileLayout } = useViewport();
-const { showRecordingError } = useErrorModal();
+const { showRecordingError, showPermissionError } = useErrorModal();
 
 let timer = null;
 
@@ -50,7 +50,19 @@ const toggleRecording = async () => {
     console.log('🎤 Recording stopped, blob size:', audioBlob?.size);
   } else {
     console.log('🎤 Starting recording with device:', props.selectedDeviceId);
+    
     try {
+      // Check if we have permission first
+      if (!hasPermission.value) {
+        console.log('🎤 No microphone permission, requesting...');
+        const granted = await requestMicrophonePermission();
+        
+        if (!granted) {
+          showPermissionError();
+          return;
+        }
+      }
+      
       // Get media stream with selected device
       const stream = await getMediaStream(props.selectedDeviceId);
       await startRecording(null, stream); // Pass the stream to the recorder
@@ -64,7 +76,11 @@ const toggleRecording = async () => {
       const selectedDevice = getSelectedDevice();
       const deviceName = selectedDevice?.label || `Device ID: ${props.selectedDeviceId || 'default'}`;
       
-      showRecordingError(deviceName, error);
+      if (error.name === 'NotAllowedError') {
+        showPermissionError();
+      } else {
+        showRecordingError(deviceName, error);
+      }
     }
   }
 };
