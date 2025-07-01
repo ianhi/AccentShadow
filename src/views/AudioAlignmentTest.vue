@@ -381,6 +381,29 @@ import { ref, computed, onMounted } from 'vue'
 import AudioVisualizationPanel from '@/components/AudioVisualizationPanel.vue'
 import { useSmartAudioAlignment } from '@/composables/useSmartAudioAlignment'
 import { useAudioRecorder } from '@/composables/useAudioRecorder'
+import { useAppState } from '@/composables/useAppState'
+
+// Initialize app state for AudioVisualizationPanel
+const {
+  globalPlaybackSpeed,
+  isRecordingActive,
+  appSettings,
+  vadSettings: appVadSettings,
+  targetAudioPlayerRef,
+  userAudioPlayerRef,
+  audioVisualizationPanel,
+  hasTargetAudio: appHasTargetAudio,
+  hasUserAudio,
+  getTargetBlob,
+  getUserBlob,
+  updateVadSettings,
+  updateAppSettings,
+  updatePlaybackSpeed,
+  setRecordingActive,
+  setTargetAudioPlayerRef,
+  setUserAudioPlayerRef,
+  setAudioVisualizationPanel
+} = useAppState()
 
 // Smart alignment composable
 const { 
