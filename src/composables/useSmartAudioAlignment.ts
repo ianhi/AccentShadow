@@ -127,6 +127,7 @@ export function useSmartAudioAlignment() {
       const sampleRate = audioBuffer.sampleRate;
       const targetPaddingSamples = Math.floor((padding / 1000) * sampleRate);
       
+      
       // Use original speech boundaries (before VAD padding) for accurate trimming
       const speechStart = vadBoundaries.originalSpeechStart !== undefined 
         ? vadBoundaries.originalSpeechStart 
@@ -139,6 +140,7 @@ export function useSmartAudioAlignment() {
       const speechStartSample = Math.floor(speechStart * sampleRate);
       const speechEndSample = Math.floor(speechEnd * sampleRate);
       const speechDurationSamples = speechEndSample - speechStartSample;
+      
       
       // ONSET NORMALIZATION: Speech should start at exactly the target padding time
       // Calculate new buffer length: target_padding + speech + target_padding

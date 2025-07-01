@@ -219,8 +219,27 @@ export function usePreloader() {
     }
     
     // Create AudioContext on first use (after user interaction)
+    // 
+    // CRITICAL FIX: Force consistent 44.1kHz sample rate across all browsers
+    // 
+    // Problem: Chrome defaults to 16kHz, Firefox to 44.1kHz, causing identical audio files
+    // to be decoded at different sample rates, leading to different VAD processing results.
+    //
+    // Solution: Force all browsers to use 44.1kHz for consistent audio decoding.
+    // Combined with pre-padding strategy, this ensures identical VAD behavior cross-browser.
+    //
+    // See AUDIO_SAMPLING_RATE_DEBUG.md for complete technical explanation.
     console.log('🔄 Creating AudioContext on first use (user interaction detected)')
-    globalAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    try {
+      globalAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 44100  // Force consistent sample rate across browsers
+      })
+      console.log('✅ AudioContext created with forced 44.1kHz sample rate for cross-browser consistency')
+    } catch (error) {
+      // Fallback to default if forced sample rate fails
+      console.warn('⚠️ Failed to create AudioContext with forced sample rate, using default:', error)
+      globalAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    }
     preloadStatus.value.audioContext = true
     return globalAudioContext
   }

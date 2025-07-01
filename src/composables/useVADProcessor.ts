@@ -177,61 +177,43 @@ export function useVADProcessor() {
       // });
       //
       // Get audio data as Float32Array (VAD expects mono)
-      const audioData = audioBuffer.getChannelData(0);
+      const originalAudioData = audioBuffer.getChannelData(0);
       const nativeSampleRate = audioBuffer.sampleRate;
-
-      console.log(`📊 Processing ${audioData.length} samples at ${nativeSampleRate}Hz using simplified VAD approach`);
-
-      // Debug audio data to ensure it's valid
-      // let maxAmplitude = 0;
-      // let minAmplitude = 0;
-      // let avgAmplitude = 0;
-      // let nonZeroSamples = 0;
-
-      // for (let i = 0; i < Math.min(audioData.length, 10000); i++) {
-      //   const sample = audioData[i];
-      //   maxAmplitude = Math.max(maxAmplitude, sample);
-      //   minAmplitude = Math.min(minAmplitude, sample);
-      //   avgAmplitude += Math.abs(sample);
-      //   if (Math.abs(sample) > 0.0001) nonZeroSamples++;
-      // }
-      // avgAmplitude /= Math.min(audioData.length, 10000);
+      
+      // CRITICAL FIX: Pre-padding strategy for consistent VAD processing
+      // 
+      // Problem: MP3 files and files with minimal leading silence cause VAD to aggressively 
+      // trim speech onset, leading to misalignment. Different browsers also decode audio
+      // at different sample rates (Chrome: 16kHz, Firefox: 44.1kHz).
       //
-      // console.log('🔊 Audio data check:', {
-      //   dataType: audioData.constructor.name,
-      //   length: audioData.length,
-      //   maxAmplitude: maxAmplitude.toFixed(6),
-      //   minAmplitude: minAmplitude.toFixed(6),
-      //   avgAmplitude: avgAmplitude.toFixed(6),
-      //   nonZeroSamples: nonZeroSamples,
-      //   hasContent: maxAmplitude > 0.001
-      // });
-
-      // Configure VAD parameters
-      console.log('🔧 VAD CONFIGURATION:', {
-        threshold,
-        minSpeechDuration,
-        maxSilenceDuration,
-        positiveSpeechThreshold,
-        negativeSpeechThreshold,
-        minSpeechFrames
-      });
+      // Solution: Add consistent 320ms silence before ALL audio sent to VAD, then adjust
+      // the detected boundaries afterward. This ensures VAD has identical context regardless
+      // of original file characteristics or browser differences.
+      //
+      // See AUDIO_SAMPLING_RATE_DEBUG.md for complete technical explanation.
+      const prePaddingMs = 320; // 320ms = 100 frames at VAD's internal 16kHz rate
+      const prePaddingSamples = Math.floor((prePaddingMs / 1000) * nativeSampleRate);
+      
+      // Create padded audio data with silence at the start
+      const paddedLength = originalAudioData.length + prePaddingSamples;
+      const audioData = new Float32Array(paddedLength);
+      
+      // Fill with silence at the start
+      for (let i = 0; i < prePaddingSamples; i++) {
+        audioData[i] = 0;
+      }
+      
+      // Copy original audio after the padding
+      for (let i = 0; i < originalAudioData.length; i++) {
+        audioData[prePaddingSamples + i] = originalAudioData[i];
+      }
+      
+      console.log(`🛡️ VAD: Applied ${prePaddingMs}ms pre-padding (${(originalAudioData.length / nativeSampleRate).toFixed(2)}s -> ${(audioData.length / nativeSampleRate).toFixed(2)}s)`);
 
       // Use NonRealTimeVAD to get speech segments - create instance with runtime options
       const speechSegments = [];
 
-      console.log('🔍 Audio data analysis:', {
-        length: audioData.length,
-        sampleRate: nativeSampleRate,
-        // maxAmplitude: Math.max(...Array.from(audioData.slice(0, 1000))), // Sample first 1000 points to avoid memory issues
-        // minAmplitude: Math.min(...Array.from(audioData.slice(0, 1000))), // Sample first 1000 points to avoid memory issues
-        rmsLevel: Math.sqrt(audioData.reduce((sum, val) => sum + val * val, 0) / audioData.length),
-        hasNonZeroSamples: audioData.some(val => Math.abs(val) > 0.001),
-        averageAmplitude: Array.from(audioData).reduce((sum, val) => sum + Math.abs(val), 0) / audioData.length
-      });
-
-      // Create VAD instance using simplified approach from documentation
-      console.log('🎛️ Creating simplified VAD instance following documentation pattern');
+      // Create VAD instance
 
       // Use passed parameters with proper defaults that preserve speech
       // VAD internally resamples to 16kHz, so frameSamples=512 gives consistent 32ms frames
@@ -245,56 +227,38 @@ export function useVADProcessor() {
         positiveSpeechPadFrames: (options as any).positiveSpeechPadFrames || 8  // More conservative padding
       };
 
-      // VAD PROCESSING DEBUG: Log sample rate and frame info
-      console.log('🔍 VAD PROCESSING INFO:', {
-        inputSampleRate: nativeSampleRate + 'Hz',
-        vadInternalRate: '16kHz (VAD resamples internally)',
-        frameSize: vadConfig.frameSamples + ' samples',
-        frameDuration: (vadConfig.frameSamples / 16000 * 1000).toFixed(1) + 'ms @ 16kHz',
-        browserType: navigator.userAgent.includes('Chrome') ? 'Chrome-like' : 
-                    navigator.userAgent.includes('Firefox') ? 'Firefox' : 'Other'
-      });
-
-      console.log('🔧 VAD CONFIG (simplified approach):', vadConfig);
 
       let runtimeVADInstance = null;
       try {
         runtimeVADInstance = await (window as any).vad.NonRealTimeVAD.new(vadConfig);
-        console.log('✅ Simplified VAD instance created successfully');
       } catch (error) {
         console.warn('⚠️ Failed to create VAD instance, using default:', error);
         runtimeVADInstance = vadInstance;
       }
 
-      // Use simplified VAD processing following documentation pattern
-      console.log('🎯 Starting simplified VAD processing (start/end in milliseconds)...');
       let iterationCount = 0;
 
       try {
         // Following the documentation: myvad.run(audioFileData, nativeSampleRate)
         // Returns: {audio, start, end} where start/end are in MILLISECONDS
-        console.log("🔍 CRITICAL DEBUG - SAMPLE RATE INFO:", {
-          nativeSampleRate,
-          audioBufferSampleRate: audioBuffer.sampleRate,
-          audioContextSampleRate: getAudioContext().sampleRate,
-          browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Firefox',
-          audioDataLength: audioData.length,
-          expectedDuration: audioData.length / nativeSampleRate
-        });
         const vadIterator = runtimeVADInstance.run(audioData, nativeSampleRate);
 
         for await (const { audio, start, end } of vadIterator) {
           iterationCount++;
-          console.log(`🔍 VAD iteration ${iterationCount}, raw values:`, { start, end });
 
           if (typeof start === 'undefined' || typeof end === 'undefined') {
-            console.warn('⚠️ Invalid segment returned by VAD:', { start, end });
+            console.warn('⚠️ Invalid VAD segment:', { start, end });
             continue;
           }
 
-          // According to documentation, start/end are already in MILLISECONDS
-          const startTimeSeconds = start / 1000; // Convert milliseconds to seconds
-          const endTimeSeconds = end / 1000;     // Convert milliseconds to seconds
+          // Adjust detected boundaries to account for our pre-padding
+          // VAD detected speech at 'start' in the padded audio, but we need the position
+          // in the original audio, so we subtract our 320ms offset
+          const adjustedStartMs = Math.max(0, start - prePaddingMs);
+          const adjustedEndMs = Math.max(0, end - prePaddingMs);
+          
+          const startTimeSeconds = adjustedStartMs / 1000;
+          const endTimeSeconds = adjustedEndMs / 1000;
 
           speechSegments.push({
             startTime: startTimeSeconds,
@@ -302,13 +266,11 @@ export function useVADProcessor() {
             audioLength: audio ? audio.length : 0
           });
 
-          console.log(`🎙 Speech segment detected: ${start}ms - ${end}ms (${startTimeSeconds.toFixed(3)}s - ${endTimeSeconds.toFixed(3)}s)`);
+          console.log(`🎙 Speech detected: ${adjustedStartMs}ms - ${adjustedEndMs}ms`);
         }
       } catch (iterError) {
         console.error('❌ Error during VAD iteration:', iterError);
       }
-
-      console.log(`🎯 VAD iteration complete. Total iterations: ${iterationCount}, segments found: ${speechSegments.length}`);
 
       // Determine overall speech boundaries
       let overallStart = null;
@@ -318,13 +280,8 @@ export function useVADProcessor() {
       let originalSpeechEnd = null;
 
       if (speechSegments.length > 0) {
-        // Don't filter out early segments - we need all detected speech
-        console.log(`🎯 KEEPING ALL ${speechSegments.length} detected segments (no filtering)`);
-        let filteredSegments = speechSegments; // Keep everything
-
         // Merge nearby segments with a larger gap to connect speech parts
-        const mergedSegments = mergeNearbySegments(filteredSegments, 0.5); // Merge segments within 500ms
-        console.log(`🔗 MERGED ${filteredSegments.length} segments into ${mergedSegments.length} merged segments`);
+        const mergedSegments = mergeNearbySegments(speechSegments, 0.5);
 
         // Find earliest start and latest end from merged segments
         const rawStart = Math.min(...mergedSegments.map((s: any) => s.startTime));
@@ -335,36 +292,8 @@ export function useVADProcessor() {
         overallStart = Math.max(0, rawStart);
         overallEnd = Math.min(audioBuffer.duration, rawEnd);
         
-        console.log(`🎯 VAD BOUNDARIES DETECTED:`, {
-          speechStart: overallStart.toFixed(3) + 's',
-          speechEnd: overallEnd.toFixed(3) + 's',
-          speechDuration: (overallEnd - overallStart).toFixed(3) + 's',
-          browserType: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Firefox/Other',
-          audioContextSampleRate: audioBuffer.sampleRate + 'Hz',
-          rawStartMs: (rawStart * 1000).toFixed(1) + 'ms',
-          rawEndMs: (rawEnd * 1000).toFixed(1) + 'ms',
-          totalAudioDuration: audioBuffer.duration.toFixed(3) + 's'
-        });
+        console.log(`🎯 VAD: Speech detected ${overallStart.toFixed(3)}s - ${overallEnd.toFixed(3)}s (${(overallEnd - overallStart).toFixed(3)}s duration)`);
 
-        console.log(`🔍 VAD SEGMENTS ANALYSIS:`, {
-          totalSegments: speechSegments.length,
-          segments: speechSegments.map((s, i) => ({
-            index: i,
-            start: s.startTime.toFixed(3) + 's',
-            end: s.endTime.toFixed(3) + 's',
-            duration: (s.endTime - s.startTime).toFixed(3) + 's'
-          })),
-          overallEnvelope: {
-            start: overallStart.toFixed(3) + 's',
-            end: overallEnd.toFixed(3) + 's',
-            span: (overallEnd - overallStart).toFixed(3) + 's'
-          },
-          audioFileInfo: {
-            totalDuration: audioBuffer.duration.toFixed(3) + 's',
-            expectedSilenceStart: '~0.150s',
-            expectedSpeechStart: '~0.200s'
-          }
-        });
 
         // Calculate confidence based on speech coverage
         const totalSpeechDuration = speechSegments.reduce((sum, seg) => sum + (seg.endTime - seg.startTime), 0);
