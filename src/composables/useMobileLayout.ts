@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { useViewport } from './useViewport'
 
-export type MobileTab = 'sets' | 'saved' | 'settings'
+export type MobileTab = 'sets' | 'settings'
 
 export interface MobileLayoutState {
   activeTab: MobileTab | null
@@ -34,10 +34,6 @@ export function useMobileLayout() {
     switch (tab) {
       case 'sets':
         showSidebar.value = true
-        break
-      case 'saved':
-        showModal.value = true
-        modalContent.value = 'saved-recordings'
         break
       case 'settings':
         showModal.value = true
@@ -78,7 +74,7 @@ export function useMobileLayout() {
   const closeModal = () => {
     showModal.value = false
     modalContent.value = null
-    if (activeTab.value === 'saved' || activeTab.value === 'settings') {
+    if (activeTab.value === 'settings') {
       activeTab.value = null
     }
   }
@@ -105,7 +101,6 @@ export function useMobileLayout() {
     if (!shouldUseMobileLayout.value) return false
     
     const modalComponents = [
-      'SavedRecordingsSection',
       'AudioProcessingControls',
       'SessionStats'
     ]

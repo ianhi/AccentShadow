@@ -12,15 +12,6 @@
       
       <button 
         class="nav-button"
-        :class="{ active: activeTab === 'saved' }"
-        @click="$emit('tab-clicked', 'saved')"
-      >
-        <span class="nav-icon">💾</span>
-        <span class="nav-label">Saved</span>
-      </button>
-      
-      <button 
-        class="nav-button"
         :class="{ active: activeTab === 'settings' }"
         @click="$emit('tab-clicked', 'settings')"
       >

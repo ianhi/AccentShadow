@@ -1,16 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { useAppStateInject, type AppState, type VADSettings } from './useAppState'
 
-// Types
-interface SavedRecording {
-  id: string;
-  targetBlob?: Blob;
-  userBlob?: Blob;
-  targetData?: string;
-  userData?: string;
-  timestamp: string;
-  name: string;
-}
 
 // Import from useAppState to ensure consistency
 import type { AudioVisualizationPanel as ImportedAudioVisualizationPanel } from './useAppState'
@@ -185,97 +175,6 @@ export function useAppUtilities(providedAppState: AppState | null = null) {
     closeAppSettingsModal()
   }
 
-  // Recording management utilities
-  const saveRecording = async (targetBlob: Blob, userBlob: Blob): Promise<SavedRecording | undefined> => {
-    if (!targetBlob || !userBlob) {
-      alert('Need both target and user audio to save')
-      return
-    }
-
-    try {
-      // Create a recording object
-      const recording: SavedRecording = {
-        id: `recording_${Date.now()}`,
-        targetBlob,
-        userBlob,
-        timestamp: new Date().toISOString(),
-        name: `Recording ${new Date().toLocaleTimeString()}`
-      }
-
-      // Save to localStorage for now (could be IndexedDB in the future)
-      const savedRecordings = JSON.parse(localStorage.getItem('savedRecordings') || '[]')
-      savedRecordings.push({
-        ...recording,
-        // Convert blobs to base64 for storage
-        targetData: await blobToBase64(targetBlob),
-        userData: await blobToBase64(userBlob)
-      })
-      localStorage.setItem('savedRecordings', JSON.stringify(savedRecordings))
-
-      console.log('✅ Recording saved successfully')
-      return recording
-    } catch (error) {
-      console.error('❌ Failed to save recording:', error)
-      throw error
-    }
-  }
-
-  const loadSavedRecording = async (recording: SavedRecording): Promise<void> => {
-    if (!audioVisualizationPanel.value) return
-
-    try {
-      // Convert base64 back to blobs
-      const targetBlob = base64ToBlob(recording.targetData!)
-      const userBlob = base64ToBlob(recording.userData!)
-
-      await audioVisualizationPanel.value.setTargetAudio?.(targetBlob, {
-        name: recording.name,
-        source: 'saved'
-      })
-      
-      await audioVisualizationPanel.value.processUserAudio?.(userBlob)
-
-      console.log('✅ Saved recording loaded successfully')
-    } catch (error) {
-      console.error('❌ Failed to load saved recording:', error)
-      alert('Failed to load saved recording: ' + (error as Error).message)
-    }
-  }
-
-  const deleteSavedRecording = (recordingId: string): void => {
-    try {
-      const savedRecordings = JSON.parse(localStorage.getItem('savedRecordings') || '[]')
-      const filtered = savedRecordings.filter((r: SavedRecording) => r.id !== recordingId)
-      localStorage.setItem('savedRecordings', JSON.stringify(filtered))
-      console.log('✅ Recording deleted successfully')
-    } catch (error) {
-      console.error('❌ Failed to delete recording:', error)
-    }
-  }
-
-  // Utility functions
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-  }
-
-  const base64ToBlob = (base64: string): Blob => {
-    const [header, data] = base64.split(',')
-    const mimeMatch = header.match(/data:([^;]+)/)
-    const mimeType = mimeMatch ? mimeMatch[1] : 'audio/wav'
-    
-    const byteCharacters = atob(data)
-    const byteNumbers = new Array(byteCharacters.length)
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i)
-    }
-    const byteArray = new Uint8Array(byteNumbers)
-    return new Blob([byteArray], { type: mimeType })
-  }
 
   // Cleanup on unmount
   const cleanup = (): void => {
@@ -308,11 +207,6 @@ export function useAppUtilities(providedAppState: AppState | null = null) {
     openAppSettingsModal,
     closeAppSettingsModal,
     handleAppSettingsSave,
-    
-    // Recording management
-    saveRecording,
-    loadSavedRecording,
-    deleteSavedRecording,
     
     // Cleanup
     cleanup

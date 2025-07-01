@@ -46,14 +46,7 @@
         <!-- Recording Actions -->
         <RecordingActions
           :currentRecording="currentRecording"
-          @save-recording="handleSaveRecording"
           @mark-completed="handleMarkCompleted"
-        />
-
-        <!-- Saved Recordings Section -->
-        <SavedRecordingsSection
-          @load-recording="handleLoadRecording"
-          @delete-recording="handleDeleteRecording"
         />
 
         <!-- Recording Sets Manager -->
@@ -82,24 +75,6 @@
       </div>
     </Transition>
 
-    <!-- Mobile Modal for Saved Recordings & Settings -->
-    <Transition name="fade">
-      <div v-if="showMobileModal" class="mobile-modal-overlay" @click="closeMobileModal">
-        <div class="mobile-modal" @click.stop>
-          <div class="modal-header">
-            <h2>{{ mobileModalTitle }}</h2>
-            <button @click="closeMobileModal" class="close-btn">×</button>
-          </div>
-          <div class="modal-content">
-            <SavedRecordingsSection 
-              v-if="mobileModalContent === 'saved'"
-              @load-recording="handleLoadRecording"
-              @delete-recording="handleDeleteRecording"
-            />
-          </div>
-        </div>
-      </div>
-    </Transition>
 
     <!-- URL Input Modal -->
     <div v-if="showUrlModal" class="modal-overlay" @click="closeUrlModal">
@@ -125,9 +100,6 @@
     <!-- Recording Manager -->
     <RecordingManager
       ref="recordingManager"
-      @recording-saved="handleRecordingSaved"
-      @recording-deleted="handleRecordingDeleted"
-      @recording-loaded="handleRecordingLoaded"
       @recording-completed="handleRecordingCompleted"
       @operation-error="handleOperationError"
     />
@@ -173,14 +145,12 @@ import AudioVisualizationPanel from '../components/AudioVisualizationPanel.vue';
 import MainHeader from '../components/MainHeader.vue';
 import CentralPlaybackControls from '../components/CentralPlaybackControls.vue';
 import RecordingActions from '../components/RecordingActions.vue';
-import SavedRecordingsSection from '../components/SavedRecordingsSection.vue';
 import RecordingManager from '../components/RecordingManager.vue';
 import RecordingStateManager from '../components/RecordingStateManager.vue';
 import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
 import AppSettingsModal from '../components/AppSettingsModal.vue';
 import MobileBottomNav from '../components/MobileBottomNav.vue';
 import MicrophoneSelector from '../components/MicrophoneSelector.vue';
-import { useIndexedDB } from '../composables/useIndexedDB.ts';
 import { useRecordingSets } from '../composables/useRecordingSets';
 import { useAppState } from '../composables/useAppState';
 import { useAppUtilities } from '../composables/useAppUtilities';
@@ -212,7 +182,6 @@ const {
 } = useAppState()
 
 // Core composables
-const { initDB } = useIndexedDB()
 const { currentRecording, updateUserRecording } = useRecordingSets()
 const { updateConfig: updateEffectsConfig } = useAudioEffects()
 
@@ -225,17 +194,8 @@ const { availableDevices, selectedDeviceId, setSelectedDevice } = useMicrophoneD
 // Mobile layout state
 const mobileActiveTab = ref(null)
 const showMobileSidebar = ref(false)
-const showMobileModal = ref(false)
-const mobileModalContent = ref('')
 const showStatsOnMobile = ref(false)
 
-const mobileModalTitle = computed(() => {
-  switch (mobileModalContent.value) {
-    case 'saved': return 'Saved Recordings'
-    case 'settings': return 'Audio Settings'
-    default: return ''
-  }
-})
 
 // Since we're in the same component that provides the state, pass it directly
 // to avoid provide/inject within the same component (which doesn't work in Vue setup)
@@ -268,9 +228,6 @@ const {
   openAppSettingsModal,
   closeAppSettingsModal,
   handleAppSettingsSave,
-  saveRecording: saveRecordingUtil,
-  loadSavedRecording,
-  deleteSavedRecording,
   cleanup
 } = useAppUtilities(appStateForComposables)
 
@@ -290,7 +247,7 @@ const recordingStateManager = ref(null)
 const audioProcessingHandler = ref(null)
 
 onMounted(async () => {
-  await initDB()
+  // App initialization
 })
 
 // Audio Visualization Panel event handlers
@@ -321,38 +278,8 @@ const handleAppEffectsSave = (newEffectsConfig) => {
 }
 
 
-// Recording Manager event handlers - simplified using utilities
-const handleSaveRecording = async () => {
-  const targetBlob = getTargetBlob()
-  const userBlob = getUserBlob()
-  
-  try {
-    await saveRecordingUtil(targetBlob, userBlob)
-    alert('Recording saved!')
-  } catch (error) {
-    alert('Failed to save recording: ' + error.message)
-  }
-}
-
 const handleMarkCompleted = () => {
   recordingManager.value?.markCurrentCompleted(currentRecording.value)
-}
-
-const handleLoadRecording = async (recording) => {
-  try {
-    await loadSavedRecording(recording)
-  } catch (error) {
-    console.error('Failed to load recording:', error)
-  }
-}
-
-const handleDeleteRecording = (id) => {
-  try {
-    deleteSavedRecording(id)
-    console.log('Recording deleted successfully')
-  } catch (error) {
-    console.error('Failed to delete recording:', error)
-  }
 }
 
 // Recording State Manager event handlers
@@ -396,9 +323,6 @@ const handleSpeedChange = (newSpeed) => {
 const manualAlign = () => audioProcessingHandler.value?.manualAlign()
 
 // Recording Manager event handlers that are still needed for components
-const handleRecordingSaved = () => console.log('Recording saved successfully')
-const handleRecordingDeleted = () => console.log('Recording deleted successfully')
-const handleRecordingLoaded = (recording) => console.log('Recording loaded:', recording)
 const handleRecordingCompleted = (recording) => console.log('Recording marked as completed:', recording)
 const handleOperationError = ({ message }) => alert(message)
 const handleRecordingStateChanged = ({ isRecording }) => console.log('Recording state changed:', isRecording)
@@ -418,11 +342,6 @@ const handleMobileTabClick = (tabName) => {
       showMobileSidebar.value = true
       showMobileModal.value = false
       break
-    case 'saved':
-      mobileModalContent.value = 'saved'
-      showMobileModal.value = true
-      showMobileSidebar.value = false
-      break
     case 'settings':
       // Open the unified app settings modal instead of mobile-specific modal
       openAppSettingsModal()
@@ -439,13 +358,6 @@ const closeMobileSidebar = () => {
   }
 }
 
-const closeMobileModal = () => {
-  showMobileModal.value = false
-  mobileModalContent.value = ''
-  if (mobileActiveTab.value === 'saved' || mobileActiveTab.value === 'settings') {
-    mobileActiveTab.value = null
-  }
-}
 
 const handleMicrophoneChange = (deviceId) => {
   setSelectedDevice(deviceId)

@@ -35,8 +35,10 @@ vi.mock('../../src/composables/useRecordingSets', () => ({
 vi.mock('../../src/composables/useIndexedDB', () => ({
   useIndexedDB: () => ({
     initDB: vi.fn(),
-    addRecording: vi.fn(),
-    deleteRecording: vi.fn()
+    saveSetting: vi.fn(),
+    getSetting: vi.fn().mockResolvedValue(null),
+    saveStatistic: vi.fn(),
+    getStatistic: vi.fn().mockResolvedValue(null)
   })
 }));
 

@@ -3,7 +3,8 @@ import { ref } from 'vue';
 
 const DB_NAME = 'AccentShadowDB';
 const DB_VERSION = 1;
-const RECORDINGS_STORE_NAME = 'recordings';
+const SETTINGS_STORE_NAME = 'settings';
+const STATISTICS_STORE_NAME = 'statistics';
 
 let db: IDBDatabase | null = null;
 const dbReady = ref(false);
@@ -21,8 +22,15 @@ function initDB(): Promise<boolean> {
     request.onupgradeneeded = (event: Event) => {
       const target = event.target as IDBOpenDBRequest;
       const database = target.result;
-      if (!database.objectStoreNames.contains(RECORDINGS_STORE_NAME)) {
-        database.createObjectStore(RECORDINGS_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      
+      // Create settings store for app preferences
+      if (!database.objectStoreNames.contains(SETTINGS_STORE_NAME)) {
+        database.createObjectStore(SETTINGS_STORE_NAME, { keyPath: 'id' });
+      }
+      
+      // Create statistics store for user analytics
+      if (!database.objectStoreNames.contains(STATISTICS_STORE_NAME)) {
+        database.createObjectStore(STATISTICS_STORE_NAME, { keyPath: 'id' });
       }
     };
 
@@ -41,7 +49,8 @@ function initDB(): Promise<boolean> {
   });
 }
 
-async function addRecording(targetBlob: Blob, userBlob: Blob): Promise<any> {
+// Settings management
+async function saveSetting(key: string, value: any): Promise<void> {
   await initDB();
   return new Promise((resolve, reject) => {
     if (!db) {
@@ -49,28 +58,28 @@ async function addRecording(targetBlob: Blob, userBlob: Blob): Promise<any> {
       return;
     }
     
-    const transaction = db.transaction([RECORDINGS_STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(RECORDINGS_STORE_NAME);
-    const recording = {
-      targetAudio: targetBlob,
-      userAudio: userBlob,
-      timestamp: new Date().toISOString(),
+    const transaction = db.transaction([SETTINGS_STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(SETTINGS_STORE_NAME);
+    const setting = {
+      id: key,
+      value: value,
+      updatedAt: new Date().toISOString(),
     };
-    const request = store.add(recording);
+    const request = store.put(setting);
 
     request.onsuccess = () => {
-      resolve(request.result);
+      resolve();
     };
 
     request.onerror = (event: Event) => {
       const target = event.target as IDBRequest;
-      console.error('Error adding recording:', target.error);
+      console.error('Error saving setting:', target.error);
       reject(target.error);
     };
   });
 }
 
-async function getRecordings(): Promise<any[]> {
+async function getSetting(key: string): Promise<any> {
   await initDB();
   return new Promise((resolve, reject) => {
     if (!db) {
@@ -78,23 +87,24 @@ async function getRecordings(): Promise<any[]> {
       return;
     }
     
-    const transaction = db.transaction([RECORDINGS_STORE_NAME], 'readonly');
-    const store = transaction.objectStore(RECORDINGS_STORE_NAME);
-    const request = store.getAll();
+    const transaction = db.transaction([SETTINGS_STORE_NAME], 'readonly');
+    const store = transaction.objectStore(SETTINGS_STORE_NAME);
+    const request = store.get(key);
 
     request.onsuccess = () => {
-      resolve(request.result);
+      resolve(request.result ? request.result.value : null);
     };
 
     request.onerror = (event: Event) => {
       const target = event.target as IDBRequest;
-      console.error('Error getting recordings:', target.error);
+      console.error('Error getting setting:', target.error);
       reject(target.error);
     };
   });
 }
 
-async function deleteRecording(id: string | number): Promise<boolean> {
+// Statistics management
+async function saveStatistic(key: string, value: any): Promise<void> {
   await initDB();
   return new Promise((resolve, reject) => {
     if (!db) {
@@ -102,17 +112,46 @@ async function deleteRecording(id: string | number): Promise<boolean> {
       return;
     }
     
-    const transaction = db.transaction([RECORDINGS_STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(RECORDINGS_STORE_NAME);
-    const request = store.delete(id);
+    const transaction = db.transaction([STATISTICS_STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STATISTICS_STORE_NAME);
+    const statistic = {
+      id: key,
+      value: value,
+      updatedAt: new Date().toISOString(),
+    };
+    const request = store.put(statistic);
 
     request.onsuccess = () => {
-      resolve(true);
+      resolve();
     };
 
     request.onerror = (event: Event) => {
       const target = event.target as IDBRequest;
-      console.error('Error deleting recording:', target.error);
+      console.error('Error saving statistic:', target.error);
+      reject(target.error);
+    };
+  });
+}
+
+async function getStatistic(key: string): Promise<any> {
+  await initDB();
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error('Database not initialized'));
+      return;
+    }
+    
+    const transaction = db.transaction([STATISTICS_STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STATISTICS_STORE_NAME);
+    const request = store.get(key);
+
+    request.onsuccess = () => {
+      resolve(request.result ? request.result.value : null);
+    };
+
+    request.onerror = (event: Event) => {
+      const target = event.target as IDBRequest;
+      console.error('Error getting statistic:', target.error);
       reject(target.error);
     };
   });
@@ -121,9 +160,10 @@ async function deleteRecording(id: string | number): Promise<boolean> {
 export function useIndexedDB() {
   return {
     initDB,
-    addRecording,
-    getRecordings,
-    deleteRecording,
+    saveSetting,
+    getSetting,
+    saveStatistic,
+    getStatistic,
     dbReady,
   };
 }

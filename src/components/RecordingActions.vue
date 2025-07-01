@@ -1,13 +1,6 @@
 <template>
   <div class="recording-actions">
     <button 
-      @click="$emit('save-recording')" 
-      :disabled="!hasTargetAudio || !hasUserAudio" 
-      class="save-btn"
-    >
-      Save Recording
-    </button>
-    <button 
       v-if="currentRecording && hasUserAudio" 
       @click="$emit('mark-completed')" 
       :disabled="currentRecording.userRecording?.isCompleted"
@@ -31,7 +24,7 @@ defineProps({
   }
 })
 
-defineEmits(['save-recording', 'mark-completed'])
+defineEmits(['mark-completed'])
 </script>
 
 <style scoped>
@@ -42,7 +35,6 @@ defineEmits(['save-recording', 'mark-completed'])
   flex-wrap: wrap;
 }
 
-.save-btn,
 .complete-btn {
   padding: 12px 24px;
   border: none;
@@ -53,23 +45,6 @@ defineEmits(['save-recording', 'mark-completed'])
   transition: all 0.2s;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.save-btn {
-  background: rgba(34, 197, 94, 0.9);
-  color: white;
-}
-
-.save-btn:hover:not(:disabled) {
-  background: rgba(21, 128, 61, 0.9);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
-}
-
-.save-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
 }
 
 .complete-btn {
@@ -95,7 +70,6 @@ defineEmits(['save-recording', 'mark-completed'])
     flex-direction: column;
   }
   
-  .save-btn,
   .complete-btn {
     width: 100%;
   }

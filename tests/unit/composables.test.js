@@ -452,9 +452,10 @@ import { useAudioProcessing } from '../../src/composables/useAudioProcessing';
 // Mock the dependencies
 vi.mock('../../src/composables/useIndexedDB', () => ({
   useIndexedDB: () => ({
-    addRecording: vi.fn(),
-    getRecordings: vi.fn().mockResolvedValue([]),
-    deleteRecording: vi.fn(),
+    saveSetting: vi.fn(),
+    getSetting: vi.fn().mockResolvedValue(null),
+    saveStatistic: vi.fn(),
+    getStatistic: vi.fn().mockResolvedValue(null),
     dbReady: { value: true }
   })
 }));
