@@ -565,21 +565,9 @@ const processUserAudio = async (blob) => {
               if (autoPlayBoth.value) {
                 console.log('🎧 [DEBUG] Auto-play both is enabled after alignment, preparing simultaneous playback...')
                 
-                // Use robust waiting to ensure both players are truly ready for playback
-                console.log('🎧 [DEBUG] Waiting for both players to be fully ready...')
-                const playersReady = await waitForPlayersReady()
-                
-                if (playersReady) {
-                  console.log('🎧 [DEBUG] Both players confirmed ready, triggering overlapping playback with brief delay...')
-                  // Add small delay to ensure complete readiness after alignment
-                  setTimeout(() => {
-                    console.log('🎧 [DEBUG] Triggering delayed overlapping auto-play')
-                    emit('trigger-auto-play')
-                  }, 100)
-                } else {
-                  console.log('🎧 [DEBUG] Players not ready after waiting, setting up watchers...')
-                  setupAutoPlayWatchers()
-                }
+                // Set up reactive auto-play trigger after alignment
+                console.log('🎧 [DEBUG] Auto-play both enabled after alignment, setting up reactive trigger...')
+                setupAutoPlayAfterAlignment()
               } else {
                 console.log('🎧 [DEBUG] Auto-play both is disabled')
               }
@@ -694,17 +682,9 @@ const processUserAudio = async (blob) => {
   if (autoPlayBoth.value && shouldEmitNow) {
     console.log('🎧 [DEBUG] Auto-play both is enabled, preparing simultaneous playback...')
     
-    // Use robust waiting to ensure both players are truly ready for playback
-    console.log('🎧 [DEBUG] Waiting for both players to be fully ready (no alignment path)...')
-    const playersReady = await waitForPlayersReady()
-    
-    if (playersReady) {
-      console.log('🎧 [DEBUG] Both players confirmed ready, triggering overlapping playback (no alignment path)')
-      emit('trigger-auto-play')
-    } else {
-      console.log('🎧 [DEBUG] Players not ready after waiting, setting up watchers (no alignment path)...')
-      setupAutoPlayWatchers()
-    }
+    // Set up reactive auto-play trigger for no-alignment path
+    console.log('🎧 [DEBUG] Auto-play both enabled (no alignment), setting up reactive trigger...')
+    setupAutoPlayAfterAlignment()
   } else {
     console.log('🎧 [DEBUG] Auto-play conditions not met:', { autoPlayBoth: autoPlayBoth.value, shouldEmitNow })
   }
@@ -712,44 +692,62 @@ const processUserAudio = async (blob) => {
   console.log('🎧 [DEBUG] processUserAudio function completed')
 }
 
-// Robust function to wait for both players to be truly ready for playback
-const waitForPlayersReady = async (maxWaitTime = 2000) => {
-  const startTime = Date.now()
+// Reactive auto-play setup using Vue watchers instead of manual polling
+const setupAutoPlayAfterAlignment = () => {
+  console.log('🎵 Setting up reactive auto-play trigger')
   
-  while (Date.now() - startTime < maxWaitTime) {
-    await nextTick() // Ensure Vue updates
-    
+  // Use nextTick to ensure current synchronous operations complete
+  nextTick(() => {
+    // Check immediately if both players are already ready
     const targetReady = targetAudioPlayerRef.value?.isReady
     const userReady = userAudioPlayerRef.value?.isReady
     
-    // Also check if WaveSurfer instances exist and are properly loaded
-    const targetWavesurfer = targetAudioPlayerRef.value?.wavesurfer?.value
-    const userWavesurfer = userAudioPlayerRef.value?.wavesurfer?.value
+    console.log('🎵 Initial readiness check:', { targetReady, userReady })
     
-    console.log('🎧 [DEBUG] Checking player readiness:', { 
-      targetReady, 
-      userReady, 
-      targetWavesurfer: !!targetWavesurfer, 
-      userWavesurfer: !!userWavesurfer,
-      elapsed: Date.now() - startTime 
-    })
-    
-    if (targetReady && userReady && targetWavesurfer && userWavesurfer) {
-      // Additional check: ensure WaveSurfer has actual duration (audio loaded)
-      const targetDuration = targetWavesurfer.getDuration?.()
-      const userDuration = userWavesurfer.getDuration?.()
-      
-      if (targetDuration > 0 && userDuration > 0) {
-        console.log('🎧 [DEBUG] Both players fully ready with loaded audio')
-        return true
-      }
+    if (targetReady && userReady) {
+      console.log('🎵 Both players already ready, triggering immediate auto-play')
+      // Small delay to ensure complete component initialization
+      setTimeout(() => {
+        console.log('🎵 Triggering delayed auto-play (immediate path)')
+        emit('trigger-auto-play')
+      }, 150)
+      return
     }
     
-    await new Promise(resolve => setTimeout(resolve, 25)) // Check every 25ms
-  }
-  
-  console.warn('🎧 [DEBUG] Timeout waiting for players to be ready')
-  return false
+    // If not ready immediately, set up reactive watchers
+    console.log('🎵 Players not immediately ready, setting up reactive watchers')
+    
+    // Create a watcher that triggers when both players become ready
+    const stopWatcher = watch(
+      () => [
+        targetAudioPlayerRef.value?.isReady,
+        userAudioPlayerRef.value?.isReady
+      ],
+      ([targetReady, userReady]) => {
+        console.log('🎵 Watcher detected readiness change:', { targetReady, userReady })
+        
+        if (targetReady && userReady) {
+          console.log('🎵 Both players now ready via watcher, triggering auto-play')
+          
+          // Clean up the watcher since we only need it to trigger once
+          stopWatcher()
+          
+          // Small delay to ensure complete readiness
+          setTimeout(() => {
+            console.log('🎵 Triggering delayed auto-play (watcher path)')
+            emit('trigger-auto-play')
+          }, 150)
+        }
+      },
+      { immediate: false } // Don't trigger immediately since we already checked above
+    )
+    
+    // Safety timeout to clean up watcher if players never become ready
+    setTimeout(() => {
+      console.warn('🎵 Auto-play watcher timeout - cleaning up')
+      stopWatcher()
+    }, 5000)
+  })
 }
 
 // Set up watchers to trigger auto-play when both players become ready
