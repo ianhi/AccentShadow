@@ -7,7 +7,16 @@ import DemoDataPrompt from './components/DemoDataPrompt.vue'
 
 const route = useRoute()
 const { preloadAll, preloadStatus } = usePreloader()
-const { initializeFirstVisitDetection } = useDemoData()
+const { initializeFirstVisitDetection, resetDemoState } = useDemoData()
+
+// Development mode detection
+const isDevelopment = computed(() => import.meta.env.DEV)
+
+// Reset demo state for development
+const handleResetDemo = () => {
+  console.log('🔄 Manually resetting demo state for development')
+  resetDemoState()
+}
 
 // Show navigation only on main app routes, hide on mobile demos
 const showNavigation = computed(() => {
@@ -45,6 +54,15 @@ onMounted(async () => {
       <router-link to="/alignment-test" class="nav-btn" :class="{ active: route.path === '/alignment-test' }">
         Alignment Test
       </router-link>
+      <!-- Development button to reset demo state -->
+      <button 
+        v-if="isDevelopment" 
+        @click="handleResetDemo" 
+        class="nav-btn dev-btn"
+        title="Reset demo state (dev only)"
+      >
+        🎯 Demo
+      </button>
     </div>
 
     <!-- Back button for mobile views -->
@@ -94,6 +112,17 @@ onMounted(async () => {
 .nav-btn.active {
   background-color: #3b82f6;
   color: white;
+}
+
+.dev-btn {
+  border-color: #f59e0b !important;
+  color: #f59e0b !important;
+  cursor: pointer;
+}
+
+.dev-btn:hover {
+  background-color: #f59e0b !important;
+  color: white !important;
 }
 
 .mobile-demo-btn {

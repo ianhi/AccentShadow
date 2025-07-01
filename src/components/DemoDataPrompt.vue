@@ -350,11 +350,21 @@ const handleDismiss = (): void => {
 
   .modal-actions {
     flex-direction: column;
+    gap: 8px;
   }
 
   .primary-btn,
   .secondary-btn {
     width: 100%;
+    flex: none; /* Remove flex grow to prevent layout issues */
+    margin: 0;
+  }
+
+  /* Ensure proper touch targets on mobile */
+  .primary-btn,
+  .secondary-btn {
+    min-height: 48px; /* Larger touch target for mobile */
+    padding: 12px 20px;
   }
 }
 </style>

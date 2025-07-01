@@ -159,16 +159,25 @@ const dismissDemoPrompt = (): void => {
 
 // Reset demo state (for testing/development)
 const resetDemoState = (): void => {
+  // Clear localStorage
   localStorage.removeItem(STORAGE_KEYS.FIRST_VISIT);
   localStorage.removeItem(STORAGE_KEYS.DEMO_LOADED);
   localStorage.removeItem(STORAGE_KEYS.USER_PREFERENCES);
   
+  // Reset demo state
   isFirstVisit.value = true;
   isDemoLoaded.value = false;
   showDemoPrompt.value = true;
   demoLoadError.value = null;
   
-  console.log('🔄 Demo state reset');
+  // Clear all recording sets to ensure hasUserData becomes false
+  const { recordingSets, deleteRecordingSet } = useRecordingSets();
+  const setsToDelete = [...recordingSets.value]; // Create a copy to avoid mutation during iteration
+  setsToDelete.forEach(set => {
+    deleteRecordingSet(set.id);
+  });
+  
+  console.log('🔄 Demo state reset - cleared recording sets and localStorage');
 };
 
 // Check if user has any recording sets
