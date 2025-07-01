@@ -14,15 +14,36 @@ async function startRecording(waveformContainer?: HTMLElement | null, existingSt
   try {
     const stream = existingStream || await navigator.mediaDevices.getUserMedia({ audio: true });
     
-    // Configure MediaRecorder with WAV format for better speech quality and browser compatibility
-    const options = { mimeType: 'audio/wav' };
+    // Configure MediaRecorder with best available format for speech quality
+    let options = { mimeType: 'audio/webm;codecs=opus' }; // Default to high-quality WebM/Opus
     
-    // Fallback to webm if WAV is not supported
-    if (!MediaRecorder.isTypeSupported('audio/wav')) {
-      console.warn('🎙️ WAV not supported, falling back to WebM/Opus');
-      options.mimeType = 'audio/webm;codecs=opus';
-    } else {
-      console.log('🎙️ Using WAV format for high-quality speech recording');
+    // Check format support and prioritize quality options
+    const formatPriority = [
+      'audio/wav',                    // Uncompressed (best quality, large size)
+      'audio/webm;codecs=opus',       // High quality, good compression
+      'audio/mp4',                    // Good compatibility
+      'audio/webm',                   // Basic WebM
+      'audio/ogg;codecs=opus'         // Opus fallback
+    ];
+    
+    // Debug: log all supported formats
+    console.log('🎙️ MediaRecorder format support check:', 
+      formatPriority.map(format => ({ 
+        format, 
+        supported: MediaRecorder.isTypeSupported(format) 
+      }))
+    );
+    
+    for (const format of formatPriority) {
+      if (MediaRecorder.isTypeSupported(format)) {
+        options.mimeType = format;
+        console.log(`🎙️ Selected format: ${format} for speech recording`);
+        break;
+      }
+    }
+    
+    if (options.mimeType === 'audio/webm;codecs=opus') {
+      console.log('🎙️ Using WebM/Opus format (high quality, good compression)');
     }
     
     mediaRecorder = new MediaRecorder(stream, options);
