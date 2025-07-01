@@ -85,18 +85,25 @@ const handleReadyToPlay = () => {
   if (props.autoPlayOnReady && props.audioType === 'target' && !hasAutoPlayed.value && !props.suppressAutoPlay) {
     hasAutoPlayed.value = true // Prevent multiple auto-plays for same audio
     
-    const playResult = play()
-    if (playResult instanceof Promise) {
-      playResult
-        .then(() => {
+    // Add delay to ensure complete WaveSurfer readiness, especially for processed audio
+    console.log('🎵 Delaying auto-play to ensure complete audio readiness...')
+    setTimeout(() => {
+      console.log('🎵 Starting delayed auto-play')
+      const playResult = play()
+      if (playResult instanceof Promise) {
+        playResult
+          .then(() => {
+            console.log('🎵 Delayed auto-play successful')
+            emit('auto-played')
+          })
+          .catch(error => console.warn('🎵 Auto-play failed:', error))
+      } else {
+        if (playResult) {
+          console.log('🎵 Delayed auto-play successful (sync)')
           emit('auto-played')
-        })
-        .catch(error => console.warn('🎵 Auto-play failed:', error))
-    } else {
-      if (playResult) {
-        emit('auto-played')
+        }
       }
-    }
+    }, 150) // 150ms delay for complete audio decoding
   }
 }
 

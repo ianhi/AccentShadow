@@ -565,19 +565,19 @@ const processUserAudio = async (blob) => {
               if (autoPlayBoth.value) {
                 console.log('🎧 [DEBUG] Auto-play both is enabled after alignment, preparing simultaneous playback...')
                 
-                // Use nextTick to ensure Vue has updated player refs with aligned audio
-                console.log('🎧 [DEBUG] Waiting for nextTick before checking player readiness...')
-                await nextTick()
+                // Use robust waiting to ensure both players are truly ready for playback
+                console.log('🎧 [DEBUG] Waiting for both players to be fully ready...')
+                const playersReady = await waitForPlayersReady()
                 
-                const targetReady = targetAudioPlayerRef.value?.isReady
-                const userReady = userAudioPlayerRef.value?.isReady
-                console.log('🎧 [DEBUG] Player readiness after nextTick:', { targetReady, userReady })
-                
-                if (targetReady && userReady) {
-                  console.log('🎧 [DEBUG] Both players ready after alignment, triggering overlapping playback immediately')
-                  emit('trigger-auto-play')
+                if (playersReady) {
+                  console.log('🎧 [DEBUG] Both players confirmed ready, triggering overlapping playback with brief delay...')
+                  // Add small delay to ensure complete readiness after alignment
+                  setTimeout(() => {
+                    console.log('🎧 [DEBUG] Triggering delayed overlapping auto-play')
+                    emit('trigger-auto-play')
+                  }, 100)
                 } else {
-                  console.log('🎧 [DEBUG] Players not ready after alignment, setting up watchers...', { targetReady, userReady })
+                  console.log('🎧 [DEBUG] Players not ready after waiting, setting up watchers...')
                   setupAutoPlayWatchers()
                 }
               } else {
@@ -694,19 +694,15 @@ const processUserAudio = async (blob) => {
   if (autoPlayBoth.value && shouldEmitNow) {
     console.log('🎧 [DEBUG] Auto-play both is enabled, preparing simultaneous playback...')
     
-    // Use nextTick to ensure Vue has updated player refs with new audio
-    console.log('🎧 [DEBUG] Waiting for nextTick before checking player readiness (no alignment path)...')
-    await nextTick()
+    // Use robust waiting to ensure both players are truly ready for playback
+    console.log('🎧 [DEBUG] Waiting for both players to be fully ready (no alignment path)...')
+    const playersReady = await waitForPlayersReady()
     
-    const targetReady = targetAudioPlayerRef.value?.isReady
-    const userReady = userAudioPlayerRef.value?.isReady
-    console.log('🎧 [DEBUG] Player readiness (no alignment path):', { targetReady, userReady })
-    
-    if (targetReady && userReady) {
-      console.log('🎧 [DEBUG] Both players ready, triggering overlapping playback immediately (no alignment path)')
+    if (playersReady) {
+      console.log('🎧 [DEBUG] Both players confirmed ready, triggering overlapping playback (no alignment path)')
       emit('trigger-auto-play')
     } else {
-      console.log('🎧 [DEBUG] Players not ready yet, setting up watchers (no alignment path)...', { targetReady, userReady })
+      console.log('🎧 [DEBUG] Players not ready after waiting, setting up watchers (no alignment path)...')
       setupAutoPlayWatchers()
     }
   } else {
@@ -714,6 +710,46 @@ const processUserAudio = async (blob) => {
   }
   
   console.log('🎧 [DEBUG] processUserAudio function completed')
+}
+
+// Robust function to wait for both players to be truly ready for playback
+const waitForPlayersReady = async (maxWaitTime = 2000) => {
+  const startTime = Date.now()
+  
+  while (Date.now() - startTime < maxWaitTime) {
+    await nextTick() // Ensure Vue updates
+    
+    const targetReady = targetAudioPlayerRef.value?.isReady
+    const userReady = userAudioPlayerRef.value?.isReady
+    
+    // Also check if WaveSurfer instances exist and are properly loaded
+    const targetWavesurfer = targetAudioPlayerRef.value?.wavesurfer?.value
+    const userWavesurfer = userAudioPlayerRef.value?.wavesurfer?.value
+    
+    console.log('🎧 [DEBUG] Checking player readiness:', { 
+      targetReady, 
+      userReady, 
+      targetWavesurfer: !!targetWavesurfer, 
+      userWavesurfer: !!userWavesurfer,
+      elapsed: Date.now() - startTime 
+    })
+    
+    if (targetReady && userReady && targetWavesurfer && userWavesurfer) {
+      // Additional check: ensure WaveSurfer has actual duration (audio loaded)
+      const targetDuration = targetWavesurfer.getDuration?.()
+      const userDuration = userWavesurfer.getDuration?.()
+      
+      if (targetDuration > 0 && userDuration > 0) {
+        console.log('🎧 [DEBUG] Both players fully ready with loaded audio')
+        return true
+      }
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 25)) // Check every 25ms
+  }
+  
+  console.warn('🎧 [DEBUG] Timeout waiting for players to be ready')
+  return false
 }
 
 // Set up watchers to trigger auto-play when both players become ready

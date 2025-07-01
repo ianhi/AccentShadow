@@ -223,8 +223,11 @@ export function usePlaybackControls(providedAppState: AppState | null = null) {
   }
 
   const playOverlapping = async (): Promise<void> => {
+    console.log('🎵 playOverlapping called')
     const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
     const userPlayer = getAudioPlayer(userAudioPlayerRef)
+    
+    console.log('🎵 Player availability:', { targetPlayer: !!targetPlayer, userPlayer: !!userPlayer })
     
     if (targetPlayer && userPlayer) {
       try {
@@ -257,12 +260,18 @@ export function usePlaybackControls(providedAppState: AppState | null = null) {
         const targetPlayerInfo = targetPlayer.playerInfo?.()
         const userPlayerInfo = userPlayer.playerInfo?.()
         
+        console.log('🎵 Player info availability:', { targetPlayerInfo: !!targetPlayerInfo, userPlayerInfo: !!userPlayerInfo })
+        
         if (targetPlayerInfo && userPlayerInfo) {
+          console.log('🎵 Using global audio manager for overlapping playback')
           await globalAudioManager.playOverlapping([targetPlayerInfo, userPlayerInfo])
         } else {
           // Fallback: manually coordinate by directly calling WaveSurfer instances
+          console.log('🎵 Falling back to direct WaveSurfer control')
           const targetWavesurfer = targetPlayer.wavesurfer
           const userWavesurfer = userPlayer.wavesurfer
+          
+          console.log('🎵 WaveSurfer availability:', { targetWavesurfer: !!targetWavesurfer, userWavesurfer: !!userWavesurfer })
           
           if (targetWavesurfer && userWavesurfer) {
             // Stop any existing playback on the wavesurfer instances
@@ -270,10 +279,12 @@ export function usePlaybackControls(providedAppState: AppState | null = null) {
             if (userWavesurfer.isPlaying()) userWavesurfer.pause()
             
             // Play both simultaneously
+            console.log('🎵 Starting overlapping playback with WaveSurfer fallback')
             await Promise.all([
               targetWavesurfer.play(),
               userWavesurfer.play()
             ])
+            console.log('🎵 Overlapping playback started successfully')
           }
         }
         
@@ -282,9 +293,13 @@ export function usePlaybackControls(providedAppState: AppState | null = null) {
         console.error('❌ Error playing overlapping audio:', error)
       }
     } else if (targetPlayer) {
+      console.log('🎵 Only target player available, playing target only')
       await playTarget()
     } else if (userPlayer) {
+      console.log('🎵 Only user player available, playing user only')
       await playUser()
+    } else {
+      console.warn('🎵 No players available for overlapping playback')
     }
   }
 

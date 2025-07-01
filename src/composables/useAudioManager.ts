@@ -125,7 +125,9 @@ export function useAudioManager() {
         }
       });
 
+      console.log(`🎼 Calling wavesurfer.play() for ${playerInfo.id}`);
       playerInfo.wavesurfer.play();
+      console.log(`🎼 Successfully started playback for ${playerInfo.id}`);
       return true;
     } catch (error) {
       console.error(`🎼 Error playing ${playerInfo.id}:`, error);
@@ -189,11 +191,14 @@ export function useAudioManager() {
 
   // Overlapping playback - play multiple players simultaneously
   const playOverlapping = async (players: PlayerInfo[]): Promise<void> => {
+    console.log('🎼 playOverlapping called with players:', players.map(p => ({ id: p.id, type: p.type, hasWavesurfer: !!p.wavesurfer })));
+    
     // Stop any current playback first
     stopAll();
     
     // Enter overlapping mode
     isOverlappingPlaybackActive.value = true;
+    console.log('🎼 Overlapping mode activated');
     
     // Start all players simultaneously
     const playPromises = players.map(player => {
@@ -202,16 +207,23 @@ export function useAudioManager() {
         return Promise.resolve(false);
       }
       
+      console.log(`🎼 Starting player ${player.id} (${player.type})`);
       return new Promise<boolean>((resolve) => {
-        const success = play(player, () => resolve(true));
+        const success = play(player, () => {
+          console.log(`🎼 Player ${player.id} finished`);
+          resolve(true);
+        });
         if (!success) {
+          console.warn(`🎼 Failed to start player ${player.id}`);
           resolve(false);
         }
       });
     });
     
     try {
+      console.log('🎼 Waiting for all players to start...');
       await Promise.all(playPromises);
+      console.log('🎼 All players started successfully');
     } catch (error) {
       console.error('🎼 Error in overlapping playback:', error);
       stopAll();
