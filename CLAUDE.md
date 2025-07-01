@@ -23,6 +23,8 @@ This project emphasizes **idiomatic Vue 3 development practices** with strict ad
 
 **Build Quality Assurance**: Always verify that builds work and check for TypeScript errors regularly during development using `npm run build` and `npm run type-check`.
 
+**Commit Workflow**: **ALWAYS ASK THE USER BEFORE EXECUTING COMMITS**. It's fine to stage files (`git add`) and prepare commit messages, but always ask for explicit permission before running `git commit`, even for documentation or cleanup changes.
+
 ## Audio Processing & Cross-Browser Debugging
 
 **IMPORTANT**: When working on audio-related issues, particularly:
