@@ -9,13 +9,13 @@
         @load-url="$emit('load-url')"
       />
       
-      <!-- Microphone Selection - Hidden on mobile -->
+      <!-- Microphone Selection - Always visible -->
       <MicrophoneSelector 
-        v-if="!shouldUseMobileLayout"
         :availableDevices="availableDevices"
         :selectedDeviceId="selectedDeviceId"
         :disabled="isRecording"
         @device-change="handleDeviceChange"
+        :class="{ 'mobile-microphone': shouldUseMobileLayout }"
       />
     </div>
     
@@ -1164,6 +1164,10 @@ defineExpose({
 
 .mobile-audio-column {
   min-height: auto;
+}
+
+.mobile-microphone {
+  margin-top: 8px;
 }
 
 /* Mobile responsive breakpoint */

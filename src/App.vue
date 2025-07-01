@@ -3,11 +3,14 @@ import { useRoute } from 'vue-router'
 import { computed, onMounted } from 'vue'
 import { usePreloader } from './composables/usePreloader'
 import { useDemoData } from './composables/useDemoData'
+import { useErrorModal } from './composables/useErrorModal'
 import DemoDataPrompt from './components/DemoDataPrompt.vue'
+import ErrorModal from './components/ErrorModal.vue'
 
 const route = useRoute()
 const { preloadAll, preloadStatus } = usePreloader()
 const { initializeFirstVisitDetection, resetDemoState } = useDemoData()
+const { isVisible, title, message, details, showReload, hideError } = useErrorModal()
 
 // Development mode detection
 const isDevelopment = computed(() => import.meta.env.DEV)
@@ -74,6 +77,16 @@ onMounted(async () => {
 
     <!-- Demo data prompt for first-time users -->
     <DemoDataPrompt />
+
+    <!-- Global error modal for production debugging -->
+    <ErrorModal 
+      :isVisible="isVisible"
+      :title="title"
+      :message="message"
+      :details="details"
+      :showReload="showReload"
+      @close="hideError"
+    />
 
     <!-- Router view for all pages -->
     <router-view />

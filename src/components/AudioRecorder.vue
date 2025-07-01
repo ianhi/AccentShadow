@@ -19,12 +19,14 @@ import { ref, onUnmounted } from 'vue';
 import { useAudioRecorder } from '../composables/useAudioRecorder';
 import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts';
 import { useViewport } from '../composables/useViewport';
+import { useErrorModal } from '../composables/useErrorModal';
 
 const emit = defineEmits(['recorded', 'recording-started', 'recording-stopped']);
 
 const { isRecording, recordingTime, startRecording, stopRecording } = useAudioRecorder();
-const { getMediaStream } = useMicrophoneDevices();
+const { getMediaStream, getSelectedDevice } = useMicrophoneDevices();
 const { shouldUseMobileLayout } = useViewport();
+const { showRecordingError } = useErrorModal();
 
 let timer = null;
 
@@ -59,7 +61,10 @@ const toggleRecording = async () => {
       console.log('🎤 Recording started');
     } catch (error) {
       console.error('🎤 Failed to start recording:', error);
-      alert('Failed to start recording with selected microphone. Please try a different microphone.');
+      const selectedDevice = getSelectedDevice();
+      const deviceName = selectedDevice?.label || `Device ID: ${props.selectedDeviceId || 'default'}`;
+      
+      showRecordingError(deviceName, error);
     }
   }
 };
