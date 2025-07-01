@@ -750,41 +750,10 @@ const setupAutoPlayAfterAlignment = () => {
   })
 }
 
-// Set up watchers to trigger auto-play when both players become ready
+// Legacy function - now redirects to reactive approach
 const setupAutoPlayWatchers = () => {
-  console.log('🎵 Setting up watchers for auto-play both')
-  
-  const checkReadiness = () => {
-    const targetReady = targetAudioPlayerRef.value?.isReady
-    const userReady = userAudioPlayerRef.value?.isReady
-    
-    if (targetReady && userReady) {
-      console.log('🎵 Both players now ready, triggering overlapping playback')
-      emit('trigger-auto-play')
-      return true
-    }
-    return false
-  }
-  
-  // Use nextTick to check again after Vue updates
-  nextTick(() => {
-    if (!checkReadiness()) {
-      // If still not ready, poll every 50ms for a maximum of 2 seconds
-      let attempts = 0
-      const maxAttempts = 40 // 2 seconds
-      
-      const pollInterval = setInterval(() => {
-        attempts++
-        
-        if (checkReadiness() || attempts >= maxAttempts) {
-          clearInterval(pollInterval)
-          if (attempts >= maxAttempts) {
-            console.warn('🎵 Auto-play both timeout - players took too long to become ready')
-          }
-        }
-      }, 50)
-    }
-  })
+  console.log('🎵 Legacy setupAutoPlayWatchers called - redirecting to reactive approach')
+  setupAutoPlayAfterAlignment()
 }
 
 // Manual alignment function

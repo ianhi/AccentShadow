@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
 
 const { 
@@ -80,9 +80,15 @@ interface LastSessionStats {
 }
 
 // Component state
-const elapsedTime = ref(0);
 const lastSessionStats = ref<LastSessionStats | null>(null);
-let animationFrameId: number | null = null;
+const currentTime = ref(Date.now());
+let timerInterval: number | null = null;
+
+// Reactive elapsed time computation
+const elapsedTime = computed(() => {
+  if (!sessionState.value.isActive || !sessionState.value.startTime) return 0;
+  return currentTime.value - sessionState.value.startTime;
+});
 
 // Computed properties
 const completionRate = computed(() => {
@@ -90,22 +96,34 @@ const completionRate = computed(() => {
   return Math.round((activeSet.value.progress.completed / activeSet.value.recordings.length) * 100);
 });
 
-// Methods
-const updateTimer = () => {
-  if (sessionState.value.isActive && sessionState.value.startTime) {
-    elapsedTime.value = Date.now() - sessionState.value.startTime;
-    
-    // Use requestAnimationFrame for smooth, efficient updates
-    animationFrameId = requestAnimationFrame(() => {
-      // Schedule next update in approximately 1 second
-      setTimeout(() => {
-        if (sessionState.value.isActive) {
-          updateTimer();
-        }
-      }, 1000);
-    });
+// Reactive timer management
+const startTimer = () => {
+  if (timerInterval) return; // Already running
+  
+  // Update current time every second for reactive elapsed time calculation
+  timerInterval = setInterval(() => {
+    currentTime.value = Date.now();
+  }, 1000);
+  
+  console.log('📊 Session timer started (reactive)');
+};
+
+const stopTimer = () => {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    console.log('📊 Session timer stopped');
   }
 };
+
+// Watch session state reactively instead of manual polling
+watch(() => sessionState.value.isActive, (isActive) => {
+  if (isActive) {
+    startTimer();
+  } else {
+    stopTimer();
+  }
+}, { immediate: true });
 
 const formatTime = (milliseconds: number): string => {
   const seconds = Math.floor(milliseconds / 1000);
@@ -140,17 +158,9 @@ const clearLastSession = () => {
   lastSessionStats.value = null;
 };
 
-// Lifecycle
-onMounted(() => {
-  // Start timer using requestAnimationFrame for better performance
-  updateTimer();
-});
-
+// Lifecycle - cleanup timer on unmount
 onUnmounted(() => {
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
+  stopTimer();
 });
 </script>
 
