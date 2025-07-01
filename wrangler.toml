@@ -1,4 +1,4 @@
-name = "accentshadow"
+name = "accent-shadow"
 main = "src/worker.ts"
 compatibility_date = "2025-07-01"
 compatibility_flags = ["nodejs_compat"]
