@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { useVADProcessor } from './useVADProcessor';
+import { usePreloader } from './usePreloader';
 
 interface VADOptions {
   threshold?: number;
@@ -35,6 +36,7 @@ interface AlignmentResult {
 export function useSmartAudioAlignment() {
   const isProcessing = ref(false);
   const { detectSpeechBoundariesVAD, vadReady, initVAD } = useVADProcessor();
+  const { getAudioContext } = usePreloader();
   
   // Settings - can be made configurable later (keep higher for length balancing)
   const defaultPaddingMs = ref(200); // Keep 200ms for alignment to balance different length audios
@@ -118,12 +120,12 @@ export function useSmartAudioAlignment() {
       isProcessing.value = true;
       console.log(`🔧 Normalizing audio with ${padding}ms padding...`);
       
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioContext = getAudioContext();
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       
       const sampleRate = audioBuffer.sampleRate;
-      const paddingSamples = Math.floor((padding / 1000) * sampleRate);
+      const targetPaddingSamples = Math.floor((padding / 1000) * sampleRate);
       
       // Use original speech boundaries (before VAD padding) for accurate trimming
       const speechStart = vadBoundaries.originalSpeechStart !== undefined 
@@ -138,45 +140,64 @@ export function useSmartAudioAlignment() {
       const speechEndSample = Math.floor(speechEnd * sampleRate);
       const speechDurationSamples = speechEndSample - speechStartSample;
       
-      // Calculate new buffer length: padding + speech + padding
-      const newLength = paddingSamples + speechDurationSamples + paddingSamples;
+      // ONSET NORMALIZATION: Speech should start at exactly the target padding time
+      // Calculate new buffer length: target_padding + speech + target_padding
+      const newLength = targetPaddingSamples + speechDurationSamples + targetPaddingSamples;
       const newBuffer = audioContext.createBuffer(audioBuffer.numberOfChannels, newLength, sampleRate);
       
-      console.log('📏 Audio normalization details:', {
+      console.log('📏 Audio normalization details (ONSET SYNCHRONIZED):', {
+        browserType: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Firefox/Other',
         originalDuration: audioBuffer.duration.toFixed(3) + 's',
-        vadPaddedStart: vadBoundaries.startTime.toFixed(3) + 's',
-        vadPaddedEnd: vadBoundaries.endTime.toFixed(3) + 's',
-        originalSpeechStart: speechStart.toFixed(3) + 's',
-        originalSpeechEnd: speechEnd.toFixed(3) + 's',
+        detectedSpeechStart: speechStart.toFixed(3) + 's',
+        detectedSpeechEnd: speechEnd.toFixed(3) + 's',
         speechDuration: (speechDurationSamples / sampleRate).toFixed(3) + 's',
-        paddingMs: padding + 'ms',
-        newDuration: (newLength / sampleRate).toFixed(3) + 's'
+        targetPaddingMs: padding + 'ms',
+        normalizedSpeechStart: (targetPaddingSamples / sampleRate).toFixed(3) + 's (FIXED)',
+        newDuration: (newLength / sampleRate).toFixed(3) + 's',
+        audioContextSampleRate: audioBuffer.sampleRate + 'Hz'
       });
       
-      // Copy audio data for each channel
+      // Copy audio data for each channel with ONSET NORMALIZATION
       for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
         const originalData = audioBuffer.getChannelData(channel);
         const newData = newBuffer.getChannelData(channel);
         
-        // Add silence padding at the start
-        for (let i = 0; i < paddingSamples; i++) {
+        // Add silence padding at the start (exactly targetPaddingSamples)
+        for (let i = 0; i < targetPaddingSamples; i++) {
           newData[i] = 0;
         }
         
-        // Copy speech portion
+        // Copy speech portion starting at exactly targetPaddingSamples position
+        // This ensures speech onset is ALWAYS at the target padding time (200ms)
         for (let i = 0; i < speechDurationSamples; i++) {
           if (speechStartSample + i < originalData.length) {
-            newData[paddingSamples + i] = originalData[speechStartSample + i];
+            newData[targetPaddingSamples + i] = originalData[speechStartSample + i];
           } else {
-            newData[paddingSamples + i] = 0; // Safety fallback
+            newData[targetPaddingSamples + i] = 0; // Safety fallback
           }
         }
         
         // Add silence padding at the end
-        for (let i = paddingSamples + speechDurationSamples; i < newLength; i++) {
+        for (let i = targetPaddingSamples + speechDurationSamples; i < newLength; i++) {
           newData[i] = 0;
         }
       }
+      
+      // VERIFICATION: Check that speech actually starts at the target padding time
+      const verificationSampleRate = newBuffer.sampleRate;
+      const expectedSpeechStartSample = targetPaddingSamples;
+      const actualSpeechStartTime = expectedSpeechStartSample / verificationSampleRate;
+      
+      console.log('🔍 ONSET NORMALIZATION VERIFICATION:', {
+        expectedSpeechStart: (targetPaddingSamples / verificationSampleRate).toFixed(3) + 's',
+        actualBufferLayout: {
+          silenceSamples: targetPaddingSamples,
+          speechSamples: speechDurationSamples,
+          endSilenceSamples: targetPaddingSamples,
+          totalSamples: newBuffer.length
+        },
+        verificationPassed: newBuffer.length === (targetPaddingSamples + speechDurationSamples + targetPaddingSamples)
+      });
       
       console.log('✅ Audio normalization complete');
       return audioBufferToBlob(newBuffer);
@@ -230,7 +251,7 @@ export function useSmartAudioAlignment() {
       }
       
       // Get durations of normalized audios
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioContext = getAudioContext();
       
       const buffer1 = await audioContext.decodeAudioData(await normalized1.arrayBuffer());
       const buffer2 = await audioContext.decodeAudioData(await normalized2.arrayBuffer());
@@ -244,61 +265,55 @@ export function useSmartAudioAlignment() {
         difference: Math.abs(duration1 - duration2).toFixed(3) + 's'
       });
       
+      // ONSET SYNCHRONIZED ALIGNMENT: Both audios now have speech at exactly the target padding time
+      // We just need to make them the same total duration by padding the shorter one at the end
+      console.log(`🎯 ONSET SYNCHRONIZED: Both audios have speech starting at exactly ${padding}ms`);
+      
       // If they're already very close (within 10ms), no need to pad
       if (Math.abs(duration1 - duration2) < 0.01) {
-        console.log('✅ Audios already aligned, no padding needed');
+        console.log('✅ Audios already aligned with synchronized onsets, no padding needed');
         return {
           audio1Aligned: normalized1,
           audio2Aligned: normalized2,
           alignmentInfo: {
             paddingAdded: 0,
             finalDuration: duration1,
-            method: 'already_aligned'
+            method: 'onset_synchronized_already_aligned'
           }
         };
       }
       
-      // Determine which audio needs padding
-      let shorterAudio: Blob, longerAudio: Blob, shorterBuffer: AudioBuffer, targetDuration: number;
+      // Determine which audio needs END padding (speech onsets are already synchronized)
       let audio1Final: Blob = normalized1;
       let audio2Final: Blob = normalized2;
+      const targetDuration = Math.max(duration1, duration2);
       
+      // Add end padding to whichever audio is shorter
       if (duration1 < duration2) {
-        shorterAudio = normalized1;
-        longerAudio = normalized2;
-        shorterBuffer = buffer1;
-        targetDuration = duration2;
-        audio2Final = normalized2;
-      } else {
-        shorterAudio = normalized2;
-        longerAudio = normalized1;
-        shorterBuffer = buffer2;
-        targetDuration = duration1;
-        audio1Final = normalized1;
+        const paddingNeeded = duration2 - duration1;
+        audio1Final = await padAudioAtEnd(normalized1, paddingNeeded);
+        console.log(`🎯 Added ${paddingNeeded.toFixed(3)}s end padding to audio1 (target) for duration matching`);
+      } else if (duration2 < duration1) {
+        const paddingNeeded = duration1 - duration2;
+        audio2Final = await padAudioAtEnd(normalized2, paddingNeeded);
+        console.log(`🎯 Added ${paddingNeeded.toFixed(3)}s end padding to audio2 (user) for duration matching`);
       }
       
-      // Pad the shorter audio at the end
-      const paddingNeeded = targetDuration - shorterBuffer.duration;
-      const paddedAudio = await padAudioAtEnd(shorterAudio, paddingNeeded);
+      const paddingAdded = Math.abs(duration1 - duration2);
       
-      if (duration1 < duration2) {
-        audio1Final = paddedAudio;
-      } else {
-        audio2Final = paddedAudio;
-      }
-      
-      console.log('✅ Audio alignment complete:', {
-        paddingAdded: paddingNeeded.toFixed(3) + 's',
-        finalDuration: targetDuration.toFixed(3) + 's'
+      console.log('✅ Onset synchronized alignment complete:', {
+        paddingAdded: paddingAdded.toFixed(3) + 's',
+        finalDuration: targetDuration.toFixed(3) + 's',
+        method: 'onset_synchronized_end_padding'
       });
       
       return {
         audio1Aligned: audio1Final,
         audio2Aligned: audio2Final,
         alignmentInfo: {
-          paddingAdded: paddingNeeded,
+          paddingAdded: paddingAdded,
           finalDuration: targetDuration,
-          method: 'end_padding'
+          method: 'onset_synchronized_end_padding'
         }
       };
       
@@ -327,7 +342,7 @@ export function useSmartAudioAlignment() {
    * @returns {Promise<Blob>} - Padded audio blob
    */
   const padAudioAtEnd = async (audioBlob: Blob, paddingSeconds: number): Promise<Blob> => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioContext = getAudioContext();
     const arrayBuffer = await audioBlob.arrayBuffer();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
     

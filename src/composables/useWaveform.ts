@@ -1,7 +1,8 @@
 
-import { ref, shallowRef, onUnmounted, nextTick, type Ref } from 'vue';
+import { ref, shallowRef, onUnmounted, nextTick, watch, type Ref } from 'vue';
 import WaveSurfer from 'wavesurfer.js';
 import Spectrogram from 'wavesurfer.js/dist/plugins/spectrogram.esm.js';
+import Regions from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import { audioManager } from './useAudioManager';
 import { usePreloader } from './usePreloader';
 
@@ -17,7 +18,8 @@ export function useWaveform(
   spectrogramContainerRef: Ref<HTMLElement | null>, 
   audioId: string | null = null, 
   audioType: string = 'unknown',
-  onReadyToPlay?: () => void
+  onReadyToPlay?: () => void,
+  vadSegments: Ref<Array<{startTime: number, endTime: number, type: string}>> = ref([])
 ) {
   const wavesurfer = shallowRef<WaveSurfer | null>(null);
   const isReady = ref(false);
@@ -88,6 +90,16 @@ export function useWaveform(
       
       wavesurfer.value = instance;
       
+      // Create regions plugin for VAD segment visualization
+      let regionsPlugin = null;
+      try {
+        regionsPlugin = Regions.create();
+        wavesurfer.value.registerPlugin(regionsPlugin);
+        console.log(`🎯 [${audioType.toUpperCase()}]: Regions plugin registered for VAD visualization`);
+      } catch (error) {
+        console.error(`🎵 Error creating regions plugin:`, error);
+      }
+      
       // Create spectrogram plugin
       try {
         const spectrogramPlugin = Spectrogram.create({
@@ -113,6 +125,14 @@ export function useWaveform(
         if (!wavesurfer.value) return;
         
         const audioDuration = wavesurfer.value.getDuration();
+        
+        // DEBUG: Check WaveSurfer's perception of audio timing
+        console.log(`🎼 WaveSurfer ready [${audioType.toUpperCase()}]:`, {
+          duration: audioDuration.toFixed(3) + 's',
+          sampleRate: (wavesurfer.value as any).options?.sampleRate || 'default',
+          audioContextSampleRate: getAudioContext().sampleRate + 'Hz',
+          browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Firefox/Other'
+        });
         
         // Register with audio manager
         playerInfo = audioManager.registerPlayer(playerId, audioType, wavesurfer.value);
@@ -145,6 +165,11 @@ export function useWaveform(
         // If we have a ready-to-play callback, call it now that everything is set up
         if (onReadyToPlay) {
           onReadyToPlay();
+        }
+        
+        // Add initial VAD segments if available
+        if (vadSegments.value.length > 0) {
+          addVadSegments(vadSegments.value);
         }
       });
 
@@ -214,54 +239,60 @@ export function useWaveform(
   
   // Separate function for direct audio loading (no recreation)
   const loadAudioDirect = (url: string): void => {
-    if (!wavesurfer.value || !url) {
+    if (!url) {
       return;
     }
     
-    // Stop any current playback 
-    try {
-      if (wavesurfer.value.isPlaying()) {
-        wavesurfer.value.pause();
-      }
-    } catch (pauseError) {
-      // Ignore pause errors
-      console.log('🎵 Paused current playback');
-    }
+    // CRITICAL FIX: Always recreate WaveSurfer instance to ensure spectrogram and waveform sync
+    // This prevents any caching issues where spectrogram might show old audio data
+    console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Destroying and recreating WaveSurfer to ensure audio sync`);
+    console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Loading URL: ${url.substring(0, 50)}...`);
     
+    // Always destroy and recreate to prevent any plugin caching issues
+    destroyWaveform();
+    
+    // Reset state
     isReady.value = false;
     isPlaying.value = false;
     currentTime.value = 0;
     duration.value = 0;
     
+    // CRITICAL FIX: Use reactive pattern to ensure both containers are ready
+    if (!containerRef.value || !spectrogramContainerRef.value) {
+      console.log('🎵 SYNC FIX: Containers not ready, deferring load...');
+      return; // Simply return - the audio will load when containers become available
+    }
+    
+    // Recreate WaveSurfer instance with fresh spectrogram plugin
     try {
-      // Wrap load operation to catch both sync and async errors
-      const loadPromise = wavesurfer.value.load(url);
+      console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Initializing fresh WaveSurfer instance`);
+      initWaveform();
       
-      // Handle promise rejection for async errors like spectrogram issues
-      if (loadPromise && typeof loadPromise.catch === 'function') {
-        loadPromise.catch((asyncError: any) => {
-          // Filter out expected spectrogram errors during loading
-          if (asyncError?.message?.includes('Cannot read properties of undefined') ||
-              asyncError?.message?.includes('length')) {
-            console.log('🎵 Spectrogram data error during load (handled)');
-            return;
-          }
-          console.error('🎵 Async load error:', asyncError);
-        });
-      }
-    } catch (error) {
-      console.error(`🎵 Error loading audio:`, error);
-      // If loading fails, try recreating the instance
-      destroyWaveform();
-      // Use nextTick for proper Vue reactivity instead of arbitrary delays
+      // Wait for initialization to complete before loading audio
       nextTick(() => {
-        initWaveform();
-        nextTick(() => {
-          if (wavesurfer.value) {
-            loadAudioDirect(url);
+        if (wavesurfer.value) {
+          console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Loading audio into fresh instance`);
+          
+          const loadPromise = wavesurfer.value.load(url);
+          
+          // Handle promise rejection for async errors
+          if (loadPromise && typeof loadPromise.catch === 'function') {
+            loadPromise.catch((asyncError: any) => {
+              // Filter out expected spectrogram errors during loading
+              if (asyncError?.message?.includes('Cannot read properties of undefined') ||
+                  asyncError?.message?.includes('length')) {
+                console.log('🎵 Spectrogram data error during load (handled)');
+                return;
+              }
+              console.error('🎵 Async load error:', asyncError);
+            });
           }
-        });
+        } else {
+          console.error(`🎵 SYNC FIX [${audioType.toUpperCase()}]: WaveSurfer instance not ready after init`);
+        }
       });
+    } catch (error) {
+      console.error(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Error during fresh instance creation:`, error);
     }
   };
 
@@ -328,6 +359,65 @@ export function useWaveform(
     }
   };
 
+  // VAD segments visualization functions
+  const addVadSegments = (segments: Array<{startTime: number, endTime: number, type: string}>) => {
+    if (!wavesurfer.value || !isReady.value) {
+      console.log(`🎯 [${audioType.toUpperCase()}]: Cannot add VAD segments - waveform not ready`);
+      return;
+    }
+    
+    try {
+      // Clear existing regions first
+      const regionsPlugin = (wavesurfer.value as any).getPlugin('regions');
+      if (regionsPlugin) {
+        regionsPlugin.clearRegions();
+        
+        segments.forEach((segment, index) => {
+          const region = regionsPlugin.addRegion({
+            start: segment.startTime,
+            end: segment.endTime,
+            color: 'rgba(255, 0, 0, 0.1)', // Semi-transparent red for speech segments
+            drag: false,
+            resize: false,
+            id: `vad-segment-${index}`
+          });
+          
+          console.log(`🎯 [${audioType.toUpperCase()}]: Added VAD segment ${index + 1}: ${segment.startTime.toFixed(3)}s - ${segment.endTime.toFixed(3)}s`);
+        });
+        
+        console.log(`🎯 [${audioType.toUpperCase()}]: Added ${segments.length} VAD segments to waveform`);
+      } else {
+        console.warn(`🎯 [${audioType.toUpperCase()}]: Regions plugin not available for VAD segments`);
+      }
+    } catch (error) {
+      console.error(`🎯 [${audioType.toUpperCase()}]: Error adding VAD segments:`, error);
+    }
+  };
+  
+  const clearVadSegments = () => {
+    if (!wavesurfer.value) return;
+    
+    try {
+      const regionsPlugin = (wavesurfer.value as any).getPlugin('regions');
+      if (regionsPlugin) {
+        regionsPlugin.clearRegions();
+        console.log(`🎯 [${audioType.toUpperCase()}]: Cleared VAD segments`);
+      }
+    } catch (error) {
+      console.error(`🎯 [${audioType.toUpperCase()}]: Error clearing VAD segments:`, error);
+    }
+  };
+  
+  // Watch for VAD segments changes
+  watch(vadSegments, (newSegments) => {
+    if (newSegments && newSegments.length > 0 && isReady.value) {
+      console.log(`🎯 [${audioType.toUpperCase()}]: VAD segments updated, adding to waveform:`, newSegments);
+      addVadSegments(newSegments);
+    } else {
+      clearVadSegments();
+    }
+  }, { deep: true });
+
   // Note: onUnmounted is handled by parent component to avoid lifecycle issues
 
   return {
@@ -348,5 +438,7 @@ export function useWaveform(
     setVolume,
     setPlaybackRate,
     destroyWaveform,
+    addVadSegments,
+    clearVadSegments,
   };
 }

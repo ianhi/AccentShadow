@@ -21,6 +21,7 @@ interface VADBoundaries {
   silenceStart: number;
   silenceEnd: number;
   speechSegments: number;
+  speechSegmentsList?: Array<{startTime: number, endTime: number, audioLength?: number}>;
   confidenceScore: number;
   vadFailed?: boolean;
   error?: string;
@@ -232,16 +233,27 @@ export function useVADProcessor() {
       // Create VAD instance using simplified approach from documentation
       console.log('🎛️ Creating simplified VAD instance following documentation pattern');
 
-      // Use passed parameters or aggressive defaults from tuner
+      // Use passed parameters with proper defaults that preserve speech
+      // VAD internally resamples to 16kHz, so frameSamples=512 gives consistent 32ms frames
       const vadConfig = {
         positiveSpeechThreshold: positiveSpeechThreshold,  // From parameters or 0.3 default
         negativeSpeechThreshold: negativeSpeechThreshold,  // From parameters or 0.2 default
-        redemptionFrames: 32,  // From parameters or aggressive default
-        frameSamples: 1536,                               // Default frame size
-        minSpeechFrames: minSpeechFrames,                 // From parameters or aggressive default
-        preSpeechPadFrames: 4,                            // Balanced context
-        positiveSpeechPadFrames: 4                        // Balanced context
+        redemptionFrames: (options as any).redemptionFrames || 32,  // Use user setting or default
+        frameSamples: (options as any).frameSamples || 512,         // Standard for VAD v5 model (32ms at 16kHz)
+        minSpeechFrames: minSpeechFrames,                           // From parameters or aggressive default
+        preSpeechPadFrames: (options as any).preSpeechPadFrames || 8,     // More conservative padding
+        positiveSpeechPadFrames: (options as any).positiveSpeechPadFrames || 8  // More conservative padding
       };
+
+      // VAD PROCESSING DEBUG: Log sample rate and frame info
+      console.log('🔍 VAD PROCESSING INFO:', {
+        inputSampleRate: nativeSampleRate + 'Hz',
+        vadInternalRate: '16kHz (VAD resamples internally)',
+        frameSize: vadConfig.frameSamples + ' samples',
+        frameDuration: (vadConfig.frameSamples / 16000 * 1000).toFixed(1) + 'ms @ 16kHz',
+        browserType: navigator.userAgent.includes('Chrome') ? 'Chrome-like' : 
+                    navigator.userAgent.includes('Firefox') ? 'Firefox' : 'Other'
+      });
 
       console.log('🔧 VAD CONFIG (simplified approach):', vadConfig);
 
@@ -308,8 +320,21 @@ export function useVADProcessor() {
         console.log(`🔗 MERGED ${filteredSegments.length} segments into ${mergedSegments.length} merged segments`);
 
         // Find earliest start and latest end from merged segments
-        overallStart = Math.min(...mergedSegments.map((s: any) => s.startTime));
-        overallEnd = Math.max(...mergedSegments.map((s: any) => s.endTime));
+        const rawStart = Math.min(...mergedSegments.map((s: any) => s.startTime));
+        const rawEnd = Math.max(...mergedSegments.map((s: any) => s.endTime));
+        
+        // Use the raw VAD boundaries directly - no additional safety buffer needed
+        // The alignment composable already adds 200ms padding during normalization
+        overallStart = Math.max(0, rawStart);
+        overallEnd = Math.min(audioBuffer.duration, rawEnd);
+        
+        console.log(`🎯 VAD BOUNDARIES DETECTED:`, {
+          speechStart: overallStart.toFixed(3) + 's',
+          speechEnd: overallEnd.toFixed(3) + 's',
+          speechDuration: (overallEnd - overallStart).toFixed(3) + 's',
+          browserType: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Firefox/Other',
+          audioContextSampleRate: audioBuffer.sampleRate + 'Hz'
+        });
 
         console.log(`🔍 VAD SEGMENTS ANALYSIS:`, {
           totalSegments: speechSegments.length,
@@ -336,7 +361,7 @@ export function useVADProcessor() {
         const totalDuration = audioBuffer.duration; // Use original audio duration
         confidenceScore = Math.min(1, totalSpeechDuration / (totalDuration * 0.8)); // Expect ~80% to be speech
 
-        // Store original speech boundaries (NO PADDING APPLIED HERE)
+        // Store original speech boundaries (SAFETY BUFFERED but no user padding applied yet)
         originalSpeechStart = overallStart;
         originalSpeechEnd = overallEnd;
 
@@ -388,6 +413,7 @@ export function useVADProcessor() {
         silenceStart: overallStart,  // Silence before speech
         silenceEnd: audioBuffer.duration - overallEnd,  // Silence after speech
         speechSegments: speechSegments.length,
+        speechSegmentsList: speechSegments, // Include the detailed segments for visualization
         confidenceScore
       };
 
