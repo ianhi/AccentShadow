@@ -107,8 +107,8 @@ const handleLoadDemo = async (): Promise<void> => {
   }
 };
 
-const handleDismiss = (): void => {
-  dismissDemoPrompt();
+const handleDismiss = async (): Promise<void> => {
+  await dismissDemoPrompt();
 };
 </script>
 

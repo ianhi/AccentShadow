@@ -5,6 +5,7 @@
 
 import { ref, computed } from 'vue';
 import { useRecordingSets } from './useRecordingSets';
+import { useMicrophoneDevices } from './useMicrophoneDevices';
 import { getDefaultDemoSet, validateDemoAudio, type DemoRecording } from '@/data/demoData';
 
 // Local storage keys
@@ -43,6 +44,25 @@ const initializeFirstVisitDetection = (): void => {
 const markAsVisited = (): void => {
   localStorage.setItem(STORAGE_KEYS.FIRST_VISIT, 'true');
   isFirstVisit.value = false;
+};
+
+// Request microphone permission after user interaction
+const requestMicrophonePermissionAfterDemo = async (): Promise<void> => {
+  try {
+    console.log('🎤 Requesting microphone permission after demo interaction');
+    const { requestMicrophonePermission, hasPermission } = useMicrophoneDevices();
+    
+    // Only request if permission hasn't been granted yet
+    if (!hasPermission.value) {
+      await requestMicrophonePermission();
+      console.log('✅ Microphone permission requested successfully after demo');
+    } else {
+      console.log('🎤 Microphone permission already granted');
+    }
+  } catch (error) {
+    console.log('⚠️ Microphone permission request failed (user may have denied):', error);
+    // Don't block the demo flow if microphone permission fails
+  }
 };
 
 // Convert demo recording to input recording format
@@ -131,6 +151,9 @@ const loadDemoData = async (): Promise<boolean> => {
       setId: recordingSet.id
     });
     
+    // Request microphone permission after successful demo load
+    await requestMicrophonePermissionAfterDemo();
+    
     return true;
     
   } catch (error) {
@@ -143,7 +166,7 @@ const loadDemoData = async (): Promise<boolean> => {
 };
 
 // Dismiss demo prompt
-const dismissDemoPrompt = (): void => {
+const dismissDemoPrompt = async (): Promise<void> => {
   showDemoPrompt.value = false;
   markAsVisited();
   
@@ -155,6 +178,9 @@ const dismissDemoPrompt = (): void => {
   localStorage.setItem(STORAGE_KEYS.USER_PREFERENCES, JSON.stringify(preferences));
   
   console.log('👋 Demo prompt dismissed by user');
+  
+  // Request microphone permission after user dismisses demo
+  await requestMicrophonePermissionAfterDemo();
 };
 
 // Reset demo state (for testing/development)
