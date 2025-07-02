@@ -6,7 +6,7 @@
         <a href="https://github.com/ianhi/AccentShadow" target="_blank" rel="noopener noreferrer" class="github-link">OPEN SOURCE</a> - ALWAYS FREE
       </p>
     </div>
-    <button @click="openSettings" class="settings-btn desktop-only" title="Settings">
+    <button @click="openSettings" class="settings-btn" title="Settings">
       ⚙️ Settings
     </button>
   </div>
@@ -33,7 +33,7 @@ const openSettings = () => {
   align-items: center;
   justify-content: center;
   position: relative;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .title-section {
@@ -99,10 +99,14 @@ const openSettings = () => {
   transform: translateY(-50%) scale(1.05);
 }
 
-/* Hide settings button on mobile - use bottom nav instead */
+/* Mobile adjustments */
 @media (max-width: 768px) {
+  .main-header {
+    margin-bottom: 8px;
+  }
+  
   .main-header h1 {
-    font-size: 2rem;
+    font-size: 1.8rem;
   }
   
   .subtitle {
@@ -110,8 +114,19 @@ const openSettings = () => {
     letter-spacing: 1.2px;
   }
   
-  .desktop-only {
-    display: none;
+  .settings-btn {
+    font-size: 0;
+    padding: 10px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .settings-btn::before {
+    content: "⚙️";
+    font-size: 18px;
   }
 }
 </style>

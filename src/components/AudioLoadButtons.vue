@@ -83,11 +83,54 @@ defineEmits([
 @media (max-width: 768px) {
   .audio-load-buttons {
     justify-content: center;
+    gap: 6px;
   }
   
   .action-btn {
-    font-size: 13px;
-    padding: 8px 12px;
+    font-size: 16px;
+    padding: 8px;
+    min-width: 40px;
+    width: 40px;
+    height: 40px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+  }
+  
+  /* Hide text, show only emoji on mobile */
+  .action-btn::before {
+    content: attr(data-icon);
+  }
+  
+  .file-btn::before {
+    content: "📄";
+  }
+  
+  .folder-btn::before {
+    content: "📁";
+  }
+  
+  .url-btn::before {
+    content: "🌐";
+  }
+  
+  .demo-btn::before {
+    content: "🎵";
+  }
+  
+  .sets-btn::before {
+    content: "📚";
+  }
+  
+  /* Hide the original content */
+  .action-btn {
+    font-size: 0;
+  }
+  
+  .action-btn::before {
+    font-size: 16px;
   }
 }
 </style>

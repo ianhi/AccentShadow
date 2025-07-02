@@ -1,5 +1,6 @@
 <template>
-  <div class="folder-upload">
+  <Teleport to="body">
+    <div class="folder-upload">
     <div class="upload-header">
       <h3>📁 Upload Audio Folder</h3>
       <button @click="closeModal" class="close-btn">✕</button>
@@ -19,32 +20,12 @@
           <div class="drop-icon">📁</div>
           <div class="drop-text">
             <p><strong>Drop a folder here</strong> or click to browse</p>
-            <p class="drop-subtext">All audio files (MP3, WAV, OGG, M4A) will be imported</p>
-            <p class="drop-subtext">Include a CSV file for transcriptions and metadata</p>
+            <p class="drop-subtext">Upload a local folder containing audio files (MP3, WAV, OGG, M4A)</p>
+            <p class="drop-subtext">Optional: Include a CSV file for transcriptions and metadata</p>
           </div>
         </div>
       </div>
       
-      <div class="upload-divider">
-        <span>OR</span>
-      </div>
-      
-      <!-- URL Import -->
-      <div class="url-import">
-        <h4>🌐 Import from URL</h4>
-        <div class="url-input-group">
-          <input 
-            type="url" 
-            v-model="importUrl" 
-            placeholder="Enter Google Drive, Dropbox, or direct folder URL"
-            class="url-input"
-          />
-          <button @click="importFromUrl" :disabled="!importUrl.trim() || isLoadingUrl" class="url-import-btn">
-            {{ isLoadingUrl ? '⏳' : '📥' }} Import
-          </button>
-        </div>
-        <p class="url-help">Supports: Public Google Drive folders, Dropbox shared folders, direct file URLs</p>
-      </div>
       
       <input 
         ref="fileInput" 
@@ -143,7 +124,8 @@
         <p class="progress">{{ importProgress.current }} / {{ importProgress.total }}</p>
       </div>
     </div>
-  </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -174,9 +156,6 @@ const importProgress = ref({ current: 0, total: 0 });
 const csvData = ref(null);
 const hasCSVFile = ref(false);
 
-// URL import state
-const importUrl = ref('');
-const isLoadingUrl = ref(false);
 
 // Computed properties
 const audioFiles = computed(() => {
@@ -333,36 +312,6 @@ const closeModal = () => {
   emit('close');
 };
 
-// URL import functionality
-const importFromUrl = async () => {
-  if (!importUrl.value.trim()) return;
-  
-  isLoadingUrl.value = true;
-  try {
-    // Convert Google Drive share URLs to direct access format
-    let processedUrl = importUrl.value;
-    
-    // Handle Google Drive folder URLs
-    const driveMatch = processedUrl.match(/drive\.google\.com\/drive\/folders\/([a-zA-Z0-9-_]+)/);
-    if (driveMatch) {
-      // Note: This would require API integration for full functionality
-      // For now, show a helpful message
-      alert('🚧 Google Drive integration requires additional setup. Please download the folder and upload manually for now.');
-      isLoadingUrl.value = false;
-      return;
-    }
-    
-    // For direct URLs, try to fetch the content
-    // This is a basic implementation - real implementation would need CORS proxy
-    alert('🚧 URL import is not yet implemented. Please download files manually and upload.');
-    
-  } catch (error) {
-    console.error('❌ URL import failed:', error);
-    alert('❌ Failed to import from URL. Please check the URL and try again.');
-  } finally {
-    isLoadingUrl.value = false;
-  }
-};
 
 const importRecordings = async () => {
   if (!setName.value.trim() || !audioFiles.value.length) return;
@@ -779,100 +728,6 @@ const importRecordings = async () => {
   100% { transform: rotate(360deg); }
 }
 
-/* URL Import Styles */
-.upload-divider {
-  display: flex;
-  align-items: center;
-  margin: 16px 0;
-  text-align: center;
-}
-
-.upload-divider::before,
-.upload-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.upload-divider span {
-  padding: 0 16px;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.url-import {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.url-import h4 {
-  margin: 0 0 12px 0;
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.url-input-group {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.url-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-}
-
-.url-input:focus {
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
-}
-
-.url-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.url-import-btn {
-  padding: 8px 16px;
-  background: #60a5fa;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-.url-import-btn:hover:not(:disabled) {
-  background: #3b82f6;
-  transform: translateY(-1px);
-}
-
-.url-import-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.url-help {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0;
-  line-height: 1.4;
-}
 
 /* CSV Info Styles */
 .csv-info {

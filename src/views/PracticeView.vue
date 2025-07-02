@@ -32,6 +32,7 @@
       <div class="playback-controls-container" :class="{ 'sticky-controls': shouldUseMobileLayout }">
         <CentralPlaybackControls
           :selectedDeviceId="selectedDeviceId"
+          :availableDevices="availableDevices"
           @recorded="handleRecordedAudio"
           @recording-started="handleRecordingStarted"
           @recording-stopped="handleRecordingStopped"
@@ -41,6 +42,7 @@
           @play-sequential="playSequentialWithDelay"
           @stop-all="stopAll"
           @speed-change="handleSpeedChange"
+          @device-change="handleMicrophoneDeviceChange"
         />
       </div>
 
@@ -57,11 +59,6 @@
       </template>
     </div>
 
-    <!-- Mobile Bottom Navigation -->
-    <MobileBottomNav 
-      :activeTab="mobileActiveTab"
-      @tab-clicked="handleMobileTabClick"
-    />
 
 
 
@@ -144,7 +141,6 @@ import RecordingStateManager from '../components/RecordingStateManager.vue';
 import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
 import AppSettingsModal from '../components/AppSettingsModal.vue';
 import DemoAudioModal from '../components/DemoAudioModal.vue';
-import MobileBottomNav from '../components/MobileBottomNav.vue';
 import MicrophoneSelector from '../components/MicrophoneSelector.vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
 import { useAppState } from '../composables/useAppState';
@@ -189,7 +185,6 @@ const { shouldUseMobileLayout } = useViewport()
 const { availableDevices, selectedDeviceId, setSelectedDevice } = useMicrophoneDevices()
 
 // Mobile layout state
-const mobileActiveTab = ref(null)
 const showStatsOnMobile = ref(false)
 
 // Demo modal state
@@ -443,23 +438,6 @@ const handleAutoAlignToggled = (value) => console.log('Auto-align toggled:', val
 const handleManualAlignTriggered = () => console.log('Manual alignment triggered')
 const handleSequentialDelayUpdated = (value) => console.log('Sequential delay updated:', value)
 
-// Mobile navigation handlers
-const handleMobileTabClick = (tabName) => {
-  mobileActiveTab.value = tabName
-  
-  switch (tabName) {
-    case 'sets':
-      // Recording sets are now handled through the unified modal
-      // This case can be removed when MobileBottomNav no longer has a sets tab
-      break
-    case 'settings':
-      // Open the unified app settings modal instead of mobile-specific modal
-      openAppSettingsModal()
-      // Reset mobile tab state since we're using the main settings modal
-      mobileActiveTab.value = null
-      break
-  }
-}
 
 
 const handleMicrophoneChange = (deviceId) => {
@@ -666,12 +644,12 @@ watch(currentRecording, async (newRecording, oldRecording) => {
 
 /* Mobile Layout Styles */
 .mobile-layout .main-content {
-  padding-bottom: 80px; /* Space for bottom nav */
+  padding-bottom: 20px;
 }
 
 .sticky-controls {
   position: sticky;
-  bottom: 80px; /* Above bottom nav */
+  bottom: 20px;
   z-index: 50;
   background: rgba(26, 26, 46, 0.95);
   backdrop-filter: blur(10px);
@@ -789,7 +767,7 @@ watch(currentRecording, async (newRecording, oldRecording) => {
 /* Mobile responsive */
 @media (max-width: 768px) {
   .main-content {
-    padding: 16px;
+    padding: 8px;
   }
   
   .modal-content {
@@ -805,13 +783,13 @@ watch(currentRecording, async (newRecording, oldRecording) => {
 /* Portrait-specific mobile styles */
 @media (max-width: 768px) and (orientation: portrait) {
   .mobile-layout .main-content {
-    padding: 12px;
-    padding-bottom: 80px;
+    padding: 6px;
+    padding-bottom: 60px;
   }
   
   .sticky-controls {
-    margin: 8px 0;
-    bottom: 75px;
+    margin: 6px 0;
+    bottom: 55px;
   }
 }
 </style>

@@ -271,19 +271,47 @@ onUnmounted(() => {
   background-color: #dc2626;
 }
 
+@media (max-width: 768px) {
+  .session-stats {
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+  
+  .stats-header {
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+  }
+  
+  .stats-grid {
+    margin-bottom: 8px;
+  }
+}
+
 @media (max-width: 480px) {
+  .session-stats {
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  
+  .stats-header {
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+  }
+  
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 8px;
+    margin-bottom: 6px;
   }
   
   .stat-value {
-    font-size: 20px;
+    font-size: 18px;
+    margin-bottom: 2px;
   }
   
   .session-timer {
-    font-size: 12px;
-    padding: 3px 8px;
+    font-size: 11px;
+    padding: 2px 6px;
   }
 }
 </style>

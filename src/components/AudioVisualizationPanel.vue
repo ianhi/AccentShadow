@@ -1070,22 +1070,22 @@ defineExpose({
 
 /* Mobile layout styles */
 .mobile-layout {
-  gap: 8px;
+  gap: 6px;
 }
 
 .mobile-controls {
-  padding: 12px;
-  margin-bottom: 4px;
+  padding: 8px;
+  margin-bottom: 2px;
 }
 
 .mobile-controls h3 {
   font-size: 14px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .mobile-stacked {
   grid-template-columns: 1fr !important;
-  gap: 16px;
+  gap: 8px;
   min-height: auto;
 }
 
@@ -1098,18 +1098,18 @@ defineExpose({
 }
 
 .mobile-microphone {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 /* Mobile responsive breakpoint */
 @media (max-width: 768px) {
   .visualization-container {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 10px;
   }
   
   .bottom-controls {
-    padding: 12px;
+    padding: 8px;
   }
   
   .alignment-controls,
@@ -1126,15 +1126,15 @@ defineExpose({
 /* Portrait orientation optimization */
 @media (max-width: 768px) and (orientation: portrait) {
   .mobile-layout {
-    gap: 6px;
+    gap: 4px;
   }
   
   .mobile-controls {
-    padding: 6px 8px;
+    padding: 4px 6px;
   }
   
   .mobile-stacked {
-    gap: 4px;
+    gap: 6px;
   }
   
   .mobile-audio-column {

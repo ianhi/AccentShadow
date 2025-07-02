@@ -38,6 +38,16 @@
           :compact="true"
         />
       </div>
+      
+      <!-- Microphone Selection on Mobile -->
+      <div class="mobile-microphone-control">
+        <MicrophoneSelector 
+          :availableDevices="availableDevices" 
+          :selectedDeviceId="selectedDeviceId"
+          :disabled="isRecordingActive" 
+          @device-change="$emit('device-change', $event)"
+        />
+      </div>
     </div>
     
     <!-- Desktop Layout -->
@@ -80,11 +90,12 @@
 import AudioRecorder from './AudioRecorder.vue'
 import PlaybackControls from './PlaybackControls.vue'
 import SpeedControl from './SpeedControl.vue'
+import MicrophoneSelector from './MicrophoneSelector.vue'
 import { useAppStateInject } from '../composables/useAppState'
 import { useViewport } from '../composables/useViewport'
 
 // Use app state directly instead of props for shared state
-const { hasTargetAudio, hasUserAudio, globalPlaybackSpeed } = useAppStateInject()
+const { hasTargetAudio, hasUserAudio, globalPlaybackSpeed, isRecordingActive } = useAppStateInject()
 const { shouldUseMobileLayout } = useViewport()
 
 // Props for microphone device
@@ -92,6 +103,10 @@ const props = defineProps({
   selectedDeviceId: {
     type: String,
     default: null
+  },
+  availableDevices: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -105,7 +120,8 @@ defineEmits([
   'play-overlapping',
   'play-sequential',
   'stop-all',
-  'speed-change'
+  'speed-change',
+  'device-change'
 ])
 </script>
 
@@ -116,7 +132,7 @@ defineEmits([
   border-radius: 12px;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  margin: 20px 0;
+  margin: 16px 0;
 }
 
 .central-playback-controls h3 {
@@ -141,14 +157,14 @@ defineEmits([
 
 /* Mobile compact layout */
 .mobile-compact {
-  padding: 12px;
-  margin: 8px 0;
+  padding: 6px;
+  margin: 4px 0;
 }
 
 .mobile-controls-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
@@ -180,10 +196,16 @@ defineEmits([
   justify-content: center;
 }
 
+.mobile-microphone-control {
+  display: flex;
+  justify-content: center;
+  margin-top: 2px;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .central-playback-controls {
-    padding: 16px;
+    padding: 12px;
   }
   
   .main-controls-row {

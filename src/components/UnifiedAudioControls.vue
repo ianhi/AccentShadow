@@ -239,7 +239,7 @@ const handleFolderImported = (recordingSet) => {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
   padding: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   backdrop-filter: blur(10px);
   color: white;
 }
@@ -251,9 +251,9 @@ const handleFolderImported = (recordingSet) => {
   gap: 20px;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.8);
-  padding: 15px 0;
+  padding: 12px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 /* Navigation Section */
@@ -515,17 +515,20 @@ const handleFolderImported = (recordingSet) => {
 /* Mobile Layout */
 @media (max-width: 768px) {
   .unified-audio-controls {
-    padding: 16px;
+    padding: 6px;
+    margin-bottom: 8px;
   }
 
   .recording-info-row {
     flex-wrap: wrap;
-    gap: 10px;
-    padding: 12px 0;
+    gap: 6px;
+    padding: 4px 0;
+    margin-bottom: 8px;
   }
 
   .recording-name {
     width: 100%;
+    font-size: 13px;
   }
 
   .progress-section {
@@ -537,27 +540,93 @@ const handleFolderImported = (recordingSet) => {
     flex: 1;
   }
 
-  .controls-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 15px;
+  .audio-loading-group {
+    width: 100%;
+    margin-left: 0;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: center;
   }
 
-  .audio-loading-group {
-    order: 1;
-    justify-content: center;
-    margin-left: 0;
+  .navigation-section {
+    margin-top: 0;
+  }
+
+  .controls-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: auto;
+    gap: 4px;
+    align-items: stretch;
   }
 
   .nav-btn {
-    order: 2;
+    font-size: 0;
+    padding: 10px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-btn::before {
+    font-size: 16px;
+  }
+
+  .prev-btn {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .prev-btn::before {
+    content: "◀";
+  }
+
+  .next-btn {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .next-btn::before {
+    content: "▶";
+  }
+
+  .random-btn {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .random-btn::before {
+    content: "🔀";
+  }
+
+  .list-btn {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .list-btn::before {
+    content: "📋";
+  }
+
+  .completion-btn {
+    grid-column: 5;
+    grid-row: 1;
+    font-size: 0;
+    padding: 12px;
+  }
+
+  .completion-btn::before {
+    content: "✓";
+    font-size: 16px;
+  }
+
+  .completion-btn.completed::before {
+    content: "✅";
   }
 
   .microphone-wrapper {
-    width: 100%;
-    margin-top: 10px;
-    order: 3;
-    justify-content: center;
+    display: none;
   }
 
   .microphone-separator {
