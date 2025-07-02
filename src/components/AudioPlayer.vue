@@ -67,6 +67,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  audioBlob: {
+    type: Object, // Blob type
+    default: null,
+  },
 });
 
 const emit = defineEmits(['auto-played'])
@@ -113,6 +117,21 @@ const handleReadyToPlay = () => {
 
 const vadSegmentsRef = ref(props.vadSegments || []);
 const { wavesurfer, isReady, isPlaying, currentTime, duration, volume, playbackRate, playerId, playerInfo, initWaveform, playPause, play, stop, setVolume, setPlaybackRate, loadAudio, destroyWaveform, addVadSegments, clearVadSegments } = useWaveform(waveformContainer, spectrogramContainer, `${props.audioType}_player`, props.audioType, handleReadyToPlay, vadSegmentsRef);
+
+// Watch for audioBlob changes and update player info
+watch(() => props.audioBlob, (newBlob) => {
+  if (newBlob && playerInfo()) {
+    console.log(`🎚️ [${props.audioType.toUpperCase()}] Updating player info with audio blob for volume normalization`, {
+      blobSize: newBlob.size,
+      blobType: newBlob.type,
+      playerId: playerId
+    });
+    const info = playerInfo();
+    if (info) {
+      info.audioBlob = newBlob;
+    }
+  }
+}, { immediate: true });
 
 // Watch for VAD segments changes from props
 watch(() => props.vadSegments, (newSegments) => {

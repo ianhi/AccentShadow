@@ -1,4 +1,5 @@
 import { ref, provide, inject, computed, type Ref, type ComputedRef, type InjectionKey } from 'vue'
+import { audioManager } from './useAudioManager'
 
 // Types
 export interface AppSettings {
@@ -6,6 +7,12 @@ export interface AppSettings {
   autoPlayBothAfterRecording: boolean;
   autoAlignEnabled: boolean;
   sequentialDelay: number;
+  // Volume normalization settings
+  volumeNormalizationEnabled: boolean;
+  volumeNormalizationTargetLUFS: number;
+  volumeNormalizationMaxGain: number;
+  volumeNormalizationBalanceMode: 'target' | 'user' | 'average';
+  volumeNormalizationSmoothTransitions: boolean;
 }
 
 export interface VADSettings {
@@ -75,7 +82,13 @@ export function useAppState(): AppState {
     autoPlayTargetOnUpload: true,  // Play target audio immediately after upload
     autoPlayBothAfterRecording: true,  // Play both audios after recording
     autoAlignEnabled: true,  // Automatic silence trimming with VAD
-    sequentialDelay: 0  // Delay between sequential audio playback (ms)
+    sequentialDelay: 0,  // Delay between sequential audio playback (ms)
+    // Volume normalization settings
+    volumeNormalizationEnabled: true,  // Enable volume normalization for overlapping playback
+    volumeNormalizationTargetLUFS: -18,  // Target LUFS level for speech content
+    volumeNormalizationMaxGain: 6,  // Maximum gain amplification (6x = 15.6 dB) - increased for better handling
+    volumeNormalizationBalanceMode: 'average',  // Balance mode: target, user, or average
+    volumeNormalizationSmoothTransitions: true  // Enable smooth volume transitions
   })
   
   const vadSettings = ref<VADSettings>({
@@ -114,6 +127,24 @@ export function useAppState(): AppState {
 
   const updateAppSettings = (newSettings: Partial<AppSettings>): void => {
     appSettings.value = { ...appSettings.value, ...newSettings }
+    
+    // Sync volume normalization settings with audio manager
+    if (newSettings.volumeNormalizationEnabled !== undefined ||
+        newSettings.volumeNormalizationTargetLUFS !== undefined ||
+        newSettings.volumeNormalizationMaxGain !== undefined ||
+        newSettings.volumeNormalizationBalanceMode !== undefined ||
+        newSettings.volumeNormalizationSmoothTransitions !== undefined) {
+      
+      audioManager.updateVolumeNormalizationConfig({
+        enabled: appSettings.value.volumeNormalizationEnabled,
+        targetLUFS: appSettings.value.volumeNormalizationTargetLUFS,
+        maxGain: appSettings.value.volumeNormalizationMaxGain,
+        balanceMode: appSettings.value.volumeNormalizationBalanceMode,
+        smoothTransitions: appSettings.value.volumeNormalizationSmoothTransitions
+      })
+      
+      console.log('🎚️ Volume normalization settings synced with audio manager')
+    }
   }
 
   const updatePlaybackSpeed = (newSpeed: number): void => {

@@ -16,6 +16,7 @@
       :autoPlayOnReady="autoPlayOnReady"
       :suppressAutoPlay="suppressAutoPlay"
       :vadSegments="vadSegments"
+      :audioBlob="audioBlob"
       :key="audioKey"
       @auto-played="$emit('auto-played')"
     />
@@ -84,6 +85,10 @@ const props = defineProps({
   vadSegments: {
     type: Array,
     default: () => []
+  },
+  audioBlob: {
+    type: Object, // Blob type
+    default: null
   }
 })
 

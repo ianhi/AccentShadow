@@ -344,6 +344,107 @@
           </div>
         </div>
 
+        <!-- Volume Normalization Section -->
+        <div class="settings-section">
+          <h3>🎚️ Volume Normalization</h3>
+          <p class="settings-description">Automatically balance volume levels for overlapping playback comparison:</p>
+          
+          <div class="setting-group">
+            <label class="toggle-label">
+              <input 
+                type="checkbox" 
+                v-model="localSettings.volumeNormalizationEnabled"
+                class="toggle-input"
+              />
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">
+                <strong>Enable Volume Normalization</strong>
+                <span class="setting-description">Automatically adjust volume levels when playing target and user audio together</span>
+              </span>
+            </label>
+          </div>
+
+          <div class="volume-norm-controls" :class="{ 'disabled-section': !localSettings.volumeNormalizationEnabled }">
+            <!-- Balance Mode -->
+            <div class="setting-group">
+              <label class="select-label">
+                Balance Mode:
+                <select 
+                  v-model="localSettings.volumeNormalizationBalanceMode"
+                  class="select-input"
+                  :disabled="!localSettings.volumeNormalizationEnabled"
+                >
+                  <option value="average">Average Both</option>
+                  <option value="target">Match Target Audio</option>
+                  <option value="user">Match User Audio</option>
+                </select>
+                <span class="setting-description">How to determine the reference volume level</span>
+              </label>
+            </div>
+
+            <!-- Target LUFS -->
+            <div class="setting-group">
+              <label class="slider-label">
+                Target Level: {{ localSettings.volumeNormalizationTargetLUFS }} LUFS
+                <input 
+                  type="range" 
+                  v-model="localSettings.volumeNormalizationTargetLUFS"
+                  min="-30" 
+                  max="-6" 
+                  step="1"
+                  class="slider"
+                  :disabled="!localSettings.volumeNormalizationEnabled"
+                />
+                <span class="setting-description">Target loudness level (LUFS). -18 LUFS is ideal for speech</span>
+              </label>
+            </div>
+
+            <!-- Max Gain -->
+            <div class="setting-group">
+              <label class="slider-label">
+                Maximum Gain: {{ localSettings.volumeNormalizationMaxGain }}x ({{ (20 * Math.log10(localSettings.volumeNormalizationMaxGain)).toFixed(1) }}dB)
+                <input 
+                  type="range" 
+                  v-model="localSettings.volumeNormalizationMaxGain"
+                  min="1" 
+                  max="8" 
+                  step="0.5"
+                  class="slider"
+                  :disabled="!localSettings.volumeNormalizationEnabled"
+                />
+                <span class="setting-description">Maximum volume amplification to prevent distortion</span>
+              </label>
+            </div>
+
+            <!-- Smooth Transitions -->
+            <div class="setting-group">
+              <label class="toggle-label">
+                <input 
+                  type="checkbox" 
+                  v-model="localSettings.volumeNormalizationSmoothTransitions"
+                  class="toggle-input"
+                  :disabled="!localSettings.volumeNormalizationEnabled"
+                />
+                <span class="toggle-slider"></span>
+                <span class="toggle-text">
+                  <strong>Smooth Volume Transitions</strong>
+                  <span class="setting-description">Gradually adjust volume instead of instant changes</span>
+                </span>
+              </label>
+            </div>
+
+            <!-- Volume Normalization Info -->
+            <div class="info-box">
+              <div class="info-icon">ℹ️</div>
+              <div class="info-content">
+                <strong>About Volume Normalization:</strong>
+                <p>This feature analyzes the loudness of your target and user audio using perceptual LUFS measurement (ITU-R BS.1770 standard). When playing overlapping audio, it automatically adjusts volume levels so you can better compare pronunciation without being distracted by volume differences.</p>
+                <p><strong>Note:</strong> Analysis is performed once per audio file and cached for performance.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- VAD Settings Section -->
         <div class="settings-section">
           <h3>🎛️ Audio Processing (VAD)</h3>
@@ -941,5 +1042,84 @@ const triggerManualTrim = () => {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+}
+
+/* Volume Normalization Styles */
+.volume-norm-controls {
+  transition: opacity 0.3s ease;
+}
+
+.disabled-section {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.select-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #e5e7eb;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.select-input {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.select-input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.select-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.info-box {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.info-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.info-content {
+  flex: 1;
+}
+
+.info-content strong {
+  color: #ffffff;
+  font-size: 0.9em;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.info-content p {
+  color: #d1d5db;
+  font-size: 0.85em;
+  line-height: 1.4;
+  margin: 0 0 8px 0;
+}
+
+.info-content p:last-child {
+  margin-bottom: 0;
 }
 </style>

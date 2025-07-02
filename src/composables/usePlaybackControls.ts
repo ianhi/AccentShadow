@@ -13,6 +13,7 @@ interface AudioPlayer {
   wavesurfer?: any;
   playerInfo?: () => any;
   audioElement?: HTMLAudioElement;
+  audioBlob?: Blob; // Add audioBlob to interface for volume normalization
 }
 
 interface AudioManager {
@@ -174,7 +175,7 @@ export function usePlaybackControls(providedAppState: AppState | null = null) {
     }
   }
 
-  // Individual playback controls
+  // Individual playback controls with volume normalization
   const playTarget = async (): Promise<void> => {
     audioManager.emergencyStop('Playing target audio', 'target')
     
@@ -182,6 +183,29 @@ export function usePlaybackControls(providedAppState: AppState | null = null) {
     
     if (targetPlayer) {
       try {
+        // Apply volume normalization if both audios are available
+        const userPlayer = getAudioPlayer(userAudioPlayerRef)
+        if (userPlayer && globalAudioManager.volumeNormalizationConfig.value.enabled) {
+          console.log('🎚️ Applying volume normalization for individual target playback')
+          try {
+            const targetPlayerInfo = targetPlayer.playerInfo?.() || { 
+              id: 'target', 
+              type: 'target', 
+              wavesurfer: targetPlayer.wavesurfer,
+              audioBlob: targetPlayer.audioBlob 
+            }
+            const userPlayerInfo = userPlayer.playerInfo?.() || { 
+              id: 'user', 
+              type: 'user', 
+              wavesurfer: userPlayer.wavesurfer,
+              audioBlob: userPlayer.audioBlob 
+            }
+            await globalAudioManager.applyVolumeNormalization(targetPlayerInfo, userPlayerInfo)
+          } catch (error) {
+            console.warn('🎚️ Volume normalization failed for individual target playback:', error)
+          }
+        }
+        
         // Set playback rate first
         if (typeof targetPlayer.setPlaybackRate === 'function') {
           targetPlayer.setPlaybackRate(globalPlaybackSpeed.value)
@@ -206,6 +230,29 @@ export function usePlaybackControls(providedAppState: AppState | null = null) {
     
     if (userPlayer) {
       try {
+        // Apply volume normalization if both audios are available
+        const targetPlayer = getAudioPlayer(targetAudioPlayerRef)
+        if (targetPlayer && globalAudioManager.volumeNormalizationConfig.value.enabled) {
+          console.log('🎚️ Applying volume normalization for individual user playback')
+          try {
+            const targetPlayerInfo = targetPlayer.playerInfo?.() || { 
+              id: 'target', 
+              type: 'target', 
+              wavesurfer: targetPlayer.wavesurfer,
+              audioBlob: targetPlayer.audioBlob 
+            }
+            const userPlayerInfo = userPlayer.playerInfo?.() || { 
+              id: 'user', 
+              type: 'user', 
+              wavesurfer: userPlayer.wavesurfer,
+              audioBlob: userPlayer.audioBlob 
+            }
+            await globalAudioManager.applyVolumeNormalization(targetPlayerInfo, userPlayerInfo)
+          } catch (error) {
+            console.warn('🎚️ Volume normalization failed for individual user playback:', error)
+          }
+        }
+        
         // Set playback rate first
         if (typeof userPlayer.setPlaybackRate === 'function') {
           userPlayer.setPlaybackRate(globalPlaybackSpeed.value)
