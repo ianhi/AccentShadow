@@ -267,7 +267,7 @@ defineExpose({
 .visualization-wrapper {
   background-color: #1a1a1a;
   width: 100%;
-  height: 260px; /* Desktop: 60px waveform + 200px spectrogram */
+  height: 360px; /* Desktop: 60px waveform + 300px spectrogram */
   display: flex;
   flex-direction: column; /* Stack vertically */
   border-radius: 8px;
@@ -369,7 +369,7 @@ defineExpose({
 
 .spectrogram-container {
   width: 100%;
-  height: 200px; /* Fixed height for spectrogram */
+  height: 300px; /* Fixed height for spectrogram */
   flex-shrink: 0; /* Don't shrink */
 }
 

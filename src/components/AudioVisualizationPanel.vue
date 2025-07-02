@@ -1056,7 +1056,8 @@ defineExpose({
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
-  min-height: 350px;
+  min-height: 450px;
+  height: 100%;
 }
 
 .visualization-container.three-column {
@@ -1095,6 +1096,13 @@ defineExpose({
 
 .mobile-audio-column {
   min-height: auto;
+}
+
+/* Ensure desktop keeps proper height */
+@media (min-width: 769px) {
+  .visualization-container {
+    min-height: 450px;
+  }
 }
 
 .mobile-microphone {

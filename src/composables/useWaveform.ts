@@ -69,7 +69,7 @@ export function useWaveform(
       // Get device-specific heights
       const isMobile = isMobileDevice();
       const waveformHeight = isMobile ? 40 : 60;
-      const spectrogramHeight = isMobile ? 180 : 200;
+      const spectrogramHeight = isMobile ? 180 : 300;
 
       const instance = WaveSurfer.create({
         container: containerRef.value,

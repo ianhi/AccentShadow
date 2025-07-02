@@ -79,6 +79,19 @@ defineEmits([
   background: rgba(16, 185, 129, 0.2);
 }
 
+/* Medium screens - reduce button size and spacing */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .audio-load-buttons {
+    gap: 8px;
+    justify-content: center;
+  }
+  
+  .action-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .audio-load-buttons {

@@ -102,7 +102,7 @@ const setAudioPlayerRef = (ref) => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 350px;
+  min-height: 400px;
   height: 100%; /* Use full height of grid container */
   padding: 20px;
   background: rgba(255, 255, 255, 0.1);

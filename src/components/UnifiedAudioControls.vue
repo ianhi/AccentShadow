@@ -577,6 +577,28 @@ const triggerFolderUpload = () => {
   color: rgba(255, 255, 255, 0.4);
 }
 
+/* Medium screens - adjust layout before full mobile */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .recording-info-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .audio-loading-group {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 8px;
+    justify-content: center;
+  }
+  
+  .recording-name {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 /* Mobile Layout */
 @media (max-width: 768px) {
   .unified-audio-controls {
