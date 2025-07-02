@@ -5,15 +5,15 @@
       <span v-if="!compact">Play Target</span>
     </button>
     <button @click="$emit('play-user')" :disabled="!hasUserAudio" class="playback-btn user-btn">
-      <span class="btn-icon">🎤</span>
+      <span class="btn-icon">🔊</span>
       <span v-if="!compact">Play Recording</span>
     </button>
     <button @click="$emit('play-overlapping')" :disabled="!hasTargetAudio || !hasUserAudio" class="playback-btn overlapping-btn">
-      <span class="btn-icon">🔄</span>
+      <span class="btn-icon">🎭</span>
       <span v-if="!compact">Play Overlapping</span>
     </button>
     <button @click="$emit('play-sequential')" :disabled="!hasTargetAudio || !hasUserAudio" class="playback-btn sequential-btn">
-      <span class="btn-icon">📋</span>
+      <span class="btn-icon">⏭</span>
       <span v-if="!compact">Play Sequential</span>
     </button>
     <button @click="$emit('stop-all')" class="playback-btn stop-btn">

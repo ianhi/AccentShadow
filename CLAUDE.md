@@ -25,6 +25,8 @@ This project emphasizes **idiomatic Vue 3 development practices** with strict ad
 
 **Commit Workflow**: **ALWAYS ASK THE USER BEFORE EXECUTING COMMITS**. It's fine to stage files (`git add`) and prepare commit messages, but always ask for explicit permission before running `git commit`, even for documentation or cleanup changes.
 
+**Commit Message Guidelines**: Before creating a commit, **ALWAYS run `git diff HEAD` to review ALL staged changes** and provide a comprehensive summary that covers every modification made since the last commit. Don't just focus on the main feature - include all the supporting changes, refactoring, cleanup, and related modifications in the commit message. Use structured sections (like ### headers) to organize the summary when there are multiple types of changes.
+
 ## Audio Processing & Cross-Browser Debugging
 
 **IMPORTANT**: When working on audio-related issues, particularly:

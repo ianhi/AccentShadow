@@ -3,7 +3,7 @@
 
     <div class="recording-info-row">
       <template v-if="currentRecording">
-        <span class="info-label">Path</span>
+        <span class="info-label">File Name</span>
         <span class="recording-name">{{ currentRecording.name }}</span>
         <span class="recording-counter">{{ currentIndex + 1 }} / {{ activeSet?.recordings.length || 0 }}</span>
         <span class="attempts-info">🎤 {{ currentRecording.userRecording.attempts }} attempts</span>
@@ -27,7 +27,7 @@
       </template>
       
       <div class="audio-loading-group">
-        <AudioLoadButtons @browse-file="$emit('browse-file')" @upload-folder="showFolderUpload = true" 
+        <AudioLoadButtons @browse-file="$emit('browse-file')" @upload-folder="triggerFolderUpload" 
           @load-url="$emit('load-url')" @load-demo="$emit('load-demo')" @open-sets="showRecordingSetsModal = true" />
       </div>
     </div>
@@ -44,10 +44,6 @@
         Next ▶
       </button>
 
-      <button @click="randomRecording" :disabled="!activeSet || activeSet.recordings.length <= 1"
-        class="nav-btn random-btn" title="Random recording">
-        🔀 Random
-      </button>
 
       <button 
         @click="showRecordingList = !showRecordingList" 
@@ -74,13 +70,6 @@
 
     <!-- Recording Sets Modal -->
     <RecordingSetsModal :isVisible="showRecordingSetsModal" @close="showRecordingSetsModal = false" />
-    
-    <!-- Folder Upload Modal -->
-    <FolderUpload 
-      v-if="showFolderUpload" 
-      @close="showFolderUpload = false"
-      @imported="handleFolderImported"
-    />
 
     <!-- Recording List (Expandable) -->
     <div v-if="showRecordingList && activeSet" class="recording-list">
@@ -130,7 +119,6 @@ import { useViewport } from '../composables/useViewport';
 import AudioLoadButtons from './AudioLoadButtons.vue';
 import MicrophoneSelector from './MicrophoneSelector.vue';
 import RecordingSetsModal from './RecordingSetsModal.vue';
-import FolderUpload from './FolderUpload.vue';
 
 // Props
 const props = defineProps({
@@ -163,16 +151,15 @@ const {
   currentRecordingIndex,
   nextRecording,
   previousRecording,
-  randomRecording,
   goToRecording,
   markRecordingCompleted,
-  setActiveSet
+  setActiveSet,
+  createRecordingSet
 } = useRecordingSets();
 
 // Component state
 const showRecordingList = ref(false);
 const showRecordingSetsModal = ref(false);
-const showFolderUpload = ref(false);
 const listFilter = ref('all');
 
 // Computed properties
@@ -199,12 +186,22 @@ const filteredRecordings = computed(() => {
 const toggleCompleted = () => {
   if (!currentRecording.value) return;
 
+  const wasCompleted = currentRecording.value.userRecording.isCompleted;
+  
   // Toggle the completion status
   currentRecording.value.userRecording.isCompleted = !currentRecording.value.userRecording.isCompleted;
 
   if (currentRecording.value.userRecording.isCompleted) {
     currentRecording.value.userRecording.lastPracticed = new Date().toISOString();
     console.log('✅ Marked recording as completed:', currentRecording.value.name);
+    
+    // Auto-advance to next recording when marking as complete (not when unmarking)
+    if (!wasCompleted && activeSet.value && currentIndex.value < (activeSet.value.recordings.length - 1)) {
+      console.log('🎯 Auto-advancing to next recording...');
+      setTimeout(() => {
+        nextRecording();
+      }, 200); // Quick delay to let user see the completion status change
+    }
   } else {
     console.log('↩️ Unmarked recording as completed:', currentRecording.value.name);
   }
@@ -225,11 +222,79 @@ const handleDeviceChange = (deviceId) => {
   emit('device-change', deviceId);
 };
 
-const handleFolderImported = (recordingSet) => {
-  console.log('✅ Recording set imported:', recordingSet.name);
-  showFolderUpload.value = false;
-  // Auto-select the newly imported set
-  setActiveSet(recordingSet.id);
+const triggerFolderUpload = () => {
+  // Create a folder input element
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.webkitdirectory = true;
+  input.multiple = true;
+  input.style.display = 'none';
+  
+  input.addEventListener('change', async (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+    
+    try {
+      // Process the files and create a recording set
+      const folderName = files[0].webkitRelativePath.split('/')[0];
+      const audioFiles = files.filter(file => {
+        const isAudio = file.type.startsWith('audio/') || 
+                       /\.(mp3|wav|ogg|m4a|flac|aac|wma)$/i.test(file.name);
+        return isAudio;
+      });
+      
+      if (audioFiles.length === 0) {
+        alert('No audio files found in the selected folder.');
+        return;
+      }
+      
+      console.log(`📁 Processing ${audioFiles.length} audio files from folder: ${folderName}`);
+      
+      // Create recordings array
+      const recordings = [];
+      for (let i = 0; i < audioFiles.length; i++) {
+        const file = audioFiles[i];
+        const pathParts = file.webkitRelativePath.split('/');
+        const category = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'general';
+        const name = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        
+        recordings.push({
+          name: name,
+          translation: '',
+          audioUrl: URL.createObjectURL(file),
+          audioBlob: file,
+          metadata: {
+            category: category,
+            fileName: file.name,
+            fileSize: file.size,
+            filePath: file.webkitRelativePath || file.name
+          }
+        });
+      }
+      
+      // Create the recording set
+      const recordingSet = createRecordingSet(
+        folderName.replace(/[-_]/g, ' '),
+        'upload',
+        'en',
+        recordings
+      );
+      
+      console.log('✅ Recording set created:', recordingSet.name);
+      // Auto-select the newly imported set
+      setActiveSet(recordingSet.id);
+      
+    } catch (error) {
+      console.error('❌ Error processing folder:', error);
+      alert(`Failed to process folder: ${error.message}`);
+    }
+    
+    // Clean up
+    document.body.removeChild(input);
+  });
+  
+  document.body.appendChild(input);
+  input.click();
 };
 </script>
 
@@ -554,7 +619,7 @@ const handleFolderImported = (recordingSet) => {
 
   .controls-row {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     grid-template-rows: auto;
     gap: 4px;
     align-items: stretch;
@@ -591,17 +656,8 @@ const handleFolderImported = (recordingSet) => {
     content: "▶";
   }
 
-  .random-btn {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  .random-btn::before {
-    content: "🔀";
-  }
-
   .list-btn {
-    grid-column: 4;
+    grid-column: 3;
     grid-row: 1;
   }
 
@@ -610,7 +666,7 @@ const handleFolderImported = (recordingSet) => {
   }
 
   .completion-btn {
-    grid-column: 5;
+    grid-column: 4;
     grid-row: 1;
     font-size: 0;
     padding: 12px;

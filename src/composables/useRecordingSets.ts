@@ -176,16 +176,6 @@ const previousRecording = (): boolean => {
   return false; // At first recording
 };
 
-const randomRecording = (): void => {
-  if (!activeSet.value || activeSet.value.recordings.length <= 1) return;
-  
-  let randomIndex;
-  do {
-    randomIndex = Math.floor(Math.random() * activeSet.value.recordings.length);
-  } while (randomIndex === currentRecordingIndex.value && activeSet.value.recordings.length > 1);
-  
-  goToRecording(randomIndex);
-};
 
 // Progress tracking
 const updateProgress = (): void => {
@@ -496,7 +486,6 @@ export function useRecordingSets() {
     goToRecording,
     nextRecording,
     previousRecording,
-    randomRecording,
     updateProgress,
     markRecordingCompleted,
     updateUserRecording,

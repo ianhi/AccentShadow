@@ -201,19 +201,30 @@ const requestPermission = async () => {
 /* Mobile responsive */
 @media (max-width: 768px) {
   .mic-dropdown-container {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
     max-width: 100%;
+    gap: 6px;
   }
   
   .mic-dropdown {
     min-width: auto;
-    max-width: 100%;
+    max-width: 200px;
+    flex: 1;
+  }
+}
+
+/* Show only emoji on very small screens to save space */
+@media (max-width: 480px) {
+  .mic-label {
+    font-size: 0;
   }
   
-  .mic-label {
-    text-align: center;
+  .mic-label::before {
+    content: "🎙️";
+    font-size: 16px;
+  }
+  
+  .mic-dropdown {
+    max-width: 100%;
   }
 }
 </style>
