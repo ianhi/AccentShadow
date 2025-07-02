@@ -99,7 +99,76 @@ npm test
 
 **Status**: ✅ All accessibility tests currently pass with 0 violations across all views.
 
+## Microphone Permission System
+
+**IMPORTANT**: The application implements a comprehensive automatic microphone permission system that handles both first-time and returning users seamlessly.
+
+### Permission Request Strategy
+
+**For First-Time Users (Demo Modal)**:
+- Microphone permissions are automatically requested after demo interaction
+- Triggers on both "Load Demo" and "Skip Demo" actions
+- Uses user interaction context to satisfy browser security requirements
+
+**For Returning Users (Main App)**:
+- Automatic permission checking when PracticeView mounts (with 1-second delay)
+- Detects previously granted permissions without showing dialogs
+- Silently handles permission restoration or requests new permissions
+
+### Technical Implementation
+
+**Permission Detection System**:
+- **Primary**: Uses browser's Permissions API (`navigator.permissions.query`)
+- **Fallback**: Device enumeration to check if device labels are available
+- **Cross-browser compatible**: Works with Chrome, Firefox, Safari
+- **No redundant dialogs**: Avoids repeated permission requests
+
+**Key Components**:
+- `useDemoData.ts`: Handles demo interaction permission requests
+- `useMicrophoneDevices.ts`: Manages device access and permission state
+- `PracticeView.vue`: Implements returning user permission checking
+
+### Permission States Handled
+
+1. **'granted'**: Permission previously granted, automatically restored
+2. **'denied'**: Permission denied, respects user choice
+3. **'prompt'**: No previous interaction, requests permission from user action
+
+### Browser Security Compliance
+
+- All permission requests occur within user interaction context
+- No automatic permission requests without user action
+- Graceful fallback handling for unsupported browsers
+- Respects browser security policies and user privacy
+
+### Development Notes
+
+- Permission system is designed to be non-intrusive
+- Failures are logged but don't block application functionality
+- Users can always manually trigger permissions later through recording interface
+- System automatically detects and restores existing permissions on subsequent visits
+
+## UI Components
+
+### Unified Audio Controls
+
+The application uses a **UnifiedAudioControls** component that combines recording navigation and audio loading functionality into a single card. This improves space efficiency and provides a more cohesive user experience.
+
+**Key Features**:
+- Recording navigation (Previous/Next/Random/Show List)
+- Audio loading controls (Browse File/Load URL/Load Demo)
+- Microphone device selection
+- Progress tracking and completion status
+- Expandable recording list with filtering
+
+**Component Location**: `src/components/UnifiedAudioControls.vue`
+
+This replaces the previous two-card system (RecordingNavigation + Load Target Audio section) with a single unified interface that works seamlessly on both desktop and mobile layouts.
+
 ## Development Memories and Notes
 
 - **Commit Workflow Reminder**: Please always ask me before making a commit
 - **Accessibility Compliance**: All new features must maintain WCAG 2.1 AA standards
+- **Microphone Permissions**: Automatic system implemented for seamless user experience across all user types
+- **UI Consolidation**: Audio controls unified into single card for better UX
+- **IMPORTANT COMMIT POLICY**: NEVER MAKE A COMMIT WITHOUT MY PERMISSION. MY PERMISSION FOR ONE COMMIT DOES NOT IMPLY PERMISSION FOR FUTURE COMMITS

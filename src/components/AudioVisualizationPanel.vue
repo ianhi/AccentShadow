@@ -1,25 +1,5 @@
 <template>
   <div class="audio-visualization-panel" :class="{ 'mobile-layout': shouldUseMobileLayout }">
-    <!-- Target Audio Controls Section - Show on mobile too -->
-    <div class="target-controls-section" :class="{ 'mobile-controls': shouldUseMobileLayout }">
-      <h2>📁 Load Target Audio</h2>
-      <TargetAudioControls 
-        :currentAudioSource="currentAudioSource"
-        @browse-file="$emit('browse-file')"
-        @load-url="$emit('load-url')"
-        @load-demo="$emit('load-demo')"
-      />
-      
-      <!-- Microphone Selection - Always visible -->
-      <MicrophoneSelector 
-        :availableDevices="availableDevices"
-        :selectedDeviceId="selectedDeviceId"
-        :disabled="isRecording"
-        @device-change="handleDeviceChange"
-        :class="{ 'mobile-microphone': shouldUseMobileLayout }"
-      />
-    </div>
-    
     <div class="visualization-container" :class="{ 'mobile-stacked': shouldUseMobileLayout, 'three-column': rawTargetAudioUrl && showRawAudio }">
       <!-- Target Audio Column (Processed) -->
       <AudioColumn
@@ -85,13 +65,10 @@
 <script setup>
 import { ref, watch, computed, nextTick } from 'vue'
 import AudioColumn from './AudioColumn.vue'
-import TargetAudioControls from './TargetAudioControls.vue'
-import MicrophoneSelector from './MicrophoneSelector.vue'
 import { useSmartAudioAlignment } from '../composables/useSmartAudioAlignment'
 import { useTimeSync } from '../composables/useTimeSync.ts'
 import { audioManager } from '../composables/useAudioManager.ts'
 import { useViewport } from '../composables/useViewport'
-import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts'
 import { useAppStateInject } from '../composables/useAppState'
 
 const props = defineProps({
@@ -139,24 +116,14 @@ const emit = defineEmits([
   'user-audio-ref',
   'audio-processed',
   'trigger-auto-play',
-  'vad-segments',
-  'microphone-device-change'
+  'vad-segments'
 ])
 
 // Mobile layout detection
 const { shouldUseMobileLayout } = useViewport()
 
-// Microphone device management
-const { availableDevices, selectedDeviceId, setSelectedDevice } = useMicrophoneDevices()
-
 // App state access for shared settings
 const { appSettings } = useAppStateInject()
-
-const handleDeviceChange = (newDeviceId) => {
-  console.log('🎙️ Microphone device changed to:', newDeviceId);
-  setSelectedDevice(newDeviceId);
-  emit('microphone-device-change', newDeviceId);
-}
 
 // Audio state
 const targetAudioUrl = ref(null)
@@ -1084,21 +1051,6 @@ defineExpose({
   gap: 20px;
 }
 
-.target-controls-section {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 16px;
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.target-controls-section h3 {
-  margin: 0 0 12px 0;
-  color: white;
-  font-size: 16px;
-  font-weight: 600;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
 
 .visualization-container {
   display: grid;
@@ -1156,7 +1108,6 @@ defineExpose({
     gap: 16px;
   }
   
-  .target-controls-section,
   .bottom-controls {
     padding: 12px;
   }

@@ -3,8 +3,17 @@
     <div class="main-content">
       <MainHeader @open-settings="openAppSettingsModal" />
       
-      <!-- Recording Navigation - Hidden on mobile -->
-      <RecordingNavigation v-if="!shouldUseMobileLayout" />
+      <!-- Unified Audio Controls - Always visible -->
+      <UnifiedAudioControls 
+        :currentAudioSource="currentAudioSource"
+        :availableDevices="availableDevices"
+        :selectedDeviceId="selectedDeviceId"
+        :isRecording="isRecordingActive"
+        @browse-file="triggerFileInput"
+        @load-url="showUrlModalHandler"
+        @load-demo="showDemoModalHandler"
+        @device-change="handleMicrophoneDeviceChange"
+      />
       
       <!-- Audio Visualization Panel - Always visible -->
       <AudioVisualizationPanel
@@ -13,14 +22,10 @@
         :isRecording="isRecordingActive"
         :vadSettings="vadSettings"
         :appSettings="appSettings"
-        @browse-file="triggerFileInput"
-        @load-url="showUrlModalHandler"
-        @load-demo="showDemoModalHandler"
         @target-audio-ref="handleTargetAudioPlayerRef"
         @user-audio-ref="handleUserAudioPlayerRef"
         @audio-processed="handleAudioProcessed"
         @trigger-auto-play="playOverlapping"
-        @microphone-device-change="handleMicrophoneDeviceChange"
       />
 
       <!-- Central Playback Controls - Always visible, sticky on mobile -->
@@ -143,9 +148,9 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, watch, nextTick, computed } from 'vue';
-import RecordingNavigation from '../components/RecordingNavigation.vue';
+import UnifiedAudioControls from '../components/UnifiedAudioControls.vue';
 import SessionStats from '../components/SessionStats.vue';
 import RecordingSetsManager from '../components/RecordingSetsManager.vue';
 import AudioVisualizationPanel from '../components/AudioVisualizationPanel.vue';
@@ -209,6 +214,18 @@ const showStatsOnMobile = ref(false)
 // Demo modal state
 const showDemoModal = ref(false)
 
+// Audio source state for unified controls
+const currentAudioSource = ref('')
+
+// Update currentAudioSource when audio is loaded
+const updateAudioSource = (source: any) => {
+  if (source && source.name) {
+    currentAudioSource.value = source.name
+  } else {
+    currentAudioSource.value = ''
+  }
+}
+
 
 // Since we're in the same component that provides the state, pass it directly
 // to avoid provide/inject within the same component (which doesn't work in Vue setup)
@@ -230,11 +247,11 @@ const {
   showVadModal,
   showAppSettingsModal,
   urlToLoad,
-  triggerFileInput,
-  loadAudioFromUrl,
+  triggerFileInput: triggerFileInputOriginal,
+  loadAudioFromUrl: loadAudioFromUrlOriginal,
   openUrlModal,
   closeUrlModal,
-  handleUrlSubmit,
+  handleUrlSubmit: handleUrlSubmitOriginal,
   openVadModal,
   closeVadModal,
   handleVadSettingsSave: handleVadSettingsSaveUtil,
@@ -243,6 +260,58 @@ const {
   handleAppSettingsSave,
   cleanup
 } = useAppUtilities(appStateForComposables)
+
+// Wrap file input to track single file loads
+const triggerFileInput = () => {
+  // Create a custom file input to intercept the file name
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'audio/*'
+  input.style.display = 'none'
+  
+  input.addEventListener('change', async (event) => {
+    const target = event.target as HTMLInputElement
+    const file = target.files?.[0]
+    if (file && audioVisualizationPanel.value) {
+      try {
+        currentAudioSource.value = file.name
+        await audioVisualizationPanel.value.setTargetAudio?.(file, {
+          name: file.name,
+          fileName: file.name,
+          source: 'file'
+        })
+        console.log('✅ File loaded successfully:', file.name)
+      } catch (error) {
+        console.error('❌ Failed to load file:', error)
+        currentAudioSource.value = ''
+        alert('Failed to load audio file: ' + (error as Error).message)
+      }
+    }
+    // Clear the input
+    target.value = ''
+    document.body.removeChild(input)
+  })
+  
+  document.body.appendChild(input)
+  input.click()
+}
+
+// Wrap URL loading to track single file loads
+const loadAudioFromUrl = async (url: string) => {
+  try {
+    const fileName = url.split('/').pop() || 'Remote Audio'
+    currentAudioSource.value = fileName
+    await loadAudioFromUrlOriginal(url)
+  } catch (error) {
+    currentAudioSource.value = ''
+    throw error
+  }
+}
+
+// Wrap URL submit handler
+const handleUrlSubmit = async () => {
+  await handleUrlSubmitOriginal()
+}
 
 // Consolidated playback controls - pass app state directly
 const {
@@ -289,6 +358,10 @@ const handleUserAudioPlayerRef = (ref) => {
 
 const handleAudioProcessed = async (data) => {
   console.log('Audio processed:', data)
+  // Update audio source if provided
+  if (data && data.source) {
+    updateAudioSource(data.source)
+  }
   // Auto-play is now handled automatically by AudioPlayer when wavesurfer is ready
 }
 
@@ -308,13 +381,17 @@ const handleDemoLoad = async (demoInfo) => {
     // Close the modal first
     closeDemoModal()
     
+    // Set the audio source name from demo info
+    currentAudioSource.value = demoInfo.name || 'Demo Audio'
+    
     // Load the demo audio using the existing URL loading functionality
     if (demoInfo.audioUrl) {
-      await loadAudioFromUrl(demoInfo.audioUrl)
+      await loadAudioFromUrlOriginal(demoInfo.audioUrl)
       console.log('✅ Demo audio loaded successfully')
     }
   } catch (error) {
     console.error('❌ Failed to load demo audio:', error)
+    currentAudioSource.value = ''
     // Could show an error modal here if needed
   }
 }
@@ -392,7 +469,6 @@ const handleMobileTabClick = (tabName) => {
   switch (tabName) {
     case 'sets':
       showMobileSidebar.value = true
-      showMobileModal.value = false
       break
     case 'settings':
       // Open the unified app settings modal instead of mobile-specific modal
@@ -429,6 +505,9 @@ const openVadSettingsFromApp = () => {
 watch(currentRecording, async (newRecording, oldRecording) => {
   if (newRecording && newRecording !== oldRecording && newRecording.audioBlob && audioVisualizationPanel.value) {
     try {
+      // Clear single file info when loading from recording set
+      currentAudioSource.value = ''
+      
       // Add delay for demo recordings to give user time to orient
       const isDemo = newRecording.metadata?.isDemo === true
       if (isDemo) {
@@ -447,6 +526,7 @@ watch(currentRecording, async (newRecording, oldRecording) => {
     }
   } else if (!newRecording && audioVisualizationPanel.value) {
     console.log('🗑️ Clearing target audio (no recording selected)')
+    currentAudioSource.value = ''
     await audioVisualizationPanel.value.setTargetAudio(null)
   }
 })

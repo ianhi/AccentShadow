@@ -81,9 +81,6 @@ const requestPermission = async () => {
 
 <style scoped>
 .microphone-selection {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* Permission states */

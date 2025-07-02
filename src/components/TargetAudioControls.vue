@@ -15,6 +15,9 @@
       <button @click="$emit('load-url')" class="action-btn url-btn">
         🌐 Load URL
       </button>
+      <button @click="$emit('load-demo')" class="action-btn demo-btn">
+        🎵 Load Demo
+      </button>
     </div>
   </div>
 </template>
@@ -29,7 +32,8 @@ defineProps({
 
 defineEmits([
   'browse-file',
-  'load-url'
+  'load-url',
+  'load-demo'
 ])
 </script>
 
@@ -105,6 +109,16 @@ defineEmits([
 
 .url-btn:hover {
   background-color: #7c3aed;
+  color: white;
+}
+
+.demo-btn {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.demo-btn:hover {
+  background-color: #f59e0b;
   color: white;
 }
 

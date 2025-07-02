@@ -137,6 +137,60 @@ export function useMicrophoneDevices() {
     return availableDevices.value.find(device => device.deviceId === selectedDeviceId.value);
   };
 
+  // Check if microphone permission was previously granted
+  const checkExistingPermission = async (): Promise<boolean> => {
+    try {
+      // Use Permissions API to check permission status without triggering dialog
+      if ('permissions' in navigator) {
+        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        console.log('🎤 Existing microphone permission status:', permission.state);
+        
+        if (permission.state === 'granted') {
+          hasPermission.value = true;
+          permissionRequested.value = true;
+          await getAvailableDevices();
+          return true;
+        } else if (permission.state === 'denied') {
+          hasPermission.value = false;
+          permissionRequested.value = true;
+          return false;
+        }
+        // If 'prompt' state, permission hasn't been requested yet
+      }
+      
+      // Fallback: Try to enumerate devices to check for permission
+      // If we get device labels, permission was granted
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(device => device.kind === 'audioinput');
+      
+      // Check if any device has a proper label (indicates permission granted)
+      const hasLabels = audioInputs.some(device => device.label && device.label !== '');
+      
+      if (hasLabels) {
+        console.log('🎤 Detected existing microphone permission via device labels');
+        hasPermission.value = true;
+        permissionRequested.value = true;
+        availableDevices.value = audioInputs.map(device => ({
+          deviceId: device.deviceId,
+          label: device.label || `Microphone ${device.deviceId.slice(0, 8)}...`,
+          groupId: device.groupId
+        }));
+        
+        // Set default device if none selected
+        if (!selectedDeviceId.value && audioInputs.length > 0) {
+          selectedDeviceId.value = audioInputs[0].deviceId;
+        }
+        
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.log('🎤 Could not check existing permission:', error);
+      return false;
+    }
+  };
+
   // Listen for device changes
   const setupDeviceChangeListener = () => {
     navigator.mediaDevices.addEventListener('devicechange', () => {
@@ -145,15 +199,22 @@ export function useMicrophoneDevices() {
     });
   };
 
-  onMounted(() => {
+  onMounted(async () => {
     // Only initialize once globally
     if (!isInitialized.value && typeof navigator.mediaDevices?.enumerateDevices === 'function') {
       console.log('🎤 Initializing microphone system (permission-aware)');
       isInitialized.value = true;
       setupDeviceChangeListener();
       
-      // Don't request permission automatically - wait for user interaction
-      console.log('🎤 Microphone system ready, waiting for user permission request');
+      // Check if permission was previously granted
+      console.log('🎤 Checking for existing microphone permission...');
+      const hasExistingPermission = await checkExistingPermission();
+      
+      if (hasExistingPermission) {
+        console.log('✅ Existing microphone permission detected and restored');
+      } else {
+        console.log('🎤 No existing permission - waiting for user interaction');
+      }
     } else if (isInitialized.value) {
       console.log('🎤 Microphone system already initialized, skipping');
     } else if (!navigator.mediaDevices?.enumerateDevices) {
@@ -169,6 +230,7 @@ export function useMicrophoneDevices() {
     hasPermission,
     permissionRequested,
     requestMicrophonePermission,
+    checkExistingPermission,
     getAvailableDevices,
     getMediaStream,
     setSelectedDevice,
