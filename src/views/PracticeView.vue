@@ -166,6 +166,7 @@ import { usePlaybackControls } from '../composables/usePlaybackControls';
 import { useViewport } from '../composables/useViewport';
 import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts';
 import { useAudioEffects } from '../composables/useAudioEffects';
+import { useDemoData } from '../composables/useDemoData';
 
 // IMPORTANT: Initialize global app state FIRST to provide it to all child components
 const {
@@ -192,6 +193,7 @@ const {
 // Core composables
 const { currentRecording, updateUserRecording } = useRecordingSets()
 const { updateConfig: updateEffectsConfig } = useAudioEffects()
+const { shouldRequestMicrophonePermission, requestMicrophonePermissionForReturningUser } = useDemoData()
 
 // Mobile layout detection
 const { shouldUseMobileLayout } = useViewport()
@@ -259,6 +261,21 @@ const audioProcessingHandler = ref(null)
 
 onMounted(async () => {
   // App initialization
+  
+  // Check if we should request microphone permission for returning users
+  // This happens when users have visited before and won't see the demo modal
+  if (shouldRequestMicrophonePermission.value) {
+    // Add a small delay to let the UI initialize first
+    setTimeout(async () => {
+      try {
+        console.log('🎤 Checking microphone permissions for returning user...');
+        await requestMicrophonePermissionForReturningUser();
+      } catch (error) {
+        console.log('⚠️ Failed to check microphone permissions for returning user:', error);
+        // Silently handle failure - user can still manually trigger permissions later
+      }
+    }, 1000);
+  }
 })
 
 // Audio Visualization Panel event handlers

@@ -5,7 +5,6 @@
 
 import { ref, computed } from 'vue';
 import { useRecordingSets } from './useRecordingSets';
-import { useMicrophoneDevices } from './useMicrophoneDevices';
 import { getDefaultDemoSet, validateDemoAudio, type DemoRecording } from '@/data/demoData';
 
 // Local storage keys
@@ -49,18 +48,61 @@ const markAsVisited = (): void => {
 // Request microphone permission after user interaction
 const requestMicrophonePermissionAfterDemo = async (): Promise<void> => {
   try {
-    console.log('🎤 Requesting microphone permission after demo interaction');
-    const { requestMicrophonePermission, hasPermission } = useMicrophoneDevices();
+    console.log('🎤 Checking and requesting microphone permission after demo interaction');
     
-    // Only request if permission hasn't been granted yet
-    if (!hasPermission.value) {
-      await requestMicrophonePermission();
-      console.log('✅ Microphone permission requested successfully after demo');
-    } else {
-      console.log('🎤 Microphone permission already granted');
+    // Check if microphone permission was previously granted without triggering initialization
+    let hasExistingPermission = false;
+    try {
+      // Use Permissions API to check permission status without triggering dialog
+      if ('permissions' in navigator) {
+        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        console.log('🎤 Existing microphone permission status:', permission.state);
+        
+        if (permission.state === 'granted') {
+          console.log('✅ Existing microphone permission detected');
+          hasExistingPermission = true;
+        }
+      }
+      
+      // Fallback: Try to enumerate devices to check for permission
+      if (!hasExistingPermission) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(device => device.kind === 'audioinput');
+        
+        // Check if any device has a proper label (indicates permission granted)
+        const hasLabels = audioInputs.some(device => device.label && device.label !== '');
+        
+        if (hasLabels) {
+          console.log('🎤 Detected existing microphone permission via device labels');
+          hasExistingPermission = true;
+        }
+      }
+    } catch (error) {
+      console.log('🎤 Could not check existing permission:', error);
     }
+    
+    // If we already have permission, no need to request again
+    if (hasExistingPermission) {
+      console.log('✅ Existing microphone permission restored');
+      return;
+    }
+    
+    // Request new permission using basic getUserMedia
+    try {
+      console.log('🎤 Requesting new microphone permission...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Stop the stream immediately, we just needed permission
+      stream.getTracks().forEach(track => track.stop());
+      
+      console.log('✅ Microphone permission granted successfully after demo');
+    } catch (permissionError) {
+      console.log('⚠️ Microphone permission request failed (user may have denied):', permissionError);
+      // Don't throw - just log and continue
+    }
+    
   } catch (error) {
-    console.log('⚠️ Microphone permission request failed (user may have denied):', error);
+    console.log('⚠️ Microphone permission request failed:', error);
     // Don't block the demo flow if microphone permission fails
   }
 };
@@ -217,6 +259,20 @@ const shouldShowDemoPrompt = computed(() => {
   return showDemoPrompt.value && !hasUserData.value;
 });
 
+// Check if we should proactively request microphone permissions for returning users
+const shouldRequestMicrophonePermission = computed(() => {
+  // Request permission for returning users who haven't seen the demo prompt
+  return !isFirstVisit.value && !showDemoPrompt.value;
+});
+
+// Proactive permission request for returning users (call from user interaction)
+const requestMicrophonePermissionForReturningUser = async (): Promise<void> => {
+  if (shouldRequestMicrophonePermission.value) {
+    console.log('🎤 Requesting microphone permission for returning user');
+    await requestMicrophonePermissionAfterDemo();
+  }
+};
+
 export function useDemoData() {
   return {
     // State
@@ -226,6 +282,7 @@ export function useDemoData() {
     demoLoadError,
     showDemoPrompt,
     shouldShowDemoPrompt,
+    shouldRequestMicrophonePermission,
     hasUserData,
     
     // Actions
@@ -233,6 +290,7 @@ export function useDemoData() {
     loadDemoData,
     dismissDemoPrompt,
     markAsVisited,
-    resetDemoState
+    resetDemoState,
+    requestMicrophonePermissionForReturningUser
   };
 }
