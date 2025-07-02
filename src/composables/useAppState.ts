@@ -20,7 +20,7 @@ export interface VADSettings {
 export interface AudioVisualizationPanel {
   getTargetBlob?: () => Blob | null;
   getUserBlob?: () => Blob | null;
-  setTargetAudio?: (blob: Blob, metadata: any) => Promise<void>;
+  setTargetAudio?: (blob: Blob | null, metadata?: any) => Promise<void>;
   processUserAudio?: (blob: Blob) => Promise<void>;
 }
 

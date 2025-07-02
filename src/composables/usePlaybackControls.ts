@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { useAppStateInject, type AppState } from './useAppState'
+import { audioManager as globalAudioManager } from './useAudioManager'
 
 // Types
 interface AudioPlayer {
@@ -252,9 +253,6 @@ export function usePlaybackControls(providedAppState: AppState | null = null) {
         if (audioManager.activePlayback) {
           audioManager.stopAll()
         }
-        
-        // Import the global audioManager for proper overlapping support
-        const { audioManager: globalAudioManager } = await import('./useAudioManager')
         
         // Use the global manager's playOverlapping method by getting playerInfo
         const targetPlayerInfo = targetPlayer.playerInfo?.()

@@ -143,7 +143,7 @@ import AppSettingsModal from '../components/AppSettingsModal.vue';
 import DemoAudioModal from '../components/DemoAudioModal.vue';
 import MicrophoneSelector from '../components/MicrophoneSelector.vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
-import { useAppState } from '../composables/useAppState';
+import { useAppState, type VADSettings } from '../composables/useAppState';
 import { useAppUtilities } from '../composables/useAppUtilities';
 import { usePlaybackControls } from '../composables/usePlaybackControls';
 import { useViewport } from '../composables/useViewport';
@@ -214,7 +214,16 @@ const appStateForComposables = {
   targetAudioPlayerRef,
   userAudioPlayerRef,
   globalPlaybackSpeed,
-  updatePlaybackSpeed
+  updatePlaybackSpeed,
+  isRecordingActive,
+  hasTargetAudio,
+  hasUserAudio,
+  getTargetBlob,
+  getUserBlob,
+  setRecordingActive,
+  setTargetAudioPlayerRef,
+  setUserAudioPlayerRef,
+  setAudioVisualizationPanel
 }
 
 // Consolidated utilities - pass app state directly since we're in the provider component
@@ -300,9 +309,9 @@ const {
 } = usePlaybackControls(appStateForComposables)
 
 // Remaining component refs (will be further consolidated)
-const recordingManager = ref(null)
-const recordingStateManager = ref(null)
-const audioProcessingHandler = ref(null)
+const recordingManager = ref<any>(null)
+const recordingStateManager = ref<any>(null)
+const audioProcessingHandler = ref<any>(null)
 
 onMounted(async () => {
   // App initialization
@@ -324,15 +333,15 @@ onMounted(async () => {
 })
 
 // Audio Visualization Panel event handlers
-const handleTargetAudioPlayerRef = (ref) => {
+const handleTargetAudioPlayerRef = (ref: HTMLAudioElement | null) => {
   setTargetAudioPlayerRef(ref)
 }
 
-const handleUserAudioPlayerRef = (ref) => {
+const handleUserAudioPlayerRef = (ref: HTMLAudioElement | null) => {
   setUserAudioPlayerRef(ref)
 }
 
-const handleAudioProcessed = async (data) => {
+const handleAudioProcessed = async (data: { source?: { name: string } }) => {
   console.log('Audio processed:', data)
   // Update audio source if provided
   if (data && data.source) {
@@ -350,7 +359,7 @@ const closeDemoModal = () => {
   showDemoModal.value = false
 }
 
-const handleDemoLoad = async (demoInfo) => {
+const handleDemoLoad = async (demoInfo: { name?: string; audioUrl?: string }) => {
   console.log('🎵 Loading demo audio:', demoInfo)
   
   try {
@@ -373,18 +382,18 @@ const handleDemoLoad = async (demoInfo) => {
 }
 const showVADSettings = () => openVadModal()
 
-const handleVADSettingsSave = (newSettings) => {
+const handleVADSettingsSave = (newSettings: VADSettings) => {
   handleVadSettingsSaveUtil(newSettings)
 }
 
-const handleAppEffectsSave = (newEffectsConfig) => {
+const handleAppEffectsSave = (newEffectsConfig: Record<string, unknown>) => {
   console.log('🎚️ Saving audio effects configuration:', newEffectsConfig)
   updateEffectsConfig(newEffectsConfig)
 }
 
 
 const handleMarkCompleted = () => {
-  recordingManager.value?.markCurrentCompleted(currentRecording.value)
+  recordingManager.value?.markCurrentCompleted?.(currentRecording.value)
 }
 
 // Recording State Manager event handlers
@@ -398,53 +407,51 @@ const handleRecordingStopped = () => {
   console.log('Recording stopped in PracticeView')
 }
 
-const handleRecordedAudio = async (blob) => {
+const handleRecordedAudio = async (blob: Blob) => {
   // Delegate audio processing to AudioVisualizationPanel
   if (audioVisualizationPanel.value) {
-    await audioVisualizationPanel.value.processUserAudio(blob)
+    await audioVisualizationPanel.value.processUserAudio?.(blob)
   }
   
   // Update the current recording if we have an active set
   if (currentRecording.value && blob) {
-    const userUrl = audioVisualizationPanel.value?.getUserUrl()
-    if (userUrl) {
-      updateUserRecording(blob, userUrl)
-    }
+    // getUserUrl method doesn't exist, use blob directly for now
+    updateUserRecording(blob, URL.createObjectURL(blob))
   }
 }
 
 
 // Playback event handlers - now direct calls to composable  
 const playSequentialWithDelay = () => {
-  const delay = audioVisualizationPanel.value?.sequentialDelay || 0
+  const delay = appSettings.value.sequentialDelay || 0
   playSequential(delay)
 }
 
-const handleSpeedChange = (newSpeed) => {
+const handleSpeedChange = (newSpeed: number) => {
   updatePlaybackSpeedDirect(newSpeed)
 }
 
 // Manual align function - keep this as it's still needed for the "Trim Now" button
-const manualAlign = () => audioProcessingHandler.value?.manualAlign()
+const manualAlign = () => audioProcessingHandler.value?.manualAlign?.()
 
 // Recording Manager event handlers that are still needed for components
-const handleRecordingCompleted = (recording) => console.log('Recording marked as completed:', recording)
-const handleOperationError = ({ message }) => alert(message)
-const handleRecordingStateChanged = ({ isRecording }) => console.log('Recording state changed:', isRecording)
+const handleRecordingCompleted = (recording: any) => console.log('Recording marked as completed:', recording)
+const handleOperationError = ({ message }: { message: string }) => alert(message)
+const handleRecordingStateChanged = ({ isRecording }: { isRecording: boolean }) => console.log('Recording state changed:', isRecording)
 
 // Audio Processing Handler event handlers - simplified logging
-const handleAutoPlayToggled = (value) => console.log('Auto-play toggled:', value)
-const handleAutoAlignToggled = (value) => console.log('Auto-align toggled:', value)
+const handleAutoPlayToggled = (value: boolean) => console.log('Auto-play toggled:', value)
+const handleAutoAlignToggled = (value: boolean) => console.log('Auto-align toggled:', value)
 const handleManualAlignTriggered = () => console.log('Manual alignment triggered')
-const handleSequentialDelayUpdated = (value) => console.log('Sequential delay updated:', value)
+const handleSequentialDelayUpdated = (value: number) => console.log('Sequential delay updated:', value)
 
 
 
-const handleMicrophoneChange = (deviceId) => {
+const handleMicrophoneChange = (deviceId: string) => {
   setSelectedDevice(deviceId)
 }
 
-const handleMicrophoneDeviceChange = (deviceId) => {
+const handleMicrophoneDeviceChange = (deviceId: string) => {
   console.log('🎙️ Microphone device changed from AudioVisualizationPanel:', deviceId);
   setSelectedDevice(deviceId);
 }
@@ -468,7 +475,7 @@ watch(currentRecording, async (newRecording, oldRecording) => {
         await new Promise(resolve => setTimeout(resolve, 500))
       }
       
-      await audioVisualizationPanel.value.setTargetAudio(newRecording.audioBlob, {
+      await audioVisualizationPanel.value.setTargetAudio?.(newRecording.audioBlob, {
         name: newRecording.name,
         fileName: newRecording.metadata?.fileName,
         source: 'folder'
@@ -480,7 +487,7 @@ watch(currentRecording, async (newRecording, oldRecording) => {
   } else if (!newRecording && audioVisualizationPanel.value) {
     console.log('🗑️ Clearing target audio (no recording selected)')
     currentAudioSource.value = ''
-    await audioVisualizationPanel.value.setTargetAudio(null)
+    await audioVisualizationPanel.value.setTargetAudio?.(null)
   }
 })
 </script>

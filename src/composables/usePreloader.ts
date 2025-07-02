@@ -1,5 +1,7 @@
 import { ref, readonly } from 'vue'
 import { useVADProcessor } from './useVADProcessor'
+import WaveSurfer from 'wavesurfer.js'
+import Spectrogram from 'wavesurfer.js/dist/plugins/spectrogram.esm.js'
 
 interface PreloadStatus {
   vad: boolean
@@ -60,14 +62,8 @@ export function usePreloader() {
     try {
       console.log('📦 Pre-loading WaveSurfer modules...')
       
-      // Dynamically import WaveSurfer to trigger module loading
-      const [WaveSurfer, Spectrogram] = await Promise.all([
-        import('wavesurfer.js'),
-        import('wavesurfer.js/dist/plugins/spectrogram.esm.js')
-      ])
-      
-      // Verify modules loaded correctly
-      if (WaveSurfer.default && Spectrogram.default) {
+      // Verify modules are available (already statically imported)
+      if (WaveSurfer && Spectrogram) {
         preloadStatus.value.wavesurfer = true
         console.log('✅ WaveSurfer modules pre-loaded successfully')
       } else {
@@ -98,18 +94,12 @@ export function usePreloader() {
     try {
       console.log('🔥 Warming up WaveSurfer initialization...')
       
-      // Ensure modules are loaded first
-      const [WaveSurfer, Spectrogram] = await Promise.all([
-        import('wavesurfer.js'),
-        import('wavesurfer.js/dist/plugins/spectrogram.esm.js')
-      ])
-      
       // Create offscreen containers
       const waveContainer = createOffscreenContainer()
       const spectroContainer = createOffscreenContainer()
       
       // Create a test WaveSurfer instance to warm up the creation process
-      const testInstance = WaveSurfer.default.create({
+      const testInstance = WaveSurfer.create({
         container: waveContainer,
         waveColor: 'rgba(96, 165, 250, 0.8)',
         progressColor: 'rgba(59, 130, 246, 0.9)',
@@ -125,7 +115,7 @@ export function usePreloader() {
       })
       
       // Create spectrogram plugin to warm up plugin system
-      const spectrogramPlugin = Spectrogram.default.create({
+      const spectrogramPlugin = Spectrogram.create({
         container: spectroContainer,
         labels: true,
         splitChannels: false,
