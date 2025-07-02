@@ -1,7 +1,10 @@
 <template>
   <div class="audio-load-buttons">
     <button @click="$emit('browse-file')" class="action-btn file-btn">
-      📁 Browse File
+      📄 Browse File
+    </button>
+    <button @click="$emit('upload-folder')" class="action-btn folder-btn">
+      📁 Upload Folder
     </button>
     <button @click="$emit('load-url')" class="action-btn url-btn">
       🌐 Load URL
@@ -9,14 +12,19 @@
     <button @click="$emit('load-demo')" class="action-btn demo-btn">
       🎵 Load Demo
     </button>
+    <button @click="$emit('open-sets')" class="action-btn sets-btn">
+      📚 Recording Sets
+    </button>
   </div>
 </template>
 
 <script setup>
 defineEmits([
   'browse-file',
+  'upload-folder',
   'load-url',
-  'load-demo'
+  'load-demo',
+  'open-sets'
 ])
 </script>
 
@@ -59,6 +67,16 @@ defineEmits([
 .demo-btn:hover {
   border-color: #f59e0b;
   background: rgba(245, 158, 11, 0.2);
+}
+
+.folder-btn:hover {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.sets-btn:hover {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.2);
 }
 
 /* Mobile responsive */

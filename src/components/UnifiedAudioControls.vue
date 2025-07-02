@@ -27,8 +27,8 @@
       </template>
       
       <div class="audio-loading-group">
-        <AudioLoadButtons @browse-file="$emit('browse-file')" @load-url="$emit('load-url')"
-          @load-demo="$emit('load-demo')" />
+        <AudioLoadButtons @browse-file="$emit('browse-file')" @upload-folder="showFolderUpload = true" 
+          @load-url="$emit('load-url')" @load-demo="$emit('load-demo')" @open-sets="showRecordingSetsModal = true" />
       </div>
     </div>
 
@@ -71,6 +71,16 @@
       </div>
     </div>
   </div>
+
+    <!-- Recording Sets Modal -->
+    <RecordingSetsModal :isVisible="showRecordingSetsModal" @close="showRecordingSetsModal = false" />
+    
+    <!-- Folder Upload Modal -->
+    <FolderUpload 
+      v-if="showFolderUpload" 
+      @close="showFolderUpload = false"
+      @imported="handleFolderImported"
+    />
 
     <!-- Recording List (Expandable) -->
     <div v-if="showRecordingList && activeSet" class="recording-list">
@@ -119,6 +129,8 @@ import { useRecordingSets } from '../composables/useRecordingSets';
 import { useViewport } from '../composables/useViewport';
 import AudioLoadButtons from './AudioLoadButtons.vue';
 import MicrophoneSelector from './MicrophoneSelector.vue';
+import RecordingSetsModal from './RecordingSetsModal.vue';
+import FolderUpload from './FolderUpload.vue';
 
 // Props
 const props = defineProps({
@@ -153,11 +165,14 @@ const {
   previousRecording,
   randomRecording,
   goToRecording,
-  markRecordingCompleted
+  markRecordingCompleted,
+  setActiveSet
 } = useRecordingSets();
 
 // Component state
 const showRecordingList = ref(false);
+const showRecordingSetsModal = ref(false);
+const showFolderUpload = ref(false);
 const listFilter = ref('all');
 
 // Computed properties
@@ -208,6 +223,13 @@ const toggleCompleted = () => {
 
 const handleDeviceChange = (deviceId) => {
   emit('device-change', deviceId);
+};
+
+const handleFolderImported = (recordingSet) => {
+  console.log('✅ Recording set imported:', recordingSet.name);
+  showFolderUpload.value = false;
+  // Auto-select the newly imported set
+  setActiveSet(recordingSet.id);
 };
 </script>
 

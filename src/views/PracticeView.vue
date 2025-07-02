@@ -54,9 +54,6 @@
           :currentRecording="currentRecording"
           @mark-completed="handleMarkCompleted"
         />
-
-        <!-- Recording Sets Manager -->
-        <RecordingSetsManager />
       </template>
     </div>
 
@@ -66,20 +63,6 @@
       @tab-clicked="handleMobileTabClick"
     />
 
-    <!-- Mobile Sidebar for Recording Sets -->
-    <Transition name="slide-left">
-      <div v-if="showMobileSidebar" class="mobile-sidebar-overlay" @click="closeMobileSidebar">
-        <div class="mobile-sidebar" @click.stop>
-          <div class="sidebar-header">
-            <h2>Recording Sets</h2>
-            <button @click="closeMobileSidebar" class="close-btn">×</button>
-          </div>
-          <div class="sidebar-content">
-            <RecordingSetsManager />
-          </div>
-        </div>
-      </div>
-    </Transition>
 
 
     <!-- URL Input Modal -->
@@ -152,7 +135,6 @@
 import { ref, onMounted, watch, nextTick, computed } from 'vue';
 import UnifiedAudioControls from '../components/UnifiedAudioControls.vue';
 import SessionStats from '../components/SessionStats.vue';
-import RecordingSetsManager from '../components/RecordingSetsManager.vue';
 import AudioVisualizationPanel from '../components/AudioVisualizationPanel.vue';
 import MainHeader from '../components/MainHeader.vue';
 import CentralPlaybackControls from '../components/CentralPlaybackControls.vue';
@@ -208,7 +190,6 @@ const { availableDevices, selectedDeviceId, setSelectedDevice } = useMicrophoneD
 
 // Mobile layout state
 const mobileActiveTab = ref(null)
-const showMobileSidebar = ref(false)
 const showStatsOnMobile = ref(false)
 
 // Demo modal state
@@ -468,7 +449,8 @@ const handleMobileTabClick = (tabName) => {
   
   switch (tabName) {
     case 'sets':
-      showMobileSidebar.value = true
+      // Recording sets are now handled through the unified modal
+      // This case can be removed when MobileBottomNav no longer has a sets tab
       break
     case 'settings':
       // Open the unified app settings modal instead of mobile-specific modal
@@ -476,13 +458,6 @@ const handleMobileTabClick = (tabName) => {
       // Reset mobile tab state since we're using the main settings modal
       mobileActiveTab.value = null
       break
-  }
-}
-
-const closeMobileSidebar = () => {
-  showMobileSidebar.value = false
-  if (mobileActiveTab.value === 'sets') {
-    mobileActiveTab.value = null
   }
 }
 
@@ -702,51 +677,6 @@ watch(currentRecording, async (newRecording, oldRecording) => {
   backdrop-filter: blur(10px);
   border-radius: 12px;
   margin: 12px 0;
-}
-
-/* Mobile Sidebar */
-.mobile-sidebar-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 200;
-  display: flex;
-}
-
-.mobile-sidebar {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  width: 280px;
-  max-width: 80vw;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3);
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.sidebar-header h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: white;
-}
-
-.sidebar-content {
-  flex: 1;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 16px;
 }
 
 /* Mobile Modal */
