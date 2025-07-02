@@ -228,62 +228,65 @@ export function useWaveform(
     loadAudioDirect(url);
   };
 
-  // Separate function for direct audio loading (no recreation)
+  // Load new audio into existing WaveSurfer instance (no recreation)
   const loadAudioDirect = (url: string): void => {
     if (!url) {
       return;
     }
 
-    // CRITICAL FIX: Always recreate WaveSurfer instance to ensure spectrogram and waveform sync
-    // This prevents any caching issues where spectrogram might show old audio data
-    console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Destroying and recreating WaveSurfer to ensure audio sync`);
-    console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Loading URL: ${url.substring(0, 50)}...`);
+    console.log(`🎵 [${audioType.toUpperCase()}]: Loading new audio: ${url.substring(0, 50)}...`);
 
-    // Always destroy and recreate to prevent any plugin caching issues
-    destroyWaveform();
+    // If WaveSurfer doesn't exist yet, initialize it first
+    if (!wavesurfer.value) {
+      if (!containerRef.value || !spectrogramContainerRef.value) {
+        console.log('🎵 Containers not ready, deferring load...');
+        return;
+      }
+      
+      console.log(`🎵 [${audioType.toUpperCase()}]: Initializing WaveSurfer instance`);
+      initWaveform();
+      
+      // Wait for initialization then load audio
+      nextTick(() => {
+        if (wavesurfer.value) {
+          loadAudioIntoInstance(url);
+        }
+      });
+    } else {
+      // WaveSurfer exists, just load new audio
+      loadAudioIntoInstance(url);
+    }
+  };
 
-    // Reset state
+  // Helper function to load audio into existing WaveSurfer instance
+  const loadAudioIntoInstance = (url: string): void => {
+    if (!wavesurfer.value) return;
+
+    // Reset state for new audio
     isReady.value = false;
     isPlaying.value = false;
     currentTime.value = 0;
     duration.value = 0;
 
-    // CRITICAL FIX: Use reactive pattern to ensure both containers are ready
-    if (!containerRef.value || !spectrogramContainerRef.value) {
-      console.log('🎵 SYNC FIX: Containers not ready, deferring load...');
-      return; // Simply return - the audio will load when containers become available
-    }
+    console.log(`🎵 [${audioType.toUpperCase()}]: Loading audio into existing instance`);
 
-    // Recreate WaveSurfer instance with fresh spectrogram plugin
     try {
-      console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Initializing fresh WaveSurfer instance`);
-      initWaveform();
+      const loadPromise = wavesurfer.value.load(url);
 
-      // Wait for initialization to complete before loading audio
-      nextTick(() => {
-        if (wavesurfer.value) {
-          console.log(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Loading audio into fresh instance`);
-
-          const loadPromise = wavesurfer.value.load(url);
-
-          // Handle promise rejection for async errors
-          if (loadPromise && typeof loadPromise.catch === 'function') {
-            loadPromise.catch((asyncError: any) => {
-              // Filter out expected spectrogram errors during loading
-              if (asyncError?.message?.includes('Cannot read properties of undefined') ||
-                asyncError?.message?.includes('length')) {
-                console.log('🎵 Spectrogram data error during load (handled)');
-                return;
-              }
-              console.error('🎵 Async load error:', asyncError);
-            });
+      // Handle promise rejection for async errors
+      if (loadPromise && typeof loadPromise.catch === 'function') {
+        loadPromise.catch((asyncError: any) => {
+          // Filter out expected spectrogram errors during loading
+          if (asyncError?.message?.includes('Cannot read properties of undefined') ||
+            asyncError?.message?.includes('length')) {
+            console.log('🎵 Spectrogram data error during load (handled)');
+            return;
           }
-        } else {
-          console.error(`🎵 SYNC FIX [${audioType.toUpperCase()}]: WaveSurfer instance not ready after init`);
-        }
-      });
+          console.error('🎵 Async load error:', asyncError);
+        });
+      }
     } catch (error) {
-      console.error(`🎵 SYNC FIX [${audioType.toUpperCase()}]: Error during fresh instance creation:`, error);
+      console.error('🎵 Error loading audio:', error);
     }
   };
 

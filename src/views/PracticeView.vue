@@ -15,6 +15,7 @@
         :appSettings="appSettings"
         @browse-file="triggerFileInput"
         @load-url="showUrlModalHandler"
+        @load-demo="showDemoModalHandler"
         @target-audio-ref="handleTargetAudioPlayerRef"
         @user-audio-ref="handleUserAudioPlayerRef"
         @audio-processed="handleAudioProcessed"
@@ -96,6 +97,12 @@
       </div>
     </div>
 
+    <!-- Demo Audio Selection Modal -->
+    <DemoAudioModal
+      :isVisible="showDemoModal"
+      @close="closeDemoModal"
+      @load-demo="handleDemoLoad"
+    />
     
     <!-- Recording Manager -->
     <RecordingManager
@@ -149,6 +156,7 @@ import RecordingManager from '../components/RecordingManager.vue';
 import RecordingStateManager from '../components/RecordingStateManager.vue';
 import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
 import AppSettingsModal from '../components/AppSettingsModal.vue';
+import DemoAudioModal from '../components/DemoAudioModal.vue';
 import MobileBottomNav from '../components/MobileBottomNav.vue';
 import MicrophoneSelector from '../components/MicrophoneSelector.vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
@@ -195,6 +203,9 @@ const { availableDevices, selectedDeviceId, setSelectedDevice } = useMicrophoneD
 const mobileActiveTab = ref(null)
 const showMobileSidebar = ref(false)
 const showStatsOnMobile = ref(false)
+
+// Demo modal state
+const showDemoModal = ref(false)
 
 
 // Since we're in the same component that provides the state, pass it directly
@@ -266,6 +277,30 @@ const handleAudioProcessed = async (data) => {
 
 // Simplified event handlers using utilities
 const showUrlModalHandler = () => openUrlModal()
+const showDemoModalHandler = () => {
+  showDemoModal.value = true
+}
+const closeDemoModal = () => {
+  showDemoModal.value = false
+}
+
+const handleDemoLoad = async (demoInfo) => {
+  console.log('🎵 Loading demo audio:', demoInfo)
+  
+  try {
+    // Close the modal first
+    closeDemoModal()
+    
+    // Load the demo audio using the existing URL loading functionality
+    if (demoInfo.audioUrl) {
+      await loadAudioFromUrl(demoInfo.audioUrl)
+      console.log('✅ Demo audio loaded successfully')
+    }
+  } catch (error) {
+    console.error('❌ Failed to load demo audio:', error)
+    // Could show an error modal here if needed
+  }
+}
 const showVADSettings = () => openVadModal()
 
 const handleVADSettingsSave = (newSettings) => {
@@ -389,12 +424,12 @@ watch(currentRecording, async (newRecording, oldRecording) => {
         fileName: newRecording.metadata?.fileName,
         source: 'folder'
       })
-      console.log('✅ FOLDER PROCESSING: Successfully processed folder recording')
+      console.log('✅ Successfully processed recording')
     } catch (error) {
-      console.error('❌ FOLDER PROCESSING: Failed to process folder recording:', error)
+      console.error('❌ Failed to process recording:', error)
     }
   } else if (!newRecording && audioVisualizationPanel.value) {
-    console.log('🗑️ FOLDER PROCESSING: Clearing target audio (no recording selected)')
+    console.log('🗑️ Clearing target audio (no recording selected)')
     await audioVisualizationPanel.value.setTargetAudio(null)
   }
 })

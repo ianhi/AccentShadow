@@ -7,6 +7,7 @@
         :currentAudioSource="currentAudioSource"
         @browse-file="$emit('browse-file')"
         @load-url="$emit('load-url')"
+        @load-demo="$emit('load-demo')"
       />
       
       <!-- Microphone Selection - Always visible -->
@@ -131,7 +132,8 @@ const props = defineProps({
 
 const emit = defineEmits([
   'browse-file',
-  'load-url', 
+  'load-url',
+  'load-demo',
   'show-vad-settings',
   'target-audio-ref',
   'user-audio-ref',
@@ -395,19 +397,22 @@ const getAudioDuration = async (audioBlob) => {
 const setTargetAudio = async (audioBlob, source = {}) => {
   if (!audioBlob) {
     console.warn('🎯 setTargetAudio: No audio blob provided')
-    // Clear everything
+    // Clear everything using standard path
     const oldTargetUrl = targetAudioUrl.value
     const oldRawTargetUrl = rawTargetAudioUrl.value
     targetDebugInfo.value = null
     rawTargetDebugInfo.value = null
     targetAudioProcessed.value = null
-    originalTargetAudioBlob.value = null // Clear original as well
+    originalTargetAudioBlob.value = null
     targetAudioUrl.value = null
     targetAudioBlob.value = null
     rawTargetAudioUrl.value = null
     rawTargetAudioBlob.value = null
-    hasTargetAutoPlayed.value = false // Reset auto-play flag when target is cleared
-    currentVadSegments.value = [] // Clear VAD segments when target is cleared
+    hasTargetAutoPlayed.value = false
+    currentVadSegments.value = []
+    
+    // Update source display
+    currentAudioSource.value = ''
     
     // Cleanup old blob URLs
     if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
@@ -421,33 +426,39 @@ const setTargetAudio = async (audioBlob, source = {}) => {
 
   try {
     const sourceType = source.source || 'manual'
+    console.log(`🎯 Processing ${sourceType} audio with VAD and silence padding`)
+    
+    // Store original audio blob for future operations
+    originalTargetAudioBlob.value = audioBlob
+    console.log('💾 Stored original target audio blob for future alignments')
+    
+    // Update source display
+    currentAudioSource.value = source.name || source.fileName || 'Audio file'
     
     // Store old URL for cleanup
     const oldTargetUrl = targetAudioUrl.value
     
-    // Store the original target audio blob to prevent progressive trimming
-    originalTargetAudioBlob.value = audioBlob
-    console.log('💾 Stored original target audio blob for future alignments')
-    
-    // DEBUG: Set up raw audio visualization (unprocessed)
-    const oldRawTargetUrl = rawTargetAudioUrl.value
-    rawTargetAudioBlob.value = audioBlob
-    rawTargetAudioUrl.value = URL.createObjectURL(audioBlob)
-    
-    // Set raw audio debug info
-    const rawDuration = await getAudioDurationFast(audioBlob)
-    rawTargetDebugInfo.value = {
-      rawDuration: rawDuration.toFixed(3),
-      finalDuration: rawDuration.toFixed(3),
-      trimmedAmount: '0.000'
+    // Set up raw audio visualization for debug if enabled
+    if (props.showRawAudio) {
+      const oldRawTargetUrl = rawTargetAudioUrl.value
+      rawTargetAudioBlob.value = audioBlob
+      rawTargetAudioUrl.value = URL.createObjectURL(audioBlob)
+      
+      // Set raw audio debug info
+      const rawDuration = await getAudioDurationFast(audioBlob)
+      rawTargetDebugInfo.value = {
+        rawDuration: rawDuration.toFixed(3),
+        finalDuration: rawDuration.toFixed(3),
+        trimmedAmount: '0.000'
+      }
+      
+      // Cleanup old raw URL
+      if (oldRawTargetUrl && oldRawTargetUrl.startsWith('blob:')) {
+        scheduleUrlCleanup(oldRawTargetUrl)
+      }
+      
+      console.log('🔍 DEBUG: Raw audio visualization set up for comparison')
     }
-    
-    // Cleanup old raw URL
-    if (oldRawTargetUrl && oldRawTargetUrl.startsWith('blob:')) {
-      scheduleUrlCleanup(oldRawTargetUrl)
-    }
-    
-    console.log('🔍 DEBUG: Raw audio visualization set up for comparison')
     
     // Reset auto-play flag for new target audio (but not during alignment)
     if (!isAligning.value) {
@@ -474,11 +485,9 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     if (targetProcessed.processed && targetProcessed.vadBoundaries) {
       // Emit VAD segments for visualization if requested
       if (props.showVadSegments) {
-        // Extract individual speech segments from VAD boundaries for visualization
         const vadSegments = []
         if (targetProcessed.vadBoundaries.speechSegmentsList && 
             targetProcessed.vadBoundaries.speechSegmentsList.length > 0) {
-          // Use individual segments detected by VAD
           vadSegments.push(...targetProcessed.vadBoundaries.speechSegmentsList.map(segment => ({
             startTime: segment.startTime,
             endTime: segment.endTime,
@@ -486,7 +495,6 @@ const setTargetAudio = async (audioBlob, source = {}) => {
           })))
         } else if (targetProcessed.vadBoundaries.originalSpeechStart !== undefined && 
                    targetProcessed.vadBoundaries.originalSpeechEnd !== undefined) {
-          // Fallback to overall speech boundaries
           vadSegments.push({
             startTime: targetProcessed.vadBoundaries.originalSpeechStart,
             endTime: targetProcessed.vadBoundaries.originalSpeechEnd,
@@ -498,22 +506,20 @@ const setTargetAudio = async (audioBlob, source = {}) => {
         emit('vad-segments', vadSegments)
       }
       
-      // Normalize target audio to have consistent padding
+      // Normalize target audio to have consistent 200ms padding before voice onset
       const normalizedBlob = await normalizeAudioSilence(
         targetProcessed.audioBlob,
         targetProcessed.vadBoundaries,
-        props.vadSettings.padding * 1000 // Convert to milliseconds
+        props.vadSettings.padding * 1000 // Convert to milliseconds (200ms default)
       )
       
-      // CRITICAL FIX: Create blob URL first, then update both atomically
-      // This prevents race condition where waveform and spectrogram load different audio versions
-      const newUrl = URL.createObjectURL(normalizedBlob)
-      
-      // Update state with processed audio atomically
+      // Update state with processed audio
       targetAudioBlob.value = normalizedBlob
-      targetAudioUrl.value = newUrl
+      targetAudioUrl.value = URL.createObjectURL(normalizedBlob)
+      console.log('🎯 Target audio processed with VAD and silence padding')
       
-      console.log('🎯 TIMING FIX: Target audio blob and URL updated atomically')
+      // Schedule cleanup of the newly created URL
+      scheduleUrlCleanup(targetAudioUrl.value)
       
       // Cache the processed target audio for future recordings
       targetAudioProcessed.value = {
@@ -523,21 +529,14 @@ const setTargetAudio = async (audioBlob, source = {}) => {
       
       // Update debug info using VAD-provided duration data
       const vadRawEnd = targetProcessed.vadBoundaries.endTime || 0
-      const vadFinalEnd = targetProcessed.vadBoundaries.endTime || 0 // Already normalized by VAD
+      const vadFinalEnd = targetProcessed.vadBoundaries.endTime || 0
       targetDebugInfo.value = {
         rawDuration: vadRawEnd.toFixed(3),
         finalDuration: vadFinalEnd.toFixed(3),
         trimmedAmount: '0.000' // Already optimally trimmed by VAD
       }
       
-      if (sourceType === 'folder') {
-        console.log('✅ FOLDER AUDIO PROCESSING: Successfully completed VAD processing', {
-          rawDuration: vadRawEnd.toFixed(3) + 's',
-          finalDuration: vadFinalEnd.toFixed(3) + 's',
-          trimmedAmount: '0.000s (VAD optimized)',
-          fileName: source.fileName
-        })
-      }
+      console.log('✅ Target audio VAD processing complete with silence padding')
     } else {
       console.log('📏 Target VAD processing failed - using original audio')
       
@@ -547,11 +546,10 @@ const setTargetAudio = async (audioBlob, source = {}) => {
         emit('vad-segments', [])
       }
       
-      // CRITICAL FIX: Use original audio when VAD processing fails - create URL first then update atomically
-      const fallbackUrl = URL.createObjectURL(audioBlob)
+      // Use original audio when VAD processing fails
       targetAudioBlob.value = audioBlob
-      targetAudioUrl.value = fallbackUrl
-      console.log('🎯 TIMING FIX: Fallback audio blob and URL updated atomically')
+      targetAudioUrl.value = URL.createObjectURL(audioBlob)
+      console.log('🎯 Fallback: Using original audio without VAD processing')
       
       // Clear cache since processing failed
       targetAudioProcessed.value = null
@@ -570,15 +568,7 @@ const setTargetAudio = async (audioBlob, source = {}) => {
       scheduleUrlCleanup(oldTargetUrl)
     }
     
-    // Update current audio source display
-    if (source.name) {
-      currentAudioSource.value = source.name
-    } else if (source.fileName) {
-      currentAudioSource.value = source.fileName
-    } else if (source.url) {
-      currentAudioSource.value = source.url
-    }
-    
+    // Emit processed event to trigger WaveSurfer loading with processed audio
     emit('audio-processed', { type: 'target', blob: targetAudioBlob.value, url: targetAudioUrl.value })
     
   } catch (error) {
@@ -589,6 +579,9 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     targetAudioBlob.value = audioBlob
     targetAudioUrl.value = URL.createObjectURL(audioBlob)
     targetAudioProcessed.value = null
+    
+    // Update source display even on error
+    currentAudioSource.value = source.name || source.fileName || 'Audio file'
     
     try {
       const rawDuration = await getAudioDurationFast(audioBlob)
@@ -605,7 +598,11 @@ const setTargetAudio = async (audioBlob, source = {}) => {
     if (oldTargetUrl && oldTargetUrl.startsWith('blob:')) {
       scheduleUrlCleanup(oldTargetUrl)
     }
+    
+    // Emit processed event even on error
+    emit('audio-processed', { type: 'target', blob: targetAudioBlob.value, url: targetAudioUrl.value })
   }
+
 }
 
 // Process user recorded audio
@@ -1059,25 +1056,7 @@ const manualAlign = async () => {
   }
 }
 
-// Watch for recording changes to load target audio
-watch(() => props.currentRecording, async (newRecording, oldRecording) => {
-  // Only process if switching to a new recording that has audio
-  if (newRecording && newRecording !== oldRecording && newRecording.audioBlob) {
-    try {
-      await setTargetAudio(newRecording.audioBlob, {
-        name: newRecording.name,
-        fileName: newRecording.metadata?.fileName,
-        source: 'folder'
-      })
-      console.log('✅ FOLDER PROCESSING: Successfully processed folder recording')
-    } catch (error) {
-      console.error('❌ FOLDER PROCESSING: Failed to process folder recording:', error)
-    }
-  } else if (!newRecording) {
-    console.log('🗑️ FOLDER PROCESSING: Clearing target audio (no recording selected)')
-    await setTargetAudio(null)
-  }
-})
+// Recording changes are handled by parent component (PracticeView) to avoid duplicate processing
 
 // Expose methods and state
 defineExpose({
