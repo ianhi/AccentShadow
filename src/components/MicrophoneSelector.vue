@@ -14,10 +14,39 @@
     <!-- Permission denied state -->
     <div v-else-if="!hasPermission && permissionRequested" class="permission-denied">
       <div class="permission-content">
-        <span class="permission-icon">❌</span>
-        <span class="permission-text">Microphone access denied</span>
-        <button @click="requestPermission" class="permission-btn retry-btn" :disabled="isLoading">
+        <span class="permission-icon">{{ isPermanentlyDenied ? '🔒' : '❌' }}</span>
+        <span class="permission-text">{{ permissionDeniedMessage }}</span>
+        
+        <!-- Show browser-specific instructions for permanent denial -->
+        <div v-if="isPermanentlyDenied" class="permission-instructions">
+          <p>To enable microphone access:</p>
+          <ol>
+            <li v-if="isChrome">Click the lock icon in the address bar</li>
+            <li v-else-if="isFirefox">Click the permissions icon in the address bar</li>
+            <li v-else-if="isSafari">Go to Safari → Settings → Websites → Microphone</li>
+            <li v-else>Check your browser's site settings</li>
+            <li>Find "Microphone" and set to "Allow"</li>
+            <li>Refresh this page</li>
+          </ol>
+        </div>
+        
+        <!-- Try again button only for temporary denials -->
+        <button 
+          v-if="!isPermanentlyDenied" 
+          @click="requestPermission" 
+          class="permission-btn retry-btn" 
+          :disabled="isLoading"
+        >
           {{ isLoading ? 'Requesting...' : 'Try Again' }}
+        </button>
+        
+        <!-- Refresh button for permanent denials -->
+        <button 
+          v-else 
+          @click="refreshPage" 
+          class="permission-btn refresh-btn"
+        >
+          Refresh Page
         </button>
       </div>
     </div>
@@ -47,6 +76,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useMicrophoneDevices } from '../composables/useMicrophoneDevices'
 
 defineProps({
@@ -67,7 +97,30 @@ defineProps({
 const emit = defineEmits(['device-change'])
 
 // Get permission state and functions
-const { hasPermission, permissionRequested, isLoading, requestMicrophonePermission } = useMicrophoneDevices()
+const { hasPermission, permissionRequested, isLoading, error, requestMicrophonePermission } = useMicrophoneDevices()
+
+// Detect browser type
+const isChrome = computed(() => /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor))
+const isFirefox = computed(() => /Firefox/.test(navigator.userAgent))
+const isSafari = computed(() => /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent))
+
+// Check if permission is permanently denied
+const isPermanentlyDenied = computed(() => {
+  return error.value === 'PERMISSION_DENIED_PERMANENT'
+})
+
+// Get appropriate permission denied message
+const permissionDeniedMessage = computed(() => {
+  if (error.value === 'PERMISSION_DENIED_PERMANENT') {
+    return 'Microphone access blocked by browser'
+  } else if (error.value === 'NO_MICROPHONE_FOUND') {
+    return 'No microphone found'
+  } else if (error.value === 'PERMISSION_DENIED_TEMPORARY') {
+    return 'Microphone access denied'
+  } else {
+    return 'Microphone access denied'
+  }
+})
 
 const handleDeviceChange = (event) => {
   emit('device-change', event.target.value)
@@ -76,6 +129,10 @@ const handleDeviceChange = (event) => {
 const requestPermission = async () => {
   console.log('🎤 User clicked permission request button')
   await requestMicrophonePermission()
+}
+
+const refreshPage = () => {
+  window.location.reload()
 }
 </script>
 
@@ -147,6 +204,43 @@ const requestPermission = async () => {
 
 .retry-btn:hover:not(:disabled) {
   background: #dc2626;
+}
+
+.refresh-btn {
+  background: #10b981;
+}
+
+.refresh-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.permission-instructions {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  margin: 8px 0;
+  text-align: left;
+  max-width: 300px;
+}
+
+.permission-instructions p {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.permission-instructions ol {
+  margin: 0;
+  padding-left: 20px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.permission-instructions li {
+  margin-bottom: 4px;
 }
 
 .mic-dropdown-container {

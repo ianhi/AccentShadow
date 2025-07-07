@@ -31,6 +31,22 @@ export function useMicrophoneDevices() {
 
       console.log('🎤 Requesting microphone permission (user interaction)');
       
+      // First check if permission was previously denied
+      if ('permissions' in navigator) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          if (permission.state === 'denied') {
+            console.log('🚫 Microphone permission is permanently denied');
+            hasPermission.value = false;
+            error.value = 'PERMISSION_DENIED_PERMANENT';
+            return false;
+          }
+        } catch (e) {
+          // Permissions API not available or failed, continue with getUserMedia
+          console.log('⚠️ Could not check permission status:', e);
+        }
+      }
+      
       // Request permission to get device labels
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
@@ -49,11 +65,22 @@ export function useMicrophoneDevices() {
       hasPermission.value = false;
       
       if (err instanceof Error && err.name === 'NotAllowedError') {
-        error.value = 'Microphone access denied. Please allow microphone access to record audio.';
+        // Check if this is a permanent denial by attempting to query permission state
+        let isPermanentDenial = false;
+        if ('permissions' in navigator) {
+          try {
+            const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+            isPermanentDenial = permission.state === 'denied';
+          } catch (e) {
+            // Assume it's a temporary denial if we can't check
+          }
+        }
+        
+        error.value = isPermanentDenial ? 'PERMISSION_DENIED_PERMANENT' : 'PERMISSION_DENIED_TEMPORARY';
       } else if (err instanceof Error && err.name === 'NotFoundError') {
-        error.value = 'No microphone found. Please connect a microphone and try again.';
+        error.value = 'NO_MICROPHONE_FOUND';
       } else {
-        error.value = 'Could not access microphone. Please check your browser settings.';
+        error.value = 'UNKNOWN_ERROR';
       }
       
       return false;
