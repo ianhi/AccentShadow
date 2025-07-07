@@ -18,6 +18,35 @@ const globalMicrophoneState = {
   permissionRequested: ref(false)
 };
 
+// Browser detection utility
+const getBrowserInfo = () => {
+  const userAgent = navigator.userAgent.toLowerCase();
+  return {
+    isMobile: /mobile|android|iphone|ipad/.test(userAgent),
+    isChrome: /chrome/.test(userAgent) && /google inc/.test(navigator.vendor.toLowerCase()),
+    isFirefox: /firefox/.test(userAgent),
+    isIOS: /iphone|ipad|ipod/.test(userAgent),
+    userAgent
+  };
+};
+
+// Permission API helper
+const checkPermissionAPI = async (browser: ReturnType<typeof getBrowserInfo>): Promise<PermissionState | null> => {
+  // Skip on mobile Chrome where it's unreliable
+  if (browser.isMobile && browser.isChrome) return null;
+  
+  if ('permissions' in navigator) {
+    try {
+      const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      console.log('🎤 Permission API result:', permission.state);
+      return permission.state;
+    } catch (e) {
+      console.log('⚠️ Permissions API failed:', e);
+    }
+  }
+  return null;
+};
+
 export function useMicrophoneDevices() {
   // Return the shared global state instead of creating new instances
   const { availableDevices, selectedDeviceId, isLoading, error, isInitialized, hasPermission, permissionRequested } = globalMicrophoneState;
@@ -29,26 +58,34 @@ export function useMicrophoneDevices() {
       error.value = null;
       permissionRequested.value = true;
 
-      console.log('🎤 Requesting microphone permission (user interaction)');
+      const browser = getBrowserInfo();
+      console.log('🎤 Requesting microphone permission', browser);
       
-      // First check if permission was previously denied
-      if ('permissions' in navigator) {
-        try {
-          const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-          if (permission.state === 'denied') {
-            console.log('🚫 Microphone permission is permanently denied');
-            hasPermission.value = false;
-            error.value = 'PERMISSION_DENIED_PERMANENT';
-            return false;
-          }
-        } catch (e) {
-          // Permissions API not available or failed, continue with getUserMedia
-          console.log('⚠️ Could not check permission status:', e);
-        }
+      // Check if permission was previously denied
+      const permissionState = await checkPermissionAPI(browser);
+      if (permissionState === 'denied') {
+        console.log('🚫 Microphone permission is permanently denied');
+        hasPermission.value = false;
+        error.value = 'PERMISSION_DENIED_PERMANENT';
+        return false;
       }
       
-      // Request permission to get device labels
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Small delay for mobile to ensure proper user interaction context
+      if (browser.isMobile) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
+      // Request permission with mobile-optimized constraints
+      const constraints = {
+        audio: browser.isMobile ? {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } : true
+      };
+      
+      console.log('🎤 Requesting getUserMedia with constraints:', constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       // Stop the stream immediately, we just needed permission
       stream.getTracks().forEach(track => track.stop());
@@ -56,31 +93,45 @@ export function useMicrophoneDevices() {
       hasPermission.value = true;
       console.log('✅ Microphone permission granted');
       
-      // Now get the available devices
-      await getAvailableDevices();
+      // Store permission hint for mobile browsers
+      if (browser.isMobile) {
+        localStorage.setItem('mic_permission_granted', 'true');
+      }
       
+      // Small delay for mobile Firefox before device enumeration
+      if (browser.isMobile && browser.isFirefox) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+      
+      await getAvailableDevices();
       return true;
+      
     } catch (err) {
       console.error('❌ Microphone permission denied:', err);
       hasPermission.value = false;
       
+      const browser = getBrowserInfo();
+      
       if (err instanceof Error && err.name === 'NotAllowedError') {
-        // Check if this is a permanent denial by attempting to query permission state
-        let isPermanentDenial = false;
-        if ('permissions' in navigator) {
-          try {
-            const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-            isPermanentDenial = permission.state === 'denied';
-          } catch (e) {
-            // Assume it's a temporary denial if we can't check
-          }
-        }
+        // Determine if this is a permanent denial
+        const permissionState = await checkPermissionAPI(browser);
+        const isPermanentDenial = permissionState === 'denied';
         
-        error.value = isPermanentDenial ? 'PERMISSION_DENIED_PERMANENT' : 'PERMISSION_DENIED_TEMPORARY';
+        // Mobile Chrome: always treat as temporary to allow retry
+        if (browser.isMobile && browser.isChrome) {
+          error.value = 'PERMISSION_DENIED_TEMPORARY';
+          console.log('🎤 Mobile Chrome: Treating as temporary denial');
+        } else {
+          error.value = isPermanentDenial ? 'PERMISSION_DENIED_PERMANENT' : 'PERMISSION_DENIED_TEMPORARY';
+        }
       } else if (err instanceof Error && err.name === 'NotFoundError') {
         error.value = 'NO_MICROPHONE_FOUND';
+      } else if (err instanceof Error && err.name === 'AbortError') {
+        error.value = 'PERMISSION_DENIED_TEMPORARY';
+        console.log('🎤 Permission dialog was dismissed');
       } else {
         error.value = 'UNKNOWN_ERROR';
+        console.log('🎤 Unknown error:', err);
       }
       
       return false;
@@ -167,34 +218,37 @@ export function useMicrophoneDevices() {
   // Check if microphone permission was previously granted
   const checkExistingPermission = async (): Promise<boolean> => {
     try {
+      const browser = getBrowserInfo();
+      
       // Use Permissions API to check permission status without triggering dialog
-      if ('permissions' in navigator) {
-        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        console.log('🎤 Existing microphone permission status:', permission.state);
+      const permissionState = await checkPermissionAPI(browser);
+      
+      if (permissionState === 'granted') {
+        console.log('🎤 Existing microphone permission detected');
+        hasPermission.value = true;
+        permissionRequested.value = true;
         
-        if (permission.state === 'granted') {
-          hasPermission.value = true;
-          permissionRequested.value = true;
-          await getAvailableDevices();
-          return true;
-        } else if (permission.state === 'denied') {
-          hasPermission.value = false;
-          permissionRequested.value = true;
-          return false;
+        // Small delay for mobile Firefox before enumerating
+        if (browser.isMobile && browser.isFirefox) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
-        // If 'prompt' state, permission hasn't been requested yet
+        
+        await getAvailableDevices();
+        return true;
+      } else if (permissionState === 'denied') {
+        hasPermission.value = false;
+        permissionRequested.value = true;
+        error.value = 'PERMISSION_DENIED_PERMANENT';
+        return false;
       }
       
-      // Fallback: Try to enumerate devices to check for permission
-      // If we get device labels, permission was granted
+      // Fallback: Check device labels to detect permission
       const devices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = devices.filter(device => device.kind === 'audioinput');
-      
-      // Check if any device has a proper label (indicates permission granted)
       const hasLabels = audioInputs.some(device => device.label && device.label !== '');
       
       if (hasLabels) {
-        console.log('🎤 Detected existing microphone permission via device labels');
+        console.log('🎤 Detected existing permission via device labels');
         hasPermission.value = true;
         permissionRequested.value = true;
         availableDevices.value = audioInputs.map(device => ({
@@ -203,12 +257,26 @@ export function useMicrophoneDevices() {
           groupId: device.groupId
         }));
         
-        // Set default device if none selected
         if (!selectedDeviceId.value && audioInputs.length > 0) {
           selectedDeviceId.value = audioInputs[0].deviceId;
         }
         
         return true;
+      }
+      
+      // Mobile browsers: check localStorage hint and retry
+      if (browser.isMobile && localStorage.getItem('mic_permission_granted') === 'true') {
+        console.log('🎤 Found permission hint, retrying...');
+        try {
+          const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          testStream.getTracks().forEach(track => track.stop());
+          hasPermission.value = true;
+          permissionRequested.value = true;
+          await getAvailableDevices();
+          return true;
+        } catch (e) {
+          localStorage.removeItem('mic_permission_granted');
+        }
       }
       
       return false;

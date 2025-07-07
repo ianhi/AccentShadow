@@ -21,12 +21,78 @@
         <div v-if="isPermanentlyDenied" class="permission-instructions">
           <p>To enable microphone access:</p>
           <ol>
-            <li v-if="isChrome">Click the lock icon in the address bar</li>
-            <li v-else-if="isFirefox">Click the permissions icon in the address bar</li>
-            <li v-else-if="isSafari">Go to Safari → Settings → Websites → Microphone</li>
+            <!-- Mobile Chrome (Android) -->
+            <li v-if="isChrome && isAndroid">
+              Tap the <strong>ⓘ</strong> or <strong>🔒</strong> icon in the address bar
+            </li>
+            <li v-if="isChrome && isAndroid">
+              Tap "Site settings" or "Permissions"
+            </li>
+            <li v-if="isChrome && isAndroid">
+              Find "Microphone" and change to "Allow"
+            </li>
+            
+            <!-- Mobile Chrome (iOS) - uses system settings -->
+            <li v-if="isChrome && isIOS">
+              Open iOS <strong>Settings</strong> app
+            </li>
+            <li v-if="isChrome && isIOS">
+              Scroll to <strong>Chrome</strong>
+            </li>
+            <li v-if="isChrome && isIOS">
+              Enable <strong>Microphone</strong>
+            </li>
+            
+            <!-- Desktop Chrome -->
+            <li v-if="isChrome && !isMobile">
+              Click the lock icon in the address bar
+            </li>
+            <li v-if="isChrome && !isMobile">
+              Find "Microphone" and set to "Allow"
+            </li>
+            
+            <!-- Mobile Firefox -->
+            <li v-if="isFirefox && isMobile">
+              Tap the shield icon in the address bar
+            </li>
+            <li v-if="isFirefox && isMobile">
+              Tap "Site permissions"
+            </li>
+            <li v-if="isFirefox && isMobile">
+              Enable "Use the Microphone"
+            </li>
+            
+            <!-- Desktop Firefox -->
+            <li v-if="isFirefox && !isMobile">
+              Click the permissions icon in the address bar
+            </li>
+            <li v-if="isFirefox && !isMobile">
+              Find "Microphone" and set to "Allow"
+            </li>
+            
+            <!-- Safari (iOS) -->
+            <li v-if="isSafari && isIOS">
+              Open iOS <strong>Settings</strong> app
+            </li>
+            <li v-if="isSafari && isIOS">
+              Go to <strong>Safari</strong> → <strong>Microphone</strong>
+            </li>
+            <li v-if="isSafari && isIOS">
+              Set to "Allow" or "Ask"
+            </li>
+            
+            <!-- Safari (macOS) -->
+            <li v-if="isSafari && !isIOS">
+              Go to Safari → Settings → Websites → Microphone
+            </li>
+            <li v-if="isSafari && !isIOS">
+              Find this website and set to "Allow"
+            </li>
+            
+            <!-- Generic fallback -->
             <li v-else>Check your browser's site settings</li>
-            <li>Find "Microphone" and set to "Allow"</li>
-            <li>Refresh this page</li>
+            
+            <li>Refresh this page after changing settings</li>
           </ol>
         </div>
         
@@ -99,10 +165,26 @@ const emit = defineEmits(['device-change'])
 // Get permission state and functions
 const { hasPermission, permissionRequested, isLoading, error, requestMicrophonePermission } = useMicrophoneDevices()
 
-// Detect browser type
-const isChrome = computed(() => /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor))
-const isFirefox = computed(() => /Firefox/.test(navigator.userAgent))
-const isSafari = computed(() => /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent))
+// Browser detection (matches useMicrophoneDevices.ts)
+const getBrowserInfo = () => {
+  const userAgent = navigator.userAgent.toLowerCase()
+  return {
+    isMobile: /mobile|android|iphone|ipad/.test(userAgent),
+    isChrome: /chrome/.test(userAgent) && /google inc/.test(navigator.vendor.toLowerCase()),
+    isFirefox: /firefox/.test(userAgent),
+    isSafari: /safari/.test(userAgent) && !/chrome/.test(userAgent),
+    isAndroid: /android/.test(userAgent),
+    isIOS: /iphone|ipad|ipod/.test(userAgent)
+  }
+}
+
+const browser = getBrowserInfo()
+const isMobile = computed(() => browser.isMobile)
+const isChrome = computed(() => browser.isChrome)
+const isFirefox = computed(() => browser.isFirefox)
+const isSafari = computed(() => browser.isSafari)
+const isAndroid = computed(() => browser.isAndroid)
+const isIOS = computed(() => browser.isIOS)
 
 // Check if permission is permanently denied
 const isPermanentlyDenied = computed(() => {
