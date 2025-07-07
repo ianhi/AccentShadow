@@ -24,6 +24,7 @@ export default {
       response.headers.set('X-Frame-Options', 'DENY');
       response.headers.set('X-Content-Type-Options', 'nosniff');
       response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      response.headers.set('Permissions-Policy', 'microphone=*');
       
       // Cache static assets aggressively
       if (url.pathname.startsWith('/assets/')) {
@@ -56,6 +57,7 @@ export default {
         'X-Frame-Options': 'DENY',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'Permissions-Policy': 'microphone=*',
       },
     });
     
