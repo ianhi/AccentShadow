@@ -1,7 +1,7 @@
 <template>
   <div class="practice-view" :class="{ 'mobile-layout': shouldUseMobileLayout }">
     <div class="main-content">
-      <MainHeader @open-settings="openAppSettingsModal" />
+      <MainHeader @open-settings="openAppSettingsModal" @open-guide="openAudioProcessingGuide" />
       
       <!-- Unified Audio Controls - Always visible -->
       <UnifiedAudioControls 
@@ -125,6 +125,12 @@
       @open-vad-settings="openVadSettingsFromApp"
       @manual-trim="manualAlign"
     />
+    
+    <!-- Audio Processing Guide Modal -->
+    <AudioProcessingGuideModal
+      :isVisible="showAudioProcessingGuide"
+      @close="closeAudioProcessingGuide"
+    />
   </div>
 </template>
 
@@ -140,6 +146,7 @@ import RecordingManager from '../components/RecordingManager.vue';
 import RecordingStateManager from '../components/RecordingStateManager.vue';
 import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
 import AppSettingsModal from '../components/AppSettingsModal.vue';
+import AudioProcessingGuideModal from '../components/AudioProcessingGuideModal.vue';
 import DemoAudioModal from '../components/DemoAudioModal.vue';
 import MicrophoneSelector from '../components/MicrophoneSelector.vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
@@ -231,6 +238,7 @@ const {
   showUrlModal,
   showVadModal,
   showAppSettingsModal,
+  showAudioProcessingGuide,
   urlToLoad,
   triggerFileInput: triggerFileInputOriginal,
   loadAudioFromUrl: loadAudioFromUrlOriginal,
@@ -243,6 +251,8 @@ const {
   openAppSettingsModal,
   closeAppSettingsModal,
   handleAppSettingsSave,
+  openAudioProcessingGuide,
+  closeAudioProcessingGuide,
   cleanup
 } = useAppUtilities(appStateForComposables)
 

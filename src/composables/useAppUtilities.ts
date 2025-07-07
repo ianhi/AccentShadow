@@ -52,6 +52,7 @@ export function useAppUtilities(providedAppState: AppState | null = null) {
   const showUrlModal = ref<boolean>(false)
   const showVadModal = ref<boolean>(false)
   const showAppSettingsModal = ref<boolean>(false)
+  const showAudioProcessingGuide = ref<boolean>(false)
   const urlToLoad = ref<string>('')
 
   // File input ref for triggering file selection
@@ -175,6 +176,14 @@ export function useAppUtilities(providedAppState: AppState | null = null) {
     closeAppSettingsModal()
   }
 
+  const openAudioProcessingGuide = (): void => {
+    showAudioProcessingGuide.value = true
+  }
+
+  const closeAudioProcessingGuide = (): void => {
+    showAudioProcessingGuide.value = false
+  }
+
 
   // Cleanup on unmount
   const cleanup = (): void => {
@@ -189,6 +198,7 @@ export function useAppUtilities(providedAppState: AppState | null = null) {
     showUrlModal,
     showVadModal,
     showAppSettingsModal,
+    showAudioProcessingGuide,
     urlToLoad,
 
     // File handling
@@ -207,6 +217,8 @@ export function useAppUtilities(providedAppState: AppState | null = null) {
     openAppSettingsModal,
     closeAppSettingsModal,
     handleAppSettingsSave,
+    openAudioProcessingGuide,
+    closeAudioProcessingGuide,
     
     // Cleanup
     cleanup

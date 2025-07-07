@@ -6,9 +6,14 @@
         <a href="https://github.com/ianhi/AccentShadow" target="_blank" rel="noopener noreferrer" class="github-link">OPEN SOURCE</a> - ALWAYS FREE
       </p>
     </div>
-    <button @click="openSettings" class="settings-btn" title="Settings">
-      ⚙️ Settings
-    </button>
+    <div class="header-actions">
+      <button @click="openGuide" class="guide-btn" title="How Audio Processing Works">
+        📖 Guide
+      </button>
+      <button @click="openSettings" class="settings-btn" title="Settings">
+        ⚙️ Settings
+      </button>
+    </div>
   </div>
 </template>
 
@@ -20,10 +25,14 @@ defineProps({
   }
 })
 
-const emit = defineEmits(['open-settings'])
+const emit = defineEmits(['open-settings', 'open-guide'])
 
 const openSettings = () => {
   emit('open-settings')
+}
+
+const openGuide = () => {
+  emit('open-guide')
 }
 </script>
 
@@ -77,11 +86,18 @@ const openSettings = () => {
   text-shadow: 0 0 8px rgba(0, 210, 255, 0.3);
 }
 
-.settings-btn {
+.header-actions {
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.guide-btn,
+.settings-btn {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
@@ -91,12 +107,22 @@ const openSettings = () => {
   transition: all 0.2s ease;
   backdrop-filter: blur(10px);
   color: #ffffff;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
+.guide-btn:hover,
 .settings-btn:hover {
   background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.3);
-  transform: translateY(-50%) scale(1.05);
+  transform: scale(1.05);
+}
+
+.guide-btn {
+  font-size: 1rem;
+  font-weight: 500;
 }
 
 /* Mobile adjustments */
@@ -114,6 +140,11 @@ const openSettings = () => {
     letter-spacing: 1.2px;
   }
   
+  .header-actions {
+    gap: 6px;
+  }
+  
+  .guide-btn,
   .settings-btn {
     font-size: 0;
     padding: 10px;
@@ -122,6 +153,11 @@ const openSettings = () => {
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+  
+  .guide-btn::before {
+    content: "📖";
+    font-size: 18px;
   }
   
   .settings-btn::before {

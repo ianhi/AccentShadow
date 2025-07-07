@@ -29,6 +29,7 @@ export function useWaveform(
   const playbackRate = ref(1.0);
   const playerId = audioId || `player_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   let playerInfo: PlayerInfo | null = null;
+  let currentAudioBlob: Blob | null = null; // Store the current audio blob for volume analysis
 
   // Get preloader for optimized initialization
   const { getAudioContext, preloadStatus } = usePreloader();
@@ -125,8 +126,13 @@ export function useWaveform(
           browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : 'Firefox/Other'
         });
 
-        // Register with audio manager
+        // Register with audio manager (will be updated with blob when available)
         playerInfo = audioManager.registerPlayer(playerId, audioType, wavesurfer.value);
+        
+        // Add current blob if available
+        if (currentAudioBlob) {
+          (playerInfo as any).audioBlob = currentAudioBlob;
+        }
 
         isReady.value = true;
         duration.value = audioDuration;
@@ -258,8 +264,23 @@ export function useWaveform(
     }
   };
 
+  // Utility function to fetch audio blob from URL
+  const fetchAudioBlob = async (url: string): Promise<Blob | null> => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const blob = await response.blob();
+      return blob;
+    } catch (error) {
+      console.warn(`🎵 Failed to fetch audio blob from ${url}:`, error);
+      return null;
+    }
+  };
+
   // Helper function to load audio into existing WaveSurfer instance
-  const loadAudioIntoInstance = (url: string): void => {
+  const loadAudioIntoInstance = async (url: string): Promise<void> => {
     if (!wavesurfer.value) return;
 
     // Reset state for new audio
@@ -271,6 +292,18 @@ export function useWaveform(
     console.log(`🎵 [${audioType.toUpperCase()}]: Loading audio into existing instance`);
 
     try {
+      // Fetch the audio blob for volume normalization (non-blocking)
+      fetchAudioBlob(url).then(blob => {
+        currentAudioBlob = blob;
+        // Update player info with blob if it exists
+        if (playerInfo && blob) {
+          (playerInfo as any).audioBlob = blob;
+          audioManager.registerPlayer(playerId, audioType, wavesurfer.value);
+        }
+      }).catch(error => {
+        console.warn('🎵 Failed to fetch audio blob for volume analysis:', error);
+      });
+
       const loadPromise = wavesurfer.value.load(url);
 
       // Handle promise rejection for async errors
