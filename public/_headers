@@ -10,12 +10,28 @@
 /*.wav
   Cache-Control: public, max-age=86400
 
-# Security headers for the main app
+# Security headers for HTML files
+/*.html
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: microphone=*
+  Feature-Policy: microphone *
+
+# Root path
+/
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: microphone=*
+  Feature-Policy: microphone *
+
+# Security headers for all other files
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: microphone=(), camera=(), geolocation=()
+  Permissions-Policy: microphone=*
 
 # Enable CORS for audio files if needed
 /*.mp3
