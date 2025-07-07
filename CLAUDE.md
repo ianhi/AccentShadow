@@ -150,6 +150,49 @@ npm test
 - Users can always manually trigger permissions later through recording interface
 - System automatically detects and restores existing permissions on subsequent visits
 
+### Critical Troubleshooting: Permissions Policy Violation
+
+**⚠️ CRITICAL**: If you encounter "Permissions policy violation: microphone is not allowed in this document" errors in production:
+
+**Root Cause**: The `public/_headers` file contains a blocking permissions policy.
+
+**Problem Line**:
+```
+Permissions-Policy: microphone=(), camera=(), geolocation=()
+```
+
+**Solution**: Update `public/_headers` file to allow microphone access:
+```
+/*.html
+  Permissions-Policy: microphone=*
+  Feature-Policy: microphone *
+
+/
+  Permissions-Policy: microphone=*
+  Feature-Policy: microphone *
+
+/*
+  Permissions-Policy: microphone=*
+```
+
+**Why This Happens**:
+- **Localhost works**: `_headers` file not processed during development
+- **Production fails**: Cloudflare Workers/Pages processes `_headers` and blocks microphone
+- **Chrome strict**: Chrome enforces permissions policy more strictly than Firefox
+- **Firefox lenient**: Firefox often ignores or is more permissive with policy violations
+
+**Prevention**:
+- Always check `public/_headers` file when deploying microphone-dependent applications
+- Use `microphone=*` to allow access, `microphone=()` blocks all access
+- Include both `Permissions-Policy` (modern) and `Feature-Policy` (legacy) headers
+- Test production deployment on mobile Chrome specifically
+
+**Debugging Steps**:
+1. Check browser console for "Permissions policy violation" errors
+2. Verify `_headers` file permissions policy settings
+3. Test localhost vs production to isolate the issue
+4. Use browser developer tools to check HTTP response headers
+
 ## UI Components
 
 ### Unified Audio Controls
@@ -173,4 +216,6 @@ This replaces the previous two-card system (RecordingNavigation + Load Target Au
 - **Accessibility Compliance**: All new features must maintain WCAG 2.1 AA standards
 - **Microphone Permissions**: Automatic system implemented for seamless user experience across all user types
 - **UI Consolidation**: Audio controls unified into single card for better UX
+- **CRITICAL LESSON**: Always check `public/_headers` file for microphone permissions policy - `microphone=()` blocks access, `microphone=*` allows it
+- **Production Testing**: Mobile Chrome is stricter than Firefox about permissions policies - always test production deployments
 - **IMPORTANT COMMIT POLICY**: NEVER MAKE A COMMIT WITHOUT MY PERMISSION. MY PERMISSION FOR ONE COMMIT DOES NOT IMPLY PERMISSION FOR FUTURE COMMITS

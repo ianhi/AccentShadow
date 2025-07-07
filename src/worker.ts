@@ -34,13 +34,6 @@ export default {
       response.headers.set('Permissions-Policy', 'microphone=*');
       response.headers.set('Feature-Policy', 'microphone *');
       
-      // Debug: Log permissions policy for HTML files
-      if (url.pathname.endsWith('.html') || url.pathname === '/') {
-        console.log(`🎤 Worker: Set permissions policy for ${url.pathname}`);
-      }
-      
-      // Add debug header for all responses
-      response.headers.set('X-Worker-Debug', 'permissions-policy-applied');
       
       // Cache static assets aggressively
       if (url.pathname.startsWith('/assets/')) {
@@ -81,11 +74,6 @@ export default {
     response.headers.set('Permissions-Policy', 'microphone=*');
     response.headers.set('Feature-Policy', 'microphone *');
     
-    // Debug: Log SPA route permissions policy
-    console.log(`🎤 Worker: Set permissions policy for SPA route ${url.pathname}`);
-    
-    // Add a debug header that the client can check
-    response.headers.set('X-Worker-Debug', 'permissions-policy-applied');
     
     return response;
   },
