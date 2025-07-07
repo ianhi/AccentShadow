@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Permissions Policy to allow microphone access -->
+    <!-- Permissions Policy to allow microphone access only -->
     <meta http-equiv="Permissions-Policy" content="microphone=*">
+    <!-- Legacy Feature Policy for older browsers -->
+    <meta http-equiv="Feature-Policy" content="microphone *">
     <title>AccentShadow - Pronunciation Practice</title>
     <!-- VAD Web dependencies via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.js"></script>

@@ -61,6 +61,12 @@ export function useMicrophoneDevices() {
       const browser = getBrowserInfo();
       console.log('🎤 Requesting microphone permission', browser);
       
+      // Debug: Check if permissions policy is working
+      if (typeof document !== 'undefined') {
+        const permissionsPolicyMeta = document.querySelector('meta[http-equiv="Permissions-Policy"]');
+        console.log('🔍 Permissions Policy meta tag:', permissionsPolicyMeta?.getAttribute('content'));
+      }
+      
       // Check if permission was previously denied
       const permissionState = await checkPermissionAPI(browser);
       if (permissionState === 'denied') {
