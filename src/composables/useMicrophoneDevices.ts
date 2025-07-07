@@ -67,13 +67,47 @@ export function useMicrophoneDevices() {
         const isSecureContext = window.isSecureContext;
         const permissionsPolicyMeta = document.querySelector('meta[http-equiv="Permissions-Policy"]');
         
-        console.log('🔍 Environment debug:', {
+        const debugInfo = {
           hostname: window.location.hostname,
           isLocalhost,
           isSecureContext,
           protocol: window.location.protocol,
-          permissionsPolicyMeta: permissionsPolicyMeta?.getAttribute('content')
-        });
+          permissionsPolicyMeta: permissionsPolicyMeta?.getAttribute('content'),
+          featurePolicyMeta: document.querySelector('meta[http-equiv="Feature-Policy"]')?.getAttribute('content'),
+          url: window.location.href
+        };
+        
+        console.log('🔍 Environment debug:');
+        console.log('  - hostname:', debugInfo.hostname);
+        console.log('  - isSecureContext:', debugInfo.isSecureContext);
+        console.log('  - protocol:', debugInfo.protocol);
+        console.log('  - permissionsPolicyMeta:', debugInfo.permissionsPolicyMeta);
+        console.log('  - featurePolicyMeta:', debugInfo.featurePolicyMeta);
+        console.log('  - url:', debugInfo.url);
+        
+        // Check if Cloudflare Worker is actually setting headers
+        fetch(window.location.href, { method: 'HEAD' })
+          .then(response => {
+            console.log('🔍 HTTP Headers check:');
+            console.log('  - X-Worker-Debug:', response.headers.get('X-Worker-Debug'));
+            console.log('  - Permissions-Policy:', response.headers.get('Permissions-Policy'));
+            console.log('  - Feature-Policy:', response.headers.get('Feature-Policy'));
+          })
+          .catch(e => console.log('  - Header check failed:', e));
+        
+        // Try to add iframe with allow attribute as workaround test
+        try {
+          const testIframe = document.createElement('iframe');
+          testIframe.allow = 'microphone';
+          testIframe.style.display = 'none';
+          document.body.appendChild(testIframe);
+          console.log('🔍 Added iframe with microphone allow attribute as test');
+          setTimeout(() => {
+            document.body.removeChild(testIframe);
+          }, 1000);
+        } catch (e) {
+          console.log('🔍 Iframe test failed:', e);
+        }
       }
       
       // Check if permission was previously denied
