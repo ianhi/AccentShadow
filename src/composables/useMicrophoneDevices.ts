@@ -61,10 +61,19 @@ export function useMicrophoneDevices() {
       const browser = getBrowserInfo();
       console.log('🎤 Requesting microphone permission', browser);
       
-      // Debug: Check if permissions policy is working
-      if (typeof document !== 'undefined') {
+      // Debug: Check environment and permissions policy
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const isSecureContext = window.isSecureContext;
         const permissionsPolicyMeta = document.querySelector('meta[http-equiv="Permissions-Policy"]');
-        console.log('🔍 Permissions Policy meta tag:', permissionsPolicyMeta?.getAttribute('content'));
+        
+        console.log('🔍 Environment debug:', {
+          hostname: window.location.hostname,
+          isLocalhost,
+          isSecureContext,
+          protocol: window.location.protocol,
+          permissionsPolicyMeta: permissionsPolicyMeta?.getAttribute('content')
+        });
       }
       
       // Check if permission was previously denied

@@ -18,14 +18,26 @@ export default {
     
     // If asset exists, return it with appropriate headers
     if (assetResponse.status !== 404) {
-      const response = new Response(assetResponse.body, assetResponse);
+      // Create new response with original body and status but new headers
+      const response = new Response(assetResponse.body, {
+        status: assetResponse.status,
+        statusText: assetResponse.statusText,
+        headers: new Headers(assetResponse.headers) // Start with original headers
+      });
       
-      // Add security headers
+      // Add security headers (will override any existing ones)
       response.headers.set('X-Frame-Options', 'DENY');
       response.headers.set('X-Content-Type-Options', 'nosniff');
       response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+      
+      // Critical: Add permissions policy headers for all assets
       response.headers.set('Permissions-Policy', 'microphone=*');
       response.headers.set('Feature-Policy', 'microphone *');
+      
+      // Debug: Log permissions policy for HTML files
+      if (url.pathname.endsWith('.html') || url.pathname === '/') {
+        console.log(`🎤 Worker: Set permissions policy for ${url.pathname}`);
+      }
       
       // Cache static assets aggressively
       if (url.pathname.startsWith('/assets/')) {
@@ -51,17 +63,23 @@ export default {
     
     // Return index.html with proper headers for SPA routes
     const response = new Response(indexResponse.body, {
-      ...indexResponse,
-      headers: {
-        ...Object.fromEntries(indexResponse.headers),
-        'Content-Type': 'text/html; charset=utf-8',
-        'X-Frame-Options': 'DENY',
-        'X-Content-Type-Options': 'nosniff',
-        'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'Permissions-Policy': 'microphone=*',
-        'Feature-Policy': 'microphone *',
-      },
+      status: indexResponse.status,
+      statusText: indexResponse.statusText,
+      headers: new Headers(indexResponse.headers) // Start with original headers
     });
+    
+    // Override/add critical headers
+    response.headers.set('Content-Type', 'text/html; charset=utf-8');
+    response.headers.set('X-Frame-Options', 'DENY');
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+    response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    
+    // Critical: Ensure permissions policy headers are set
+    response.headers.set('Permissions-Policy', 'microphone=*');
+    response.headers.set('Feature-Policy', 'microphone *');
+    
+    // Debug: Log SPA route permissions policy
+    console.log(`🎤 Worker: Set permissions policy for SPA route ${url.pathname}`);
     
     return response;
   },
