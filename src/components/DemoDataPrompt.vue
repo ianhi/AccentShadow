@@ -28,7 +28,7 @@
       <div id="demo-prompt-description" class="modal-body">
         <p class="intro-text">
           Would you like to load some sample recordings to try out AccentShadow's features? 
-          This includes basic English pronunciation exercises perfect for getting started.
+          This includes basic pronunciation exercises perfect for getting started.
         </p>
         
         <div class="feature-box">
@@ -43,6 +43,27 @@
           </ul>
         </div>
 
+        <!-- Language Selection -->
+        <div class="language-selection">
+          <h3 class="selection-title">Choose a language:</h3>
+          <div class="language-cards">
+            <LanguageCard
+              name="Bangla"
+              flag="🇧🇩"
+              :demoCount="3"
+              :loading="isLoadingDemo && selectedLanguage === 'bn'"
+              @click="selectedLanguage = 'bn'; handleLoadDemo()"
+            />
+            
+            <LanguageCard
+              name="English"
+              flag="🇺🇸"
+              :demoCount="0"
+              :disabled="true"
+            />
+          </div>
+        </div>
+
         <!-- Error message -->
         <div v-if="demoLoadError" class="error-box">
           <p class="error-text">
@@ -54,27 +75,9 @@
       <!-- Actions -->
       <div class="modal-actions">
         <button
-          @click="handleLoadDemo"
-          :disabled="isLoadingDemo"
-          class="primary-btn"
-          :aria-label="isLoadingDemo ? 'Loading demo data...' : 'Load demo recordings'"
-        >
-          <svg 
-            v-if="isLoadingDemo" 
-            class="spinner" 
-            fill="none" 
-            viewBox="0 0 24 24"
-          >
-            <circle class="spinner-track" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="spinner-fill" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          {{ isLoadingDemo ? 'Loading...' : 'Load Demo' }}
-        </button>
-        
-        <button
           @click="handleDismiss"
           :disabled="isLoadingDemo"
-          class="secondary-btn"
+          class="skip-btn"
           aria-label="Skip demo and start with empty workspace"
         >
           Skip Demo
@@ -90,7 +93,9 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useDemoData } from '@/composables/useDemoData';
+import LanguageCard from '@/components/LanguageCard.vue';
 
 const {
   shouldShowDemoPrompt,
@@ -99,6 +104,8 @@ const {
   loadDemoData,
   dismissDemoPrompt
 } = useDemoData();
+
+const selectedLanguage = ref<string>('');
 
 const handleLoadDemo = async (): Promise<void> => {
   const success = await loadDemoData();
@@ -247,59 +254,52 @@ const handleDismiss = async (): Promise<void> => {
   color: #f87171;
 }
 
+/* Language Selection */
+.language-selection {
+  margin: 24px 0;
+}
+
+.selection-title {
+  color: #e5e7eb;
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+.language-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+
 /* Action Buttons */
 .modal-actions {
   display: flex;
-  gap: 12px;
+  justify-content: center;
   padding: 0 24px 24px;
 }
 
-.primary-btn,
-.secondary-btn {
-  flex: 1;
-  padding: 10px 20px;
+.skip-btn {
+  padding: 10px 32px;
   border-radius: 8px;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
   cursor: pointer;
   font-weight: 500;
   font-size: 0.95em;
   transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   min-height: 44px;
 }
 
-.primary-btn {
-  background: #60a5fa;
-  color: #ffffff;
-}
-
-.primary-btn:hover:not(:disabled) {
-  background: #3b82f6;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
-}
-
-.primary-btn:disabled {
-  background: rgba(96, 165, 250, 0.5);
-  cursor: not-allowed;
-}
-
-.secondary-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e5e7eb;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.secondary-btn:hover:not(:disabled) {
+.skip-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
 }
 
-.secondary-btn:disabled {
+.skip-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -348,23 +348,12 @@ const handleDismiss = async (): Promise<void> => {
     max-height: 90vh;
   }
 
-  .modal-actions {
-    flex-direction: column;
-    gap: 8px;
+  .language-cards {
+    grid-template-columns: 1fr;
   }
 
-  .primary-btn,
-  .secondary-btn {
+  .skip-btn {
     width: 100%;
-    flex: none; /* Remove flex grow to prevent layout issues */
-    margin: 0;
-  }
-
-  /* Ensure proper touch targets on mobile */
-  .primary-btn,
-  .secondary-btn {
-    min-height: 48px; /* Larger touch target for mobile */
-    padding: 12px 20px;
   }
 }
 </style>

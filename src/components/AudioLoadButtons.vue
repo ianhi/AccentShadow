@@ -31,22 +31,25 @@ defineEmits([
 <style scoped>
 .audio-load-buttons {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .action-btn {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   color: white;
   transition: all 0.2s;
   white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .action-btn:hover {
@@ -79,16 +82,25 @@ defineEmits([
   background: rgba(16, 185, 129, 0.2);
 }
 
-/* Medium screens - reduce button size and spacing */
+/* Large screens with space constraints */
+@media (max-width: 1200px) and (min-width: 1025px) {
+  .action-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+}
+
+/* Medium screens - allow wrapping if needed */
 @media (max-width: 1024px) and (min-width: 769px) {
   .audio-load-buttons {
-    gap: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
     justify-content: center;
   }
   
   .action-btn {
-    font-size: 12px;
-    padding: 6px 12px;
+    font-size: 11px;
+    padding: 5px 10px;
   }
 }
 

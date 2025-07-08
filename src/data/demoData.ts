@@ -27,39 +27,39 @@ export interface DemoSet {
 // Demo recordings using existing public audio files
 export const demoRecordings: DemoRecording[] = [
   {
-    name: "Path",
-    translation: "A route or track between one place and another",
+    name: "পথ (Path)",
+    translation: "Path - A route or way",
     audioUrl: "/path.mp3",
     metadata: {
       speaker: "Demo Speaker",
       difficulty: "beginner",
       category: "vocabulary",
-      language: "en",
-      description: "Practice pronouncing the word 'path'"
+      language: "bn",
+      description: "Practice pronouncing the Bengali word 'পথ' (path)"
     }
   },
   {
-    name: "Patth",
-    translation: "Alternative pronunciation practice",
+    name: "পাঠ (Patth)",
+    translation: "Lesson or reading",
     audioUrl: "/patth.wav",
     metadata: {
       speaker: "Demo Speaker", 
       difficulty: "beginner",
       category: "pronunciation",
-      language: "en",
-      description: "Practice with different pronunciation patterns"
+      language: "bn",
+      description: "Practice pronouncing 'পাঠ' with aspiration"
     }
   },
   {
-    name: "Three Words",
-    translation: "A phrase with three distinct words",
+    name: "তিনটি শব্দ",
+    translation: "Three words - a phrase practice",
     audioUrl: "/test_said_three_words.wav",
     metadata: {
       speaker: "Demo Speaker",
       difficulty: "intermediate", 
       category: "phrases",
-      language: "en",
-      description: "Practice pronouncing a short phrase"
+      language: "bn",
+      description: "Practice pronouncing a Bengali phrase"
     }
   }
 ];
@@ -67,10 +67,10 @@ export const demoRecordings: DemoRecording[] = [
 // Demo sets configuration
 export const demoSets: DemoSet[] = [
   {
-    id: "demo-english-basics",
-    name: "English Pronunciation Basics",
-    description: "Get started with basic English pronunciation practice. Perfect for trying out AccentShadow's features!",
-    language: "en",
+    id: "demo-bangla-basics",
+    name: "Bangla Pronunciation Basics",
+    description: "Get started with basic Bangla pronunciation practice. Perfect for trying out AccentShadow's features!",
+    language: "bn",
     recordings: demoRecordings
   }
 ];

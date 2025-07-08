@@ -369,7 +369,7 @@ const closeDemoModal = () => {
   showDemoModal.value = false
 }
 
-const handleDemoLoad = async (demoInfo: { name?: string; audioUrl?: string }) => {
+const handleDemoLoad = async (demoInfo: { title?: string; audioUrl?: string }) => {
   console.log('🎵 Loading demo audio:', demoInfo)
   
   try {
@@ -377,7 +377,7 @@ const handleDemoLoad = async (demoInfo: { name?: string; audioUrl?: string }) =>
     closeDemoModal()
     
     // Set the audio source name from demo info
-    currentAudioSource.value = demoInfo.name || 'Demo Audio'
+    currentAudioSource.value = demoInfo.title || 'Demo Audio'
     
     // Load the demo audio using the existing URL loading functionality
     if (demoInfo.audioUrl) {

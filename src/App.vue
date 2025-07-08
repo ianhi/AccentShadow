@@ -54,7 +54,12 @@ onMounted(async () => {
       <router-link to="/" class="nav-btn" :class="{ active: route.path === '/' }">
         Main App
       </router-link>
-      <router-link to="/alignment-test" class="nav-btn" :class="{ active: route.path === '/alignment-test' }">
+      <router-link 
+        v-if="isDevelopment"
+        to="/alignment-test" 
+        class="nav-btn" 
+        :class="{ active: route.path === '/alignment-test' }"
+      >
         Alignment Test
       </router-link>
       <!-- Development button to reset demo state -->

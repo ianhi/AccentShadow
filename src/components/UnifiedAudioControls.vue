@@ -313,12 +313,13 @@ const triggerFolderUpload = () => {
 .recording-info-row {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.8);
   padding: 12px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 16px;
+  min-width: 0;
 }
 
 /* Navigation Section */
@@ -338,6 +339,8 @@ const triggerFolderUpload = () => {
   display: flex;
   align-items: center;
   margin-left: auto;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .nav-btn {
@@ -575,6 +578,18 @@ const triggerFolderUpload = () => {
 
 .status-new {
   color: rgba(255, 255, 255, 0.4);
+}
+
+/* Large screens - handle button overflow gracefully */
+@media (max-width: 1400px) and (min-width: 1025px) {
+  .recording-info-row {
+    gap: 12px;
+  }
+  
+  .audio-loading-group {
+    flex-shrink: 1;
+    min-width: 0;
+  }
 }
 
 /* Medium screens - adjust layout before full mobile */
