@@ -41,6 +41,7 @@
 import { ref, computed, watch } from 'vue'
 import { demoRecordings, getDefaultDemoSet } from '@/data/demoData'
 import { useDemoData } from '@/composables/useDemoData'
+import { useModalScrollLock } from '@/composables/useModalScrollLock'
 import LanguageCard from '@/components/LanguageCard.vue'
 
 const props = defineProps({
@@ -54,6 +55,9 @@ const emit = defineEmits(['close', 'load-demo', 'load-demo-set'])
 
 // Get demo data composable for recording set creation
 const { loadDemoData, isLoadingDemo } = useDemoData()
+
+// Modal scroll lock
+const { lockScroll, unlockScroll } = useModalScrollLock()
 
 // Selected language for loading state
 const selectedLanguage = ref('')
@@ -93,6 +97,7 @@ const comingSoonLanguages = computed(() => {
 })
 
 const handleOverlayClick = () => {
+  unlockScroll()
   emit('close')
 }
 
@@ -101,16 +106,22 @@ const loadLanguageDemos = async (languageCode) => {
     // For now, we'll load all demos as a recording set
     // In the future, we could filter by language
     await loadDemoData()
+    unlockScroll()
     emit('close')
   } catch (error) {
     console.error('Failed to load demo set:', error)
   }
 }
 
-// Reset when modal closes
+// Reset when modal closes and manage scroll lock
 watch(() => props.isVisible, (newVal) => {
-  if (!newVal && isLoadingDemo.value) {
-    // Cancel any ongoing loading if modal is closed
+  if (newVal) {
+    lockScroll()
+  } else {
+    unlockScroll()
+    if (isLoadingDemo.value) {
+      // Cancel any ongoing loading if modal is closed
+    }
   }
 })
 </script>
@@ -144,6 +155,7 @@ watch(() => props.isVisible, (newVal) => {
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s ease-out;
+  position: relative;
 }
 
 .modal-header {
@@ -181,6 +193,7 @@ watch(() => props.isVisible, (newVal) => {
   padding: 24px;
   overflow-y: auto;
   flex: 1;
+  -webkit-overflow-scrolling: touch;
 }
 
 .description {
@@ -218,9 +231,15 @@ watch(() => props.isVisible, (newVal) => {
 
 /* Mobile responsive */
 @media (max-width: 768px) {
+  .modal-overlay {
+    padding: 20px;
+  }
+  
   .modal-content {
-    width: 95%;
+    width: 100%;
+    max-width: none;
     max-height: 90vh;
+    margin: 0;
   }
   
   .modal-header,
@@ -230,6 +249,21 @@ watch(() => props.isVisible, (newVal) => {
   
   .language-cards {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-overlay {
+    padding: 10px;
+  }
+  
+  .modal-content {
+    max-height: 95vh;
+  }
+  
+  .modal-header,
+  .modal-body {
+    padding: 12px;
   }
 }
 </style>

@@ -63,7 +63,7 @@
 
 
     <!-- URL Input Modal -->
-    <div v-if="showUrlModal" class="modal-overlay" @click="closeUrlModal">
+    <div v-if="showUrlModal" class="modal-overlay" @click="unlockScroll(); closeUrlModal()">
       <div class="modal-content" @click.stop>
         <h3>🌐 Load Audio from URL</h3>
         <input 
@@ -77,7 +77,7 @@
           <button @click="handleUrlSubmit" class="load-btn" :disabled="!urlToLoad.trim()">
             Load Audio
           </button>
-          <button @click="closeUrlModal" class="cancel-btn">Cancel</button>
+          <button @click="unlockScroll(); closeUrlModal()" class="cancel-btn">Cancel</button>
         </div>
       </div>
     </div>
@@ -157,6 +157,7 @@ import { useViewport } from '../composables/useViewport';
 import { useMicrophoneDevices } from '../composables/useMicrophoneDevices.ts';
 import { useAudioEffects } from '../composables/useAudioEffects';
 import { useDemoData } from '../composables/useDemoData';
+import { useModalScrollLock } from '../composables/useModalScrollLock';
 
 // IMPORTANT: Initialize global app state FIRST to provide it to all child components
 const {
@@ -190,6 +191,9 @@ const { shouldUseMobileLayout } = useViewport()
 
 // Microphone devices for mobile settings
 const { availableDevices, selectedDeviceId, setSelectedDevice } = useMicrophoneDevices()
+
+// Modal scroll lock
+const { lockScroll, unlockScroll } = useModalScrollLock()
 
 // Mobile layout state
 const showStatsOnMobile = ref(false)
@@ -306,6 +310,7 @@ const loadAudioFromUrl = async (url: string) => {
 // Wrap URL submit handler
 const handleUrlSubmit = async () => {
   await handleUrlSubmitOriginal()
+  unlockScroll()
 }
 
 // Consolidated playback controls - pass app state directly
@@ -361,11 +366,16 @@ const handleAudioProcessed = async (data: { source?: { name: string } }) => {
 }
 
 // Simplified event handlers using utilities
-const showUrlModalHandler = () => openUrlModal()
+const showUrlModalHandler = () => {
+  lockScroll()
+  openUrlModal()
+}
 const showDemoModalHandler = () => {
+  lockScroll()
   showDemoModal.value = true
 }
 const closeDemoModal = () => {
+  unlockScroll()
   showDemoModal.value = false
 }
 
@@ -374,7 +384,8 @@ const handleDemoLoad = async (demoInfo: { title?: string; audioUrl?: string }) =
   
   try {
     // Close the modal first
-    closeDemoModal()
+    unlockScroll()
+    showDemoModal.value = false
     
     // Set the audio source name from demo info
     currentAudioSource.value = demoInfo.title || 'Demo Audio'
@@ -508,12 +519,15 @@ watch(currentRecording, async (newRecording, oldRecording) => {
   min-height: 100vh;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   color: white;
+  overflow-x: hidden;
 }
 
 .main-content {
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Component-specific styles moved to individual components */
@@ -525,6 +539,9 @@ watch(currentRecording, async (newRecording, oldRecording) => {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   margin: 20px 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .section h2 {
@@ -561,6 +578,10 @@ watch(currentRecording, async (newRecording, oldRecording) => {
   max-width: 400px;
   margin: 20px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-content h3 {
@@ -687,6 +708,8 @@ watch(currentRecording, async (newRecording, oldRecording) => {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .mobile-modal {
@@ -783,17 +806,54 @@ watch(currentRecording, async (newRecording, oldRecording) => {
 
 /* Mobile responsive */
 @media (max-width: 768px) {
+  .practice-view {
+    padding: 0;
+  }
+  
   .main-content {
     padding: 8px;
+    max-width: 100%;
+  }
+  
+  .modal-overlay {
+    padding: 20px;
   }
   
   .modal-content {
-    max-width: 90vw;
-    margin: 20px;
+    max-width: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
   }
   
   .modal-actions {
     flex-direction: column;
+  }
+  
+  /* Prevent horizontal scroll on mobile */
+  .section {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 8px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    padding: 6px;
+  }
+  
+  .modal-overlay {
+    padding: 10px;
+  }
+  
+  .modal-content {
+    padding: 16px;
+  }
+  
+  .section {
+    padding: 12px;
+    margin: 6px 0;
   }
 }
 
@@ -808,5 +868,27 @@ watch(currentRecording, async (newRecording, oldRecording) => {
     margin: 6px 0;
     bottom: 55px;
   }
+}
+
+/* Landscape mobile optimizations */
+@media (max-width: 768px) and (orientation: landscape) {
+  .modal-content {
+    max-height: 85vh;
+  }
+  
+  .modal-body {
+    max-height: 60vh;
+  }
+}
+
+/* Prevent horizontal scrolling on all screen sizes */
+* {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Ensure no content overflows container */
+.practice-view, .main-content, .section {
+  overflow-x: hidden;
 }
 </style>

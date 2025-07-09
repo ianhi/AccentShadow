@@ -83,6 +83,8 @@ defineExpose({
   height: 100vh;
   overflow: hidden;
   background-color: #f8fafc;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Mobile Header */
@@ -145,6 +147,9 @@ defineExpose({
   overflow-y: auto;
   padding: 16px;
   -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 /* Mobile Sidebar */
@@ -167,6 +172,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   box-shadow: 2px 0 12px rgba(0,0,0,0.15);
+  overflow-x: hidden;
 }
 
 .sidebar-header {
@@ -208,6 +214,9 @@ defineExpose({
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 /* Bottom Navigation */
@@ -263,6 +272,25 @@ defineExpose({
   .mobile-sidebar {
     width: 240px;
     max-width: 90vw;
+  }
+  
+  .header-content {
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .mobile-main {
+    padding: 6px;
+  }
+  
+  .mobile-sidebar {
+    width: 220px;
+    max-width: 95vw;
+  }
+  
+  .header-content {
+    padding: 6px 10px;
   }
 }
 

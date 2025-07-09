@@ -478,6 +478,7 @@
 import { ref, watch, computed, onMounted } from 'vue'
 import { useAudioEffects } from '../composables/useAudioEffects'
 import { useAppStateInject } from '../composables/useAppState'
+import { useModalScrollLock } from '../composables/useModalScrollLock'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -500,6 +501,9 @@ const {
 // App state for checking audio availability
 const { hasTargetAudio, hasUserAudio } = useAppStateInject()
 
+// Modal scroll lock
+const { lockScroll, unlockScroll } = useModalScrollLock()
+
 // Local settings for the modal
 const localSettings = ref({ ...props.settings })
 const localEffectsConfig = ref({ ...effectsConfig.value })
@@ -515,6 +519,15 @@ const isSafari = computed(() => {
 // Check if we have audio to trim
 const hasAudioToTrim = computed(() => {
   return hasTargetAudio.value && hasUserAudio.value
+})
+
+// Watch for modal open/close and manage scroll lock
+watch(() => props.isOpen, (newVal) => {
+  if (newVal) {
+    lockScroll()
+  } else {
+    unlockScroll()
+  }
 })
 
 // Watch for changes to props.settings to update local state
@@ -535,6 +548,7 @@ onMounted(() => {
 })
 
 const closeModal = () => {
+  unlockScroll()
   emit('close')
 }
 
@@ -542,7 +556,8 @@ const saveSettings = () => {
   // Save both regular settings and effects configuration
   emit('save', localSettings.value)
   emit('save-effects', localEffectsConfig.value)
-  closeModal()
+  unlockScroll()
+  emit('close')
 }
 
 const openVadSettings = () => {
@@ -596,6 +611,7 @@ const triggerManualTrim = () => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .modal-header {
@@ -636,6 +652,7 @@ const triggerManualTrim = () => {
   padding: 24px;
   overflow-y: auto;
   flex: 1;
+  -webkit-overflow-scrolling: touch;
 }
 
 .settings-section {
@@ -979,12 +996,6 @@ const triggerManualTrim = () => {
   gap: 16px;
 }
 
-@media (max-width: 600px) {
-  .eq-controls {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-}
 
 .reset-btn {
   padding: 10px 16px;
@@ -1121,5 +1132,46 @@ const triggerManualTrim = () => {
 
 .info-content p:last-child {
   margin-bottom: 0;
+}
+
+/* Mobile responsive improvements */
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 20px;
+  }
+  
+  .modal-content {
+    width: 100%;
+    max-width: none;
+    max-height: 90vh;
+    margin: 0;
+  }
+  
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 16px;
+  }
+  
+  .eq-controls {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-overlay {
+    padding: 10px;
+  }
+  
+  .modal-content {
+    max-height: 95vh;
+  }
+  
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 12px;
+  }
 }
 </style>
