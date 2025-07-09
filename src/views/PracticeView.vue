@@ -363,6 +363,11 @@ const showUrlModalHandler = () => {
 }
 
 const handleLoadDemo = async () => {
+  if (isLoadingDemo.value) {
+    console.log('🔄 Demo already loading, skipping duplicate request')
+    return
+  }
+  
   console.log('🎯 Loading demo data from main app...')
   const success = await loadDemoData()
   

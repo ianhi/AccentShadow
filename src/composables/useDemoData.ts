@@ -110,19 +110,23 @@ const requestMicrophonePermissionAfterDemo = async (): Promise<void> => {
 // Convert demo recording to input recording format
 const convertDemoRecording = async (demoRec: DemoRecording): Promise<any> => {
   try {
+    console.log('🔍 Validating audio file:', demoRec.audioUrl);
     // Validate audio file exists
     const isValid = await validateDemoAudio(demoRec.audioUrl);
     if (!isValid) {
       throw new Error(`Audio file not found: ${demoRec.audioUrl}`);
     }
+    console.log('✅ Audio file is valid');
     
     // Fetch audio file and convert to blob
+    console.log('📥 Fetching audio file...');
     const response = await fetch(demoRec.audioUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch audio: ${response.statusText}`);
     }
     
     const audioBlob = await response.blob();
+    console.log('📦 Audio blob created, size:', audioBlob.size, 'type:', audioBlob.type);
     
     return {
       name: demoRec.name,
@@ -151,23 +155,29 @@ const loadDemoData = async (): Promise<boolean> => {
   try {
     const demoSet = getDefaultDemoSet();
     console.log('📦 Loading demo set:', demoSet.name);
+    console.log('📦 Demo recordings count:', demoSet.recordings.length);
     
     // Convert demo recordings to input format
     const inputRecordings = [];
     for (const demoRec of demoSet.recordings) {
       try {
+        console.log('🎵 Converting demo recording:', demoRec.name, demoRec.audioUrl);
         const inputRec = await convertDemoRecording(demoRec);
         inputRecordings.push(inputRec);
+        console.log('✅ Successfully converted:', demoRec.name);
       } catch (error) {
         console.warn('⚠️ Skipping invalid demo recording:', demoRec.name, error);
         // Continue with other recordings even if one fails
       }
     }
     
+    console.log('📦 Total recordings converted:', inputRecordings.length);
+    
     if (inputRecordings.length === 0) {
       throw new Error('No valid demo recordings could be loaded');
     }
     
+    console.log('🎯 Creating recording set...');
     // Create recording set
     const recordingSet = createRecordingSet(
       demoSet.name,
@@ -176,8 +186,11 @@ const loadDemoData = async (): Promise<boolean> => {
       inputRecordings
     );
     
+    console.log('🎯 Recording set created:', recordingSet?.id);
+    
     // Set as active set
     setActiveSet(recordingSet.id);
+    console.log('🎯 Set as active recording set');
     
     // Mark demo as loaded
     localStorage.setItem(STORAGE_KEYS.DEMO_LOADED, 'true');

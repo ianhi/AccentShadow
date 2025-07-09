@@ -29,7 +29,7 @@ export const demoRecordings: DemoRecording[] = [
   {
     name: "পথ (Path)",
     translation: "Path - A route or way",
-    audioUrl: "/path.mp3",
+    audioUrl: "/language-learning/accent-shadow/path.mp3",
     metadata: {
       speaker: "Demo Speaker",
       difficulty: "beginner",
@@ -41,7 +41,7 @@ export const demoRecordings: DemoRecording[] = [
   {
     name: "পাঠ (Patth)",
     translation: "Lesson or reading",
-    audioUrl: "/patth.wav",
+    audioUrl: "/language-learning/accent-shadow/patth.wav",
     metadata: {
       speaker: "Demo Speaker", 
       difficulty: "beginner",
@@ -53,7 +53,7 @@ export const demoRecordings: DemoRecording[] = [
   {
     name: "তিনটি শব্দ",
     translation: "Three words - a phrase practice",
-    audioUrl: "/test_said_three_words.wav",
+    audioUrl: "/language-learning/accent-shadow/test_said_three_words.wav",
     metadata: {
       speaker: "Demo Speaker",
       difficulty: "intermediate", 
