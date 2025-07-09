@@ -125,6 +125,14 @@
       :isVisible="showAudioProcessingGuide"
       @close="closeAudioProcessingGuide"
     />
+    
+    <!-- VAD Settings Modal -->
+    <VADSettingsModal
+      :isOpen="showVadModal"
+      :settings="vadSettings"
+      @close="closeVadModal"
+      @save="handleVADSettingsSave"
+    />
   </div>
 </template>
 
@@ -141,6 +149,7 @@ import RecordingStateManager from '../components/RecordingStateManager.vue';
 import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
 import AppSettingsModal from '../components/AppSettingsModal.vue';
 import AudioProcessingGuideModal from '../components/AudioProcessingGuideModal.vue';
+import VADSettingsModal from '../components/VADSettingsModal.vue';
 import MicrophoneSelector from '../components/MicrophoneSelector.vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
 import { useAppState, type VADSettings } from '../composables/useAppState';

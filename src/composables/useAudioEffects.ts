@@ -93,7 +93,7 @@ export function useAudioEffects() {
     recordingConstraints: {
       noiseSuppression: true,   // Enable by default if supported
       echoCancellation: true,   // Usually beneficial
-      autoGainControl: false    // Can interfere with manual gain control
+      autoGainControl: true     // Enable AGC for better noise handling
     },
     postProcessing: {
       noiseSuppression: {
@@ -190,15 +190,18 @@ export function useAudioEffects() {
     const { mediaConstraints } = capabilities.value
     
     if (recordingConstraints.noiseSuppression && mediaConstraints.noiseSuppression) {
-      constraints.noiseSuppression = true
+      // Use aggressive noise suppression for better performance in noisy environments
+      constraints.noiseSuppression = { ideal: true }
     }
     
     if (recordingConstraints.echoCancellation && mediaConstraints.echoCancellation) {
-      constraints.echoCancellation = true
+      // Use aggressive echo cancellation 
+      constraints.echoCancellation = { ideal: true }
     }
     
     if (recordingConstraints.autoGainControl && mediaConstraints.autoGainControl) {
-      constraints.autoGainControl = true
+      // Enable AGC for better level control in noisy environments
+      constraints.autoGainControl = { ideal: true }
     }
     
     console.log('🎙️ Recording constraints:', constraints)
