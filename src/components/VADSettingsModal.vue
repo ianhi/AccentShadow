@@ -15,17 +15,17 @@
             <button @click="applyPreset('conservative')" class="preset-btn conservative">
               <span class="preset-icon">🛡️</span>
               <span class="preset-name">Conservative</span>
-              <span class="preset-desc">Clean target audio</span>
+              <span class="preset-desc">Noisy environments</span>
             </button>
             <button @click="applyPreset('lenient')" class="preset-btn lenient">
               <span class="preset-icon">🎤</span>
-              <span class="preset-name">Lenient</span>
-              <span class="preset-desc">User recordings</span>
+              <span class="preset-name">Balanced</span>
+              <span class="preset-desc">General use</span>
             </button>
             <button @click="applyPreset('very-sensitive')" class="preset-btn very-sensitive">
               <span class="preset-icon">🔍</span>
               <span class="preset-name">Very Sensitive</span>
-              <span class="preset-desc">Noisy environments</span>
+              <span class="preset-desc">Clean environments</span>
             </button>
           </div>
         </div>
