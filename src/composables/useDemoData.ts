@@ -269,7 +269,7 @@ const hasUserData = computed(() => {
 
 // Should show demo prompt
 const shouldShowDemoPrompt = computed(() => {
-  return showDemoPrompt.value && !hasUserData.value;
+  return showDemoPrompt.value;
 });
 
 // Check if we should proactively request microphone permissions for returning users
@@ -284,6 +284,12 @@ const requestMicrophonePermissionForReturningUser = async (): Promise<void> => {
     console.log('🎤 Requesting microphone permission for returning user');
     await requestMicrophonePermissionAfterDemo();
   }
+};
+
+// Manually show demo prompt (for users who want to try different demos)
+const showDemoPromptManually = (): void => {
+  console.log('🎯 Manually showing demo prompt');
+  showDemoPrompt.value = true;
 };
 
 export function useDemoData() {
@@ -304,6 +310,7 @@ export function useDemoData() {
     dismissDemoPrompt,
     markAsVisited,
     resetDemoState,
-    requestMicrophonePermissionForReturningUser
+    requestMicrophonePermissionForReturningUser,
+    showDemoPromptManually
   };
 }

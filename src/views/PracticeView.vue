@@ -177,7 +177,7 @@ const {
 // Core composables
 const { currentRecording, updateUserRecording } = useRecordingSets()
 const { updateConfig: updateEffectsConfig } = useAudioEffects()
-const { shouldRequestMicrophonePermission, requestMicrophonePermissionForReturningUser, loadDemoData, isLoadingDemo } = useDemoData()
+const { shouldRequestMicrophonePermission, requestMicrophonePermissionForReturningUser, loadDemoData, isLoadingDemo, showDemoPromptManually } = useDemoData()
 
 // Mobile layout detection
 const { shouldUseMobileLayout } = useViewport()
@@ -362,21 +362,9 @@ const showUrlModalHandler = () => {
   openUrlModal()
 }
 
-const handleLoadDemo = async () => {
-  if (isLoadingDemo.value) {
-    console.log('🔄 Demo already loading, skipping duplicate request')
-    return
-  }
-  
-  console.log('🎯 Loading demo data from main app...')
-  const success = await loadDemoData()
-  
-  if (success) {
-    console.log('✅ Demo data loaded successfully from main app')
-  } else {
-    console.error('❌ Demo data loading failed from main app')
-    // Could show an error notification here
-  }
+const handleLoadDemo = () => {
+  console.log('🎯 Opening demo modal from main app...')
+  showDemoPromptManually()
 }
 
 const showVADSettings = () => openVadModal()
