@@ -108,9 +108,21 @@ const {
 const selectedLanguage = ref<string>('');
 
 const handleLoadDemo = async (): Promise<void> => {
+  console.log('🎯 Starting demo data load...');
   const success = await loadDemoData();
+  
   if (success) {
-    console.log('✅ Demo data loaded successfully');
+    console.log('✅ Demo data loaded successfully, modal should close');
+    // The modal should close automatically via shouldShowDemoPrompt computed property
+    // But let's add a safety check
+    setTimeout(() => {
+      if (shouldShowDemoPrompt.value) {
+        console.warn('⚠️ Modal did not close automatically, forcing close');
+        dismissDemoPrompt();
+      }
+    }, 500);
+  } else {
+    console.error('❌ Demo data loading failed');
   }
 };
 

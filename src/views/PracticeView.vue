@@ -11,6 +11,7 @@
         :isRecording="isRecordingActive"
         @browse-file="triggerFileInput"
         @load-url="showUrlModalHandler"
+        @load-demo="handleLoadDemo"
         @device-change="handleMicrophoneDeviceChange"
       />
       
@@ -176,7 +177,7 @@ const {
 // Core composables
 const { currentRecording, updateUserRecording } = useRecordingSets()
 const { updateConfig: updateEffectsConfig } = useAudioEffects()
-const { shouldRequestMicrophonePermission, requestMicrophonePermissionForReturningUser } = useDemoData()
+const { shouldRequestMicrophonePermission, requestMicrophonePermissionForReturningUser, loadDemoData, isLoadingDemo } = useDemoData()
 
 // Mobile layout detection
 const { shouldUseMobileLayout } = useViewport()
@@ -359,6 +360,18 @@ const handleAudioProcessed = async (data: { source?: { name: string } }) => {
 const showUrlModalHandler = () => {
   lockScroll()
   openUrlModal()
+}
+
+const handleLoadDemo = async () => {
+  console.log('🎯 Loading demo data from main app...')
+  const success = await loadDemoData()
+  
+  if (success) {
+    console.log('✅ Demo data loaded successfully from main app')
+  } else {
+    console.error('❌ Demo data loading failed from main app')
+    // Could show an error notification here
+  }
 }
 
 const showVADSettings = () => openVadModal()
