@@ -1,9 +1,45 @@
 <!DOCTYPE html>
-<html lang="">
+<html lang="en">
   <head>
     <meta charset="UTF-8">
-    <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Favicon and Icons -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="alternate icon" href="/favicon.svg">
+    <link rel="mask-icon" href="/favicon.svg" color="#60a5fa">
+    
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Theme Colors -->
+    <meta name="theme-color" content="#60a5fa">
+    <meta name="msapplication-TileColor" content="#60a5fa">
+    
+    <!-- SEO Meta Tags -->
+    <title>AccentShadow - Bangla Pronunciation Practice</title>
+    <meta name="description" content="Interactive Bangla pronunciation practice with voice comparison and audio visualization. Perfect your Bengali pronunciation with AI-powered feedback.">
+    <meta name="keywords" content="Bangla, Bengali, pronunciation, practice, language learning, accent, speech, audio, AI">
+    <meta name="author" content="AccentShadow">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://accent-shadow.pages.dev/">
+    <meta property="og:title" content="AccentShadow - Bangla Pronunciation Practice">
+    <meta property="og:description" content="Interactive Bangla pronunciation practice with voice comparison and audio visualization. Perfect your Bengali pronunciation with AI-powered feedback.">
+    <meta property="og:image" content="https://accent-shadow.pages.dev/social-preview.png">
+    <meta property="og:image:alt" content="AccentShadow - Bangla pronunciation practice app interface">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:site_name" content="AccentShadow">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://accent-shadow.pages.dev/">
+    <meta name="twitter:title" content="AccentShadow - Bangla Pronunciation Practice">
+    <meta name="twitter:description" content="Interactive Bangla pronunciation practice with voice comparison and audio visualization. Perfect your Bengali pronunciation with AI-powered feedback.">
+    <meta name="twitter:image" content="https://accent-shadow.pages.dev/social-preview.png">
+    <meta name="twitter:image:alt" content="AccentShadow - Bangla pronunciation practice app interface">
+    
     <!-- Permissions Policy to allow microphone access only -->
     <meta http-equiv="Permissions-Policy" content="microphone=*">
     <!-- Legacy Feature Policy for older browsers -->
@@ -11,7 +47,7 @@
     <!-- Additional policy formats for maximum compatibility -->
     <meta name="permissions-policy" content="microphone=*">
     <meta name="feature-policy" content="microphone *">
-    <title>AccentShadow - Pronunciation Practice</title>
+    
     <!-- VAD Web dependencies via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.19/dist/bundle.min.js"></script>

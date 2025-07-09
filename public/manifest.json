@@ -1,0 +1,21 @@
+{
+  "name": "AccentShadow - Bangla Pronunciation Practice",
+  "short_name": "AccentShadow",
+  "description": "Interactive Bangla pronunciation practice with voice comparison and audio visualization",
+  "theme_color": "#60a5fa",
+  "background_color": "#0f172a",
+  "display": "standalone",
+  "scope": "/",
+  "start_url": "/",
+  "orientation": "any",
+  "categories": ["education", "productivity", "utilities"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
