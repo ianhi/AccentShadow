@@ -28,7 +28,7 @@
       
       <div class="audio-loading-group">
         <AudioLoadButtons @browse-file="$emit('browse-file')" @upload-folder="triggerFolderUpload" 
-          @load-url="$emit('load-url')" @load-demo="$emit('load-demo')" @open-sets="showRecordingSetsModal = true" />
+          @load-url="$emit('load-url')" @open-sets="showRecordingSetsModal = true" />
       </div>
     </div>
 
@@ -141,7 +141,7 @@ const props = defineProps({
 });
 
 // Emits
-const emit = defineEmits(['browse-file', 'load-url', 'load-demo', 'device-change']);
+const emit = defineEmits(['browse-file', 'load-url', 'device-change']);
 
 // Composables
 const { shouldUseMobileLayout } = useViewport();

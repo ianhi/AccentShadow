@@ -11,7 +11,6 @@
         :isRecording="isRecordingActive"
         @browse-file="triggerFileInput"
         @load-url="showUrlModalHandler"
-        @load-demo="showDemoModalHandler"
         @device-change="handleMicrophoneDeviceChange"
       />
       
@@ -82,12 +81,6 @@
       </div>
     </div>
 
-    <!-- Demo Audio Selection Modal -->
-    <DemoAudioModal
-      :isVisible="showDemoModal"
-      @close="closeDemoModal"
-      @load-demo="handleDemoLoad"
-    />
     
     <!-- Recording Manager -->
     <RecordingManager
@@ -147,7 +140,6 @@ import RecordingStateManager from '../components/RecordingStateManager.vue';
 import AudioProcessingHandler from '../components/AudioProcessingHandler.vue';
 import AppSettingsModal from '../components/AppSettingsModal.vue';
 import AudioProcessingGuideModal from '../components/AudioProcessingGuideModal.vue';
-import DemoAudioModal from '../components/DemoAudioModal.vue';
 import MicrophoneSelector from '../components/MicrophoneSelector.vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
 import { useAppState, type VADSettings } from '../composables/useAppState';
@@ -198,8 +190,6 @@ const { lockScroll, unlockScroll } = useModalScrollLock()
 // Mobile layout state
 const showStatsOnMobile = ref(false)
 
-// Demo modal state
-const showDemoModal = ref(false)
 
 // Audio source state for unified controls
 const currentAudioSource = ref('')
@@ -370,37 +360,7 @@ const showUrlModalHandler = () => {
   lockScroll()
   openUrlModal()
 }
-const showDemoModalHandler = () => {
-  lockScroll()
-  showDemoModal.value = true
-}
-const closeDemoModal = () => {
-  unlockScroll()
-  showDemoModal.value = false
-}
 
-const handleDemoLoad = async (demoInfo: { title?: string; audioUrl?: string }) => {
-  console.log('🎵 Loading demo audio:', demoInfo)
-  
-  try {
-    // Close the modal first
-    unlockScroll()
-    showDemoModal.value = false
-    
-    // Set the audio source name from demo info
-    currentAudioSource.value = demoInfo.title || 'Demo Audio'
-    
-    // Load the demo audio using the existing URL loading functionality
-    if (demoInfo.audioUrl) {
-      await loadAudioFromUrlOriginal(demoInfo.audioUrl)
-      console.log('✅ Demo audio loaded successfully')
-    }
-  } catch (error) {
-    console.error('❌ Failed to load demo audio:', error)
-    currentAudioSource.value = ''
-    // Could show an error modal here if needed
-  }
-}
 const showVADSettings = () => openVadModal()
 
 const handleVADSettingsSave = (newSettings: VADSettings) => {

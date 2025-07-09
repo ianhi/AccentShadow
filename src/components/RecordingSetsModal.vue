@@ -14,9 +14,6 @@
         <div class="manager-content">
           
           <div class="action-buttons">
-            <button @click="loadDemoData" :disabled="isLoadingDemo" class="action-btn demo-btn">
-              {{ isLoadingDemo ? '⏳' : '🎯' }} {{ isLoadingDemo ? 'Loading...' : 'Load Demo' }}
-            </button>
             <button @click="showOnlineImport = true" class="action-btn online-btn">
               🌐 Online Sources
             </button>
@@ -82,7 +79,7 @@
           <div v-else-if="recordingSets.length === 0" class="empty-state">
             <div class="empty-icon">📂</div>
             <p>No recording sets yet.</p>
-            <p class="empty-hint">Try "🎯 Load Demo" for sample recordings, or use "📁 Upload Folder" with your own audio files!</p>
+            <p class="empty-hint">Use "📁 Upload Folder" to add your own audio files, or load audio from URLs!</p>
           </div>
 
           <div v-else class="empty-state">
@@ -108,7 +105,6 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRecordingSets } from '../composables/useRecordingSets';
-import { useDemoData } from '../composables/useDemoData';
 
 const props = defineProps({
   isVisible: {
@@ -128,11 +124,6 @@ const {
   deleteRecordingSet,
   getSetStatistics
 } = useRecordingSets();
-
-const {
-  isLoadingDemo,
-  loadDemoData: loadDemo
-} = useDemoData();
 
 // Component state
 const searchQuery = ref('');
@@ -180,14 +171,6 @@ const deleteSet = (setId) => {
 };
 
 
-const loadDemoData = async () => {
-  const success = await loadDemo();
-  if (success) {
-    console.log('✅ Demo data loaded from RecordingSetsModal');
-    // Close modal after demo data is loaded
-    closeModal();
-  }
-};
 
 const getLanguageName = (code) => {
   const languages = {
@@ -375,22 +358,6 @@ const getSourceIcon = (source) => {
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
-.demo-btn {
-  background: rgba(168, 85, 247, 0.9);
-  color: white;
-}
-
-.demo-btn:hover:not(:disabled) {
-  background: rgba(147, 51, 234, 0.9);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
-}
-
-.demo-btn:disabled {
-  background: rgba(168, 85, 247, 0.5);
-  cursor: not-allowed;
-  transform: none;
-}
 
 .search-filter {
   display: flex;

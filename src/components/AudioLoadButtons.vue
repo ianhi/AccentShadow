@@ -9,9 +9,6 @@
     <button @click="$emit('load-url')" class="action-btn url-btn">
       🌐 Load URL
     </button>
-    <button @click="$emit('load-demo')" class="action-btn demo-btn">
-      🎵 Load Demo
-    </button>
     <button @click="$emit('open-sets')" class="action-btn sets-btn">
       📚 Recording Sets
     </button>
@@ -23,7 +20,6 @@ defineEmits([
   'browse-file',
   'upload-folder',
   'load-url',
-  'load-demo',
   'open-sets'
 ])
 </script>
@@ -67,10 +63,6 @@ defineEmits([
   background: rgba(168, 85, 247, 0.2);
 }
 
-.demo-btn:hover {
-  border-color: #f59e0b;
-  background: rgba(245, 158, 11, 0.2);
-}
 
 .folder-btn:hover {
   border-color: #3b82f6;
@@ -141,9 +133,6 @@ defineEmits([
     content: "🌐";
   }
   
-  .demo-btn::before {
-    content: "🎵";
-  }
   
   .sets-btn::before {
     content: "📚";
