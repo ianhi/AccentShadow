@@ -16,7 +16,7 @@ command = "npm run build"
 [vars]
 # Add any environment variables here
 
-# Routes configuration for SPA (optional - for custom domains)
-# [[routes]]
-# pattern = "/*"
-# zone_name = "your-domain.com"
+# Routes configuration for subdirectory deployment
+[[routes]]
+pattern = "ianhuntisaak.com/language-learning/accent-shadow/*"
+zone_name = "ianhuntisaak.com"
