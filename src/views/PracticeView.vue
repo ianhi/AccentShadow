@@ -662,7 +662,7 @@ watch(currentRecording, async (newRecording, oldRecording) => {
 
 .sticky-controls {
   position: sticky;
-  bottom: 20px;
+  bottom: 6px;
   z-index: 50;
   background: rgba(26, 26, 46, 0.95);
   backdrop-filter: blur(10px);
@@ -841,7 +841,6 @@ watch(currentRecording, async (newRecording, oldRecording) => {
   
   .sticky-controls {
     margin: 6px 0;
-    bottom: 55px;
   }
 }
 

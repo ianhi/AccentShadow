@@ -1148,7 +1148,7 @@ defineExpose({
   }
   
   .mobile-audio-column {
-    min-height: 180px;
+    min-height: 140px;
   }
 }
 </style>
